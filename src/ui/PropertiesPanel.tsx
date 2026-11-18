@@ -41,7 +41,7 @@ import { useDataflow } from '../widgets/dataflow';
 import { getWidget, PERMISSION_LABELS } from '../widgets/registry';
 import { STATUS_LABEL } from '../widgets/WidgetFrame';
 import { CONNECTION_KINDS } from './Toolbar';
-import { connectionStyle } from '../canvas/controller';
+import { connectionStyle } from '../core/connectionStyle';
 
 function common<T>(els: AuroraElement[], get: (e: AuroraElement) => T): T | null {
   if (!els.length) return null;

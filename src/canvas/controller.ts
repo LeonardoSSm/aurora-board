@@ -27,6 +27,7 @@ import { assignFrames, expandToGroups, selectableGroupId, withFrameChildren } fr
 import { resizeMultiple, resizeSingle, rotateElements, type Handle } from '../core/transform';
 import { fitShapeToText } from '../core/text';
 import { snapBox } from '../core/snapping';
+import { connectionStyle } from '../core/connectionStyle';
 import { getState, setState, selectedSet, useEditor } from '../store/editor';
 import {
   abandonGesture,
@@ -80,16 +81,8 @@ export function currentGesture() { return gesture; }
 
 const tolerance = () => 6 / getState().camera.zoom;
 
-const CONNECTION_COLORS: Record<LinkKind, { stroke: string; dash: 'solid' | 'dashed' | 'dotted' }> = {
-  visual: { stroke: '#8fa6c8', dash: 'solid' },
-  context: { stroke: '#c0a0ff', dash: 'dashed' },
-  data: { stroke: '#5addaa', dash: 'solid' },
-  execution: { stroke: '#f3a35c', dash: 'dashed' },
-};
-
-export function connectionStyle(kind: LinkKind) {
-  return CONNECTION_COLORS[kind];
-}
+export { connectionStyle };
+const CONNECTION_COLORS = { visual: connectionStyle('visual'), context: connectionStyle('context'), data: connectionStyle('data'), execution: connectionStyle('execution') };
 
 function snapPoint(p: Vec): Vec {
   const s = getState();

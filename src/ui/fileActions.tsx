@@ -4,7 +4,7 @@ import { getState, setState } from '../store/editor';
 import { getAsset, openBoard, refreshBoards, selectedElements } from '../store/actions';
 import { openDialog, toast } from '../store/ui';
 import { flushSave, getAdapter, snapshotCurrentBoard } from '../persistence/autosave';
-import { assetIdsOf, buildExport, downloadBlob, downloadText, ImportError, parseImport, safeFileName } from '../persistence/exportImport';
+import { applyImport, assetIdsOf, buildExport, downloadBlob, downloadText, ImportError, parseImport, safeFileName } from '../persistence/exportImport';
 import { LEGACY_STORAGE_KEY } from '../persistence/legacy';
 import { exportPNG, exportSVG } from '../render/exportImage';
 
@@ -113,21 +113,8 @@ export async function importFromText(name: string, textP: Promise<string>) {
     ],
   });
   if (button !== 'ok') return;
-  const adapter = getAdapter();
-  for (const a of r.assets) {
-    const existing = await adapter.getAsset(a.id);
-    if (!existing) await adapter.putAsset(a);
-  }
   const ws = getState().workspaces.find((w) => w.id === getState().workspaceId)!;
-  const ids: string[] = [];
-  for (const b of r.boards) {
-    const exists = await adapter.loadBoard(b.id);
-    const board: Board = { ...b, id: exists ? uid('b_') : b.id, workspaceId: ws.id, archived: false, updatedAt: Date.now() };
-    await adapter.saveBoard(board);
-    ids.push(board.id);
-  }
-  const updated = { ...ws, boardOrder: [...ws.boardOrder, ...ids], updatedAt: Date.now() };
-  await adapter.saveWorkspace(updated);
+  const { boardIds: ids, workspace: updated } = await applyImport(getAdapter(), r, ws, () => uid('b_'));
   setState({ workspaces: getState().workspaces.map((w) => (w.id === ws.id ? updated : w)) });
   await refreshBoards();
   await openBoard(ids[0]);

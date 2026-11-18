@@ -32,7 +32,8 @@ export const ElementStyleSchema = z.object({
   strokeColor: z.string(),
   backgroundColor: z.string(),
   fillStyle: FillStyleSchema,
-  strokeWidth: z.number().min(0.5).max(32),
+  // 0 é válido (imagens e widgets não têm contorno).
+  strokeWidth: z.number().min(0).max(32),
   strokeStyle: StrokeStyleSchema,
   /** 0 = arquiteto (limpo), 1 = artista, 2 = cartunista */
   roughness: z.number().min(0).max(3),

@@ -4,7 +4,7 @@ import { createBoard, createLinear, createShape, createText, createWidget, uid, 
 import { updateBoundArrows } from '../core/bindings';
 import { fitTextElement } from '../core/text';
 import { WIDGET } from '../core/widgetIds';
-import { connectionStyle } from '../canvas/controller';
+import { connectionStyle } from '../core/connectionStyle';
 
 function connect(from: AuroraElement, to: AuroraElement, kind: LinkKind, label = '') {
   const st = connectionStyle(kind);

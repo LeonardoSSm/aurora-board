@@ -1,0 +1,245 @@
+{
+ "version": 2,
+ "active": "b1",
+ "boards": [
+  {
+   "id": "b1",
+   "name": "Operação Dark",
+   "camera": {
+    "x": 70,
+    "y": 80,
+    "z": 0.8
+   },
+   "nodes": [
+    {
+     "id": "n1",
+     "type": "group",
+     "x": 80,
+     "y": 100,
+     "w": 265,
+     "title": "Operação Dark",
+     "desc": "Plano visual: testar → medir → melhorar → expandir.",
+     "color": "#6ca7ff",
+     "data": {}
+    },
+    {
+     "id": "n2",
+     "type": "text",
+     "x": 410,
+     "y": 40,
+     "w": 265,
+     "title": "Banco de ideias",
+     "desc": "Escreva qualquer ideia aqui.",
+     "color": "#f3c577",
+     "data": {}
+    },
+    {
+     "id": "n3",
+     "type": "task",
+     "x": 410,
+     "y": 280,
+     "w": 265,
+     "title": "Próximos passos",
+     "desc": "",
+     "color": "#67dcaf",
+     "data": {
+      "items": [
+       {
+        "id": "t1",
+        "text": "Escolher um nicho inicial",
+        "done": true
+       },
+       {
+        "id": "t2",
+        "text": "Produzir o primeiro vídeo",
+        "done": false
+       }
+      ]
+     }
+    },
+    {
+     "id": "n4",
+     "type": "calendar",
+     "x": 760,
+     "y": 60,
+     "w": 265,
+     "title": "Agenda de produção",
+     "desc": "",
+     "color": "#6ca7ff",
+     "data": {
+      "events": [
+       {
+        "id": "e1",
+        "date": "2026-11-18",
+        "title": "Primeiro teste de publicação"
+       }
+      ]
+     }
+    },
+    {
+     "id": "n5",
+     "type": "finance",
+     "x": 760,
+     "y": 320,
+     "w": 265,
+     "title": "Controle financeiro",
+     "desc": "Valores ilustrativos",
+     "color": "#67dcaf",
+     "data": {
+      "items": [
+       {
+        "id": "f1",
+        "text": "Receita",
+        "value": 1500.5
+       },
+       {
+        "id": "f2",
+        "text": "Gasto",
+        "value": -200.25
+       }
+      ]
+     }
+    },
+    {
+     "id": "n6",
+     "type": "ai",
+     "x": 1090,
+     "y": 160,
+     "w": 265,
+     "title": "Assistente de estratégia",
+     "desc": "",
+     "color": "#b998ff",
+     "data": {
+      "prompt": "Analise estas informações e sugira os próximos passos."
+     }
+    },
+    {
+     "id": "n7",
+     "type": "link",
+     "x": 1090,
+     "y": 500,
+     "w": 265,
+     "title": "Docs",
+     "desc": "Referência",
+     "color": "#63d7dd",
+     "data": {
+      "url": "https://example.com"
+     }
+    },
+    {
+     "id": "n8",
+     "type": "manual_rect",
+     "x": 0,
+     "y": 420,
+     "w": 190,
+     "h": 125,
+     "title": "Retângulo",
+     "desc": "Texto dentro",
+     "groupId": "g1",
+     "color": "#f47f8d",
+     "style": {
+      "stroke": "#f47f8d",
+      "fill": "#63333c",
+      "sw": 2.5,
+      "dash": "dashed",
+      "rounded": false,
+      "opacity": 80,
+      "font": "clean",
+      "size": 30,
+      "align": "left"
+     },
+     "data": {}
+    },
+    {
+     "id": "n9",
+     "type": "manual_arrow",
+     "x": 200,
+     "y": 420,
+     "w": 100,
+     "h": 50,
+     "title": "Seta",
+     "desc": "",
+     "groupId": "g1",
+     "style": {
+      "stroke": "#e6e9f4",
+      "fill": "transparent",
+      "sw": 2,
+      "dash": "solid",
+      "rounded": true,
+      "opacity": 100,
+      "font": "hand",
+      "size": 22,
+      "align": "center"
+     },
+     "data": {
+      "positiveSlope": true,
+      "fromLeft": true
+     }
+    },
+    {
+     "id": "n10",
+     "type": "manual_text",
+     "x": 0,
+     "y": 600,
+     "w": 250,
+     "h": 60,
+     "title": "Texto",
+     "desc": "Olá",
+     "style": {
+      "stroke": "#e6e9f4",
+      "fill": "transparent",
+      "sw": 2,
+      "dash": "solid",
+      "rounded": true,
+      "opacity": 100,
+      "font": "mono",
+      "size": 16,
+      "align": "left"
+     },
+     "data": {}
+    }
+   ],
+   "edges": [
+    {
+     "id": "e1",
+     "from": "n1",
+     "to": "n2",
+     "kind": "reference",
+     "label": ""
+    },
+    {
+     "id": "e2",
+     "from": "n5",
+     "to": "n6",
+     "kind": "context",
+     "label": "dados"
+    },
+    {
+     "id": "e3",
+     "from": "n3",
+     "to": "n4",
+     "kind": "flow",
+     "label": ""
+    }
+   ],
+   "strokes": [
+    {
+     "path": "M 10 10 L 20 20 L 30 15",
+     "color": "#77b9ff"
+    }
+   ]
+  },
+  {
+   "id": "b2",
+   "name": "Meu espaço",
+   "nodes": [],
+   "edges": [],
+   "strokes": [],
+   "camera": {
+    "x": 200,
+    "y": 170,
+    "z": 1
+   }
+  }
+ ]
+}
