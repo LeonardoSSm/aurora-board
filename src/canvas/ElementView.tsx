@@ -7,12 +7,13 @@ import { elementParts, linearLocalPoints } from '../render/shapes';
 import { cachedAsset, getAsset } from '../store/actions';
 import { WidgetFrame } from '../widgets/WidgetFrame';
 
-export function useAssetURL(id: string): string | null {
-  const [url, setUrl] = useState<string | null>(() => cachedAsset(id)?.dataURL ?? null);
+/** URL do asset; `undefined` enquanto carrega, `null` se o arquivo não existe mais. */
+export function useAssetURL(id: string): string | null | undefined {
+  const [url, setUrl] = useState<string | null | undefined>(() => cachedAsset(id)?.dataURL);
   useEffect(() => {
     let alive = true;
     if (cachedAsset(id)) setUrl(cachedAsset(id)!.dataURL);
-    else getAsset(id).then((a) => alive && setUrl(a?.dataURL ?? null));
+    else getAsset(id).then((a) => alive && setUrl(a?.dataURL ?? null)).catch(() => alive && setUrl(null));
     return () => { alive = false; };
   }, [id]);
   return url;
@@ -45,7 +46,12 @@ function BoundText({ el }: { el: AuroraElement }) {
 
 function ImageContent({ el }: { el: Extract<AuroraElement, { type: 'image' }> }) {
   const url = useAssetURL(el.assetId);
-  if (!url) return <div className="w-full h-full grid place-items-center rounded bg-panel-2 text-muted text-xs border border-dashed border-line">Carregando imagem…</div>;
+  if (!url)
+    return (
+      <div data-testid={url === null ? 'image-missing' : 'image-loading'} className="w-full h-full grid place-items-center rounded bg-panel-2 text-muted text-xs border border-dashed border-line text-center p-2">
+        {url === null ? 'Imagem indisponível (arquivo não encontrado neste navegador)' : 'Carregando imagem…'}
+      </div>
+    );
   return <img src={url} alt="" draggable={false} className="w-full h-full select-none pointer-events-none" style={{ objectFit: 'fill', borderRadius: el.style.roundness === 'round' ? 8 : 0 }} />;
 }
 

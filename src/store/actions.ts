@@ -20,7 +20,8 @@ import { fitShapeToText, fitTextElement } from '../core/text';
 import { getState, setState, selectedSet } from './editor';
 import type { Tool } from './types';
 import { confirmDialog, openDialog, toast } from './ui';
-import { flushSave, getAdapter, markLoaded, withoutAutosave } from '../persistence/autosave';
+import { flushCurrentBoard, flushSave, forgetBoard, getAdapter, markLoaded, runExclusive, syncSaveState, withoutAutosave } from '../persistence/autosave';
+import { migrateBoard } from '../persistence/migrations';
 import { getWidget } from '../widgets/registry';
 import { WIDGET } from '../core/widgetIds';
 
@@ -761,9 +762,18 @@ export async function openBoard(id: string) {
   if (s.boardId === id && s.status === 'ready') return;
   flushTextEditor();
   abandonGesture();
-  await flushSave();
-  const board = await getAdapter().loadBoard(id);
-  if (!board) { toast('Quadro não encontrado.', 'error'); return; }
+  await flushCurrentBoard();
+  const raw = await getAdapter().loadBoard(id);
+  if (!raw) { toast('Quadro não encontrado.', 'error'); return; }
+  // Dados lidos do armazenamento passam pela mesma validação/reparo da importação.
+  const { board, warnings } = migrateBoard(raw, raw.workspaceId);
+  if (warnings.length) {
+    console.warn('Quadro reparado ao abrir:', warnings);
+    // Guarda o original (uma vez) antes que a próxima gravação substitua os dados reparados.
+    const key = `backup-before-repair:${raw.id}`;
+    if (!(await getAdapter().getSetting(key))) await getAdapter().setSetting(key, { savedAt: Date.now(), board: raw });
+    toast(`${warnings.length} problema(s) de integridade corrigido(s) neste quadro. Detalhes no console.`, 'warning', 6000);
+  }
   withoutAutosave(() =>
     setState({
       boardId: board.id,
@@ -774,10 +784,10 @@ export async function openBoard(id: string) {
       editingTextId: null,
       contextMenu: null,
       tool: 'select',
-      saveState: 'saved',
     }),
   );
   markLoaded(board.elements, board.camera);
+  syncSaveState();
   await getAdapter().setSetting(`lastBoard:${board.workspaceId}`, board.id);
 }
 
@@ -797,8 +807,11 @@ export async function updateBoardMeta(id: string, patch: Partial<Pick<BoardMeta,
   const s = getState();
   setState({ boards: s.boards.map((b) => (b.id === id ? { ...b, ...patch, updatedAt: Date.now() } : b)) });
   if (id !== s.boardId) {
-    const board = await getAdapter().loadBoard(id);
-    if (board) await getAdapter().saveBoard({ ...board, ...patch, updatedAt: Date.now() });
+    // Na fila de gravações: nunca intercala com um snapshot antigo do mesmo quadro.
+    await runExclusive(async () => {
+      const board = await getAdapter().loadBoard(id);
+      if (board) await getAdapter().saveBoard({ ...board, ...patch, updatedAt: Date.now() });
+    });
   }
 }
 
@@ -843,7 +856,8 @@ export async function deleteBoard(id: string) {
   const ok = await confirmDialog('Excluir quadro', `Excluir "${meta.name}" permanentemente? Esta ação não pode ser desfeita. Exporte um backup antes se quiser guardar uma cópia.`, 'Excluir', true);
   if (!ok) return;
   if (id === s.boardId) await flushSave();
-  await getAdapter().deleteBoard(id);
+  forgetBoard(id);
+  await runExclusive(() => getAdapter().deleteBoard(id));
   const ws = currentWorkspace();
   await persistWorkspace({ ...ws, boardOrder: ws.boardOrder.filter((b) => b !== id) });
   const h = { ...getState().history };

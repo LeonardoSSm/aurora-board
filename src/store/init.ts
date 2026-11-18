@@ -1,5 +1,5 @@
 import type { PersistenceAdapter } from '../persistence/adapter';
-import { clearJournal, readJournal, setAdapter, startAutosave } from '../persistence/autosave';
+import { clearJournal, readJournals, setAdapter, startAutosave } from '../persistence/autosave';
 import { migrateBoard } from '../persistence/migrations';
 import { importLegacy, LEGACY_STORAGE_KEY } from '../persistence/legacy';
 import { createBoard, createWorkspace } from '../core/elements';
@@ -42,11 +42,17 @@ export async function initEditor(adapter: PersistenceAdapter, opts: { demo?: boo
     }
 
     // Recuperação de alterações não confirmadas no IndexedDB.
-    const journal = readJournal();
-    if (journal) {
-      const stored = await adapter.loadBoard(journal.boardId);
+    // Um diário por quadro: cada um é comparado com o que está gravado.
+    for (const journal of readJournals()) {
       const ws = workspaces.find((w) => w.id === journal.board.workspaceId);
-      if (ws && (!stored || journal.board.updatedAt >= stored.updatedAt) && JSON.stringify(stored?.elements) !== JSON.stringify(journal.board.elements)) {
+      if (!ws) {
+        // Quadro de outro workspace/banco: mantém o diário para não descartar dados.
+        console.warn('Diário de recuperação sem workspace correspondente mantido:', journal.boardId);
+        continue;
+      }
+      const stored = await adapter.loadBoard(journal.boardId);
+      const differs = JSON.stringify(stored?.elements) !== JSON.stringify(journal.board.elements) || stored?.name !== journal.board.name || stored?.description !== journal.board.description;
+      if ((!stored || journal.board.updatedAt >= stored.updatedAt) && differs) {
         const { board } = migrateBoard(journal.board, ws.id);
         await adapter.saveBoard(board);
         if (!ws.boardOrder.includes(board.id)) {
@@ -55,7 +61,7 @@ export async function initEditor(adapter: PersistenceAdapter, opts: { demo?: boo
         }
         notes.push(`Alterações não salvas de “${board.name}” foram recuperadas.`);
       }
-      clearJournal();
+      clearJournal(journal.boardId);
     }
 
     const last = await adapter.getSetting<string>('lastWorkspace');
