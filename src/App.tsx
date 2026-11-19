@@ -6,6 +6,7 @@ import { Toolbar } from './ui/Toolbar';
 import { LibraryPanel } from './ui/LibraryPanel';
 import { PropertiesPanel } from './ui/PropertiesPanel';
 import { BoardsPanel } from './ui/BoardsPanel';
+import { CheckpointDialog, LocationsPanel } from './ui/LocationsPanel';
 import { ContextMenu, DialogHost, ShortcutsDialog, Toasts, ZoomControls } from './ui/Overlays';
 import { setLastPointerWorld, useKeyboard } from './ui/useKeyboard';
 import { screenToWorld } from './store/actions';
@@ -86,6 +87,8 @@ export function App() {
       </div>
       <ContextMenu />
       <BoardsPanel />
+      <LocationsPanel />
+      <CheckpointDialog />
       <DialogHost />
       <ShortcutsDialog />
       <Toasts />
