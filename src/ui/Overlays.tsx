@@ -183,6 +183,8 @@ const SHORTCUTS: [string, string][] = [
   ['Ctrl + Alt + C / V', 'Copiar / colar estilo'],
   ['Ctrl ao arrastar', 'Liga/desliga o encaixe nos objetos'],
   ['Shift + 1 / Shift + 2', 'Enquadrar tudo / zoom na seleção'],
+  ['G', 'Locais (checkpoints): lista, ir, editar'],
+  ['Esc (durante navegação)', 'Interrompe o movimento da câmera'],
   ['Ctrl + + / − / 0', 'Zoom / 100%'],
   ['Espaço + arrastar, botão do meio', 'Navegar (pan)'],
   ['Shift ao desenhar', 'Proporção fixa / ângulos de 15°'],

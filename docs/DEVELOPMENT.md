@@ -16,6 +16,10 @@
 
 Primeira vez: `npx playwright install chromium` (ou `firefox webkit` para os demais).
 
+## Movimento da câmera nos testes
+
+O `playwright.config.ts` usa `reducedMotion: 'reduce'`: a câmera vai direto ao destino, e os testes antigos podem ler a câmera logo após uma ação. Testes de câmera e checkpoints ativam a animação com `test.use({ reducedMotion: 'no-preference' })` e esperam o fim com `__aurora.core.isCameraAnimating()`. Nos testes unitários, `__setCameraTestHooks(relógio, true)` injeta um relógio manual.
+
 ## Rodar um teste específico
 
 ```bash
