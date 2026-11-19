@@ -193,7 +193,7 @@ export const INTEGRATION_LABEL: Record<IntegrationState, string> = {
 export type TileNode =
   | { kind: 'rect'; x: number; y: number; w: number; h: number; rx: number; fill: string; fillOpacity?: number; stroke?: string; strokeWidth?: number }
   | { kind: 'logo'; x: number; y: number; w: number; h: number; logo: string; tone: string | null }
-  | { kind: 'text'; x: number; y: number; text: string; size: number; weight: number; color: string; anchor: 'start' | 'middle' }
+  | { kind: 'text'; x: number; y: number; text: string; size: number; weight: number; color: string; anchor: 'start' | 'middle' | 'end'; role?: string }
   | { kind: 'dot'; x: number; y: number; r: number; fill: string };
 
 export const TILE_FONT = '"Inter Variable", "Inter", system-ui, sans-serif';

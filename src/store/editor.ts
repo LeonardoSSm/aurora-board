@@ -40,6 +40,7 @@ export const initialEditorState: EditorState = {
   dialog: null,
   contextMenu: null,
   inspectorFocus: null,
+  editingWidgetId: null,
   toasts: [],
   dataflowVersion: 0,
 };
