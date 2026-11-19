@@ -225,6 +225,13 @@ export function createBoard(workspaceId: string, name: string, description = '')
   };
 }
 
+type WidgetDataRemapper = (widgetType: string, data: unknown, idMap: ReadonlyMap<string, string>) => unknown;
+let widgetDataRemapper: WidgetDataRemapper | null = null;
+/** Registrado pela camada de widgets: permite que dados de widget que referenciam outros elementos acompanhem a cópia. */
+export function setWidgetDataRemapper(fn: WidgetDataRemapper | null) {
+  widgetDataRemapper = fn;
+}
+
 /**
  * Duplica elementos remapeando ids, grupos e vínculos internos.
  * Vínculos de setas para elementos fora do conjunto são removidos.
@@ -252,6 +259,7 @@ export function cloneElements(elements: AuroraElement[], offset: { x: number; y:
       copy.startBinding = remap(copy.startBinding);
       copy.endBinding = remap(copy.endBinding);
     }
+    if (copy.type === 'widget' && widgetDataRemapper) copy.data = widgetDataRemapper(copy.widgetType, copy.data, idMap);
     return copy;
   });
 }

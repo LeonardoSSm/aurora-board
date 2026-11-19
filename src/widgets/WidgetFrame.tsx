@@ -81,6 +81,28 @@ export function WidgetFrame({ element, selected }: { element: WidgetElement; sel
   const status = plugin ? STATUS_LABEL[plugin.status] : null;
   const inputCount = Object.values(inputs).reduce((n, l) => n + l.length, 0);
 
+  if (plugin?.frame === 'bare') {
+    // Moldura mínima: o componente desenha tudo. Só controles interativos recebem o ponteiro;
+    // o resto do corpo seleciona/arrasta como qualquer elemento do quadro.
+    return (
+      <div
+        data-widget-root={element.id}
+        data-frame="bare"
+        className="w-full h-full relative select-none"
+        onPointerDown={(e) => {
+          if ((e.target as HTMLElement).closest(INTERACTIVE)) {
+            e.stopPropagation();
+            if (!getState().selectedIds.includes(element.id)) setSelection([element.id]);
+          }
+        }}
+      >
+        <WidgetErrorBoundary name={plugin.name}>
+          <plugin.Component element={element} data={data} update={update as never} selected={selected} inputs={inputs} outputs={outputs} api={api} />
+        </WidgetErrorBoundary>
+      </div>
+    );
+  }
+
   return (
     <div
       data-widget-root={element.id}

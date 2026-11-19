@@ -10,4 +10,5 @@ export const WIDGET = {
   ai: 'aurora.ai',
   chart: 'aurora.chart',
   sandbox: 'aurora.sandbox-html',
+  aiTile: 'aurora.ai-tile',
 } as const;
