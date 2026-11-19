@@ -8,6 +8,21 @@ import { expect, test } from '@playwright/test';
 import { ready, state } from './helpers';
 import { b64, backup, confirmImport, el, expectNotPwned, importBackup, SENTINEL_HTML, SENTINEL_SCRIPT } from './security-helpers';
 
+/**
+ * Cola texto "vindo de fora" (área de transferência do sistema). Chromium entrega o texto num ClipboardEvent
+ * sintético; o Firefox não — então, nele, chama diretamente pasteContent (a mesma função que o handler de
+ * colagem usa; o que se testa é a validação dela, não o evento do navegador).
+ */
+async function pasteExternal(page: import('@playwright/test').Page, text: string) {
+  await page.evaluate(async (t) => {
+    const dt = new DataTransfer();
+    dt.setData('text/plain', t);
+    const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+    if (ev.clipboardData?.getData('text/plain') === t) document.dispatchEvent(ev);
+    else await (window as any).__aurora.actions.pasteContent(t, [], null);
+  }, text);
+}
+
 test.beforeEach(async ({ page }) => {
   await ready(page);
   await page.evaluate(() => localStorage.removeItem('aurora-s1-pwned'));
@@ -111,11 +126,7 @@ test.describe('S1-SEC-001: documentos importados não executam na origem do app'
     for (let i = 0; i < 200; i++) deep = [deep];
     const payload = JSON.stringify({ type: 'aurora-board/clipboard', version: 1, elements: [{ id: 'p', type: 'widget', widgetType: 'aurora.notes', x: 0, y: 0, width: 100, height: 100, data: { markdown: 'x', fundo: deep } }] });
     const before = (await state(page)).elements.length;
-    await page.evaluate((text) => {
-      const dt = new DataTransfer();
-      dt.setData('text/plain', text);
-      document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
-    }, payload);
+    await pasteExternal(page, payload);
     await expect(page.getByText(/Conteúdo colado recusado/)).toBeVisible();
     expect((await state(page)).elements.length).toBe(before);
   });
@@ -302,11 +313,7 @@ test.describe('S1-SEC-003: HTML importado e isolamento do sandbox', () => {
       { id: 'p2', type: 'rectangle', x: 'NaN', y: 0, width: 10, height: 10, style: { strokeColor: 'red"><script>' } },
       { id: 'p3', type: 'desconhecido' },
     ] });
-    await page.evaluate((text) => {
-      const dt = new DataTransfer();
-      dt.setData('text/plain', text);
-      document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
-    }, payload);
+    await pasteExternal(page, payload);
     // A propriedade é o estado gravado (a visibilidade depende de onde o colado caiu em relação ao viewport).
     await expect.poll(async () => (await state(page)).elements.find((e) => e.widgetType === 'aurora.sandbox-html')?.data.activation?.state).toBe('blocked');
     const els = (await state(page)).elements;
