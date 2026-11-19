@@ -7,12 +7,13 @@ import { elementParts, linearLocalPoints } from '../render/shapes';
 import { cachedAsset, getAsset } from '../store/actions';
 import { WidgetFrame } from '../widgets/WidgetFrame';
 
-export function useAssetURL(id: string): string | null {
-  const [url, setUrl] = useState<string | null>(() => cachedAsset(id)?.dataURL ?? null);
+/** URL do asset; `undefined` enquanto carrega, `null` se o arquivo não existe mais. */
+export function useAssetURL(id: string): string | null | undefined {
+  const [url, setUrl] = useState<string | null | undefined>(() => cachedAsset(id)?.dataURL);
   useEffect(() => {
     let alive = true;
     if (cachedAsset(id)) setUrl(cachedAsset(id)!.dataURL);
-    else getAsset(id).then((a) => alive && setUrl(a?.dataURL ?? null));
+    else getAsset(id).then((a) => alive && setUrl(a?.dataURL ?? null)).catch(() => alive && setUrl(null));
     return () => { alive = false; };
   }, [id]);
   return url;
@@ -45,7 +46,12 @@ function BoundText({ el }: { el: AuroraElement }) {
 
 function ImageContent({ el }: { el: Extract<AuroraElement, { type: 'image' }> }) {
   const url = useAssetURL(el.assetId);
-  if (!url) return <div className="w-full h-full grid place-items-center rounded bg-panel-2 text-muted text-xs border border-dashed border-line">Carregando imagem…</div>;
+  if (!url)
+    return (
+      <div data-testid={url === null ? 'image-missing' : 'image-loading'} className="w-full h-full grid place-items-center rounded bg-panel-2 text-muted text-xs border border-dashed border-line text-center p-2">
+        {url === null ? 'Imagem indisponível (arquivo não encontrado neste navegador)' : 'Carregando imagem…'}
+      </div>
+    );
   return <img src={url} alt="" draggable={false} className="w-full h-full select-none pointer-events-none" style={{ objectFit: 'fill', borderRadius: el.style.roundness === 'round' ? 8 : 0 }} />;
 }
 
@@ -62,6 +68,16 @@ function polylineMidpoint(pts: { x: number; y: number }[]) {
     acc += seg;
   }
   return pts[0] ?? { x: 0, y: 0 };
+}
+
+/** Caixa local (relativa a el.x/el.y) que contém a linha desenhada, com margem para traço, ponta e traço à mão. */
+function linearLocalBox(el: LinearElement) {
+  const pts = linearLocalPoints(el);
+  let minX = 0, minY = 0, maxX = 0, maxY = 0;
+  for (const p of pts) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); }
+  // Pontos de controle do traço à mão (roughjs) podem passar um pouco dos pontos; pontas têm ~4×espessura+6.
+  const pad = Math.max(12, el.style.strokeWidth * 5 + 10) + el.style.roughness * 6;
+  return { x: Math.floor(minX - pad), y: Math.floor(minY - pad), w: Math.ceil(maxX - minX + pad * 2), h: Math.ceil(maxY - minY + pad * 2) };
 }
 
 export function linearLabelPosition(el: LinearElement) {
@@ -100,9 +116,12 @@ export const ElementView = memo(function ElementView({ el, editing, selected, er
 
   if (isLinear(el)) {
     const label = el.text && !editing ? linearLabelPosition(el) : null;
+    // SVG do tamanho exato da linha (+ margem para traço e pontas): o navegador recorta e pinta só essa área.
+    // (Um SVG 1×1 com overflow visível desenhando fora da caixa multiplicava o custo de pintura do pan/zoom.)
+    const box = linearLocalBox(el);
     return (
       <div className="absolute pointer-events-none" style={{ left: el.x, top: el.y, width: 0, height: 0, opacity }} data-element-id={el.id} data-type={el.type}>
-        <svg className="absolute overflow-visible" style={{ left: 0, top: 0 }} width={1} height={1}>
+        <svg className="absolute" style={{ left: box.x, top: box.y }} width={box.w} height={box.h} viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`}>
           <Parts el={el} />
         </svg>
         {label && (

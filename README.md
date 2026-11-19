@@ -36,10 +36,26 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 |---|---|
 | `npm run dev` | Frontend + servidor local (recarga automática) |
 | `npm run dev:web` | Só o frontend (IA e pré-visualização de links ficam indisponíveis) |
+| `npm run verify` | **Antes de cada commit**: tipos + unitários + build + E2E (Chromium) |
 | `npm test` | Testes unitários (Vitest) |
-| `npm run test:e2e` | Testes de interação no navegador (Playwright; sobe o servidor se preciso). Na primeira vez: `npx playwright install chromium` |
+| `npm run test:e2e` | Testes de interação no Chromium (sobe o servidor se preciso). Na primeira vez: `npx playwright install chromium` |
+| `npm run test:e2e:all` | Chromium, Firefox, WebKit e celular (Pixel 7, toque) |
+| `npm run perf` | Benchmark de desempenho no build de produção (ver docs/PERFORMANCE.md) |
 | `npm run typecheck` | Verificação de tipos |
 | `npm run build` | Build de produção em `dist/` |
+| `npm run audit:prod` | Vulnerabilidades altas/críticas em dependências de produção |
+
+## Documentação
+
+| Documento | Conteúdo |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Camadas, decisões, fluxos, pontos de extensão |
+| [docs/PERSISTENCE.md](docs/PERSISTENCE.md) | Autosave por revisões, diário de recuperação, integridade, backups |
+| [docs/SECURITY.md](docs/SECURITY.md) | Servidor local, SSRF, IA, sandbox de plugins, integrações futuras |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Testes, depuração de falhas, CI e artefatos, reprodução de bugs |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Benchmark, medições antes/depois, limites |
+| [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Problemas e limitações conhecidos |
+| [docs/AUDIT-CYCLE2.md](docs/AUDIT-CYCLE2.md) | Auditoria inicial do ciclo 2 (baseline) |
 
 ---
 
@@ -50,8 +66,8 @@ Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuraç
 ### Editor visual
 - ✅ Canvas infinito: zoom pela roda (configurável para “navegar”), pinça do touchpad, Ctrl+roda, botões, zoom focado no cursor, enquadrar tudo, zoom na seleção, pan com mão / Espaço / botão do meio / dois dedos.
 - ✅ Ferramentas: seleção, mão, retângulo, losango, elipse, seta, linha, desenho livre (pressão de caneta), texto, nota adesiva, borracha, frame, imagem, conectar.
-- ✅ Selecionar (clique, Shift+clique, área), arrastar, redimensionar (8 alças, Shift = proporção, Alt = do centro), rotacionar (Shift = 15°), duplicar (Ctrl+D, Alt+arrastar), copiar/recortar/colar (também imagens e texto da área de transferência; URL colada vira bloco de Link), excluir, bloquear, camadas, agrupar/desagrupar (grupos aninhados; duplo clique entra no grupo), alinhar, mover com setas do teclado, desfazer/refazer (histórico por quadro).
-- ✅ Texto: duplo clique em forma escreve dentro dela (o texto acompanha mover/redimensionar/rotacionar e a forma cresce para caber); texto independente; S/M/L/XL + tamanho livre; fontes Manual (Kalam), Sans (Inter), Mono (JetBrains Mono), Serifada (Lora); alinhamento horizontal e vertical; cor; opacidade.
+- ✅ Selecionar (clique, Shift+clique, área; arrastar dentro da caixa da seleção move a seleção mesmo com outro elemento por cima), arrastar, redimensionar (8 alças, Shift = proporção, Alt = do centro), rotacionar (Shift = 15°), duplicar (Ctrl+D, Alt+arrastar), copiar/recortar/colar (também imagens e texto da área de transferência; URL colada vira bloco de Link), excluir, bloquear, camadas, agrupar/desagrupar (grupos aninhados; duplo clique entra no grupo), alinhar, mover com setas do teclado, desfazer/refazer (histórico por quadro).
+- ✅ Texto: duplo clique (ou Enter) em forma escreve dentro dela (o texto acompanha mover/redimensionar/rotacionar; a forma cresce para caber e alarga em vez de quebrar palavras); texto independente com alças laterais para quebrar linha e cantos para escalar a fonte; S/M/L/XL + tamanho livre; fontes Manual (Kalam), Sans (Inter), Mono (JetBrains Mono), Serifada (Lora); alinhamento horizontal e vertical; cor; opacidade.
 - ✅ Fluxograma como no Excalidraw: **Ctrl+setas** cria um nó conectado (seta em cotovelo), **Alt+setas** navega entre nós conectados.
 - ✅ Encaixe em objetos com guias ao mover (bordas e centros); **Ctrl** durante o arrasto liga/desliga; opção por quadro.
 - ✅ Dica contextual sob a barra de ferramentas; copiar/colar estilo (**Ctrl+Alt+C / Ctrl+Alt+V**).
@@ -63,7 +79,7 @@ Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuraç
 ### Blocos (widgets)
 | Bloco | Status | Observação |
 |---|---|---|
-| Notas | ✅ | Markdown com pré-visualização sanitizada (DOMPurify) |
+| Notas | ✅ | Markdown com pré-visualização sanitizada (DOMPurify); com o bloco selecionado, o texto pode ser selecionado com o mouse |
 | Tarefas | ✅ | Estados, prioridades, prazos, recebe tarefas por conexão de dados |
 | Finanças | ✅ | Receitas/despesas, categorias, vencimentos, parcelas, período, 3 moedas, 3 formatos, saldo previsto e realizado, entradas por conexão |
 | Calendário | ✅ local · 🔜 Google | Mês, eventos com horário. Google Calendar exige OAuth (não implementado) |
@@ -77,8 +93,9 @@ Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuraç
 | Google Calendar, Google Drive, GitHub, API externa, Indicadores, Dashboard, Ferramentas de dev | 🔜 | Listados na biblioteca como “Futuro”, com o requisito de ativação |
 
 ### Dados
+- ✅ Layout responsivo: em telas estreitas os painéis viram sobreposições; toque, desenho com o dedo e pinça para zoom.
 - ✅ Workspaces → quadros → elementos; criar, renomear, descrever, duplicar, reordenar, pesquisar, arquivar, excluir (com confirmação).
-- ✅ Salvamento automático no IndexedDB (debounce 400 ms) + **diário de recuperação** síncrono no `localStorage`: se o navegador fechar antes do IndexedDB confirmar, as alterações são restauradas na próxima abertura.
+- ✅ Salvamento automático no IndexedDB com **controle de revisões** (uma gravação antiga nunca confirma uma alteração mais nova) + **diário de recuperação por quadro** no `localStorage`; novas tentativas automáticas em caso de falha; dados inconsistentes são reparados ao abrir, com cópia do original. Ver [docs/PERSISTENCE.md](docs/PERSISTENCE.md).
 - ✅ Exportar JSON (quadro ou workspace inteiro, com imagens/arquivos), PNG e SVG (quadro, seleção, com/sem fundo, fontes embutidas).
 - ✅ Importar JSON: sempre **como novos quadros**, com relatório e avisos antes de confirmar; nunca sobrescreve.
 - ✅ Esquema versionado (`SCHEMA_VERSION = 3`) com pipeline de migrações e validação por elemento (um elemento inválido não derruba o quadro).
@@ -176,18 +193,24 @@ Pontos de extensão:
 
 ## Testes e verificação
 
-- `npm test` — 95 testes unitários (geometria, transformações, encaixe, roteamento em cotovelo, fluxograma, setas multiponto, conexões, grupos, histórico, finanças, fluxo de dados, contexto de IA, contrato dos provedores com `fetch` simulado, persistência IndexedDB, migrações, importação v0.3, plugins, comandos do editor).
-- `npm run test:e2e` — 12 cenários no Chromium cobrindo os critérios de aceitação 1–16, 19 e 20 com mouse e teclado reais, mais um cenário de paridade com o Excalidraw (Enter, Ctrl+setas, foco, dicas).
+Antes de cada commit: `npm run verify` (tipos + unitários + build + E2E no Chromium). Detalhes, depuração de falhas, traces e artefatos do CI: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
+- `npm test` — testes unitários: núcleo do editor, persistência sob concorrência (gravações controladas), integridade de dados, segurança do servidor (SSRF com DNS/transporte simulados), sandbox de plugins, finanças, fluxo de dados, IA.
+- `npm run test:e2e` / `npm run test:e2e:all` — mouse e teclado reais em Chromium (padrão) ou Chromium, Firefox, WebKit e celular com toque.
+- **CI** (`.github/workflows/ci.yml`): a cada push na `main`, em branches `improvement/**` e em pull requests roda tipos, unitários, build, auditoria de dependências e E2E nos quatro projetos, publicando relatório/traces quando algo falha.
 
 Critério 18 (IA com credenciais válidas): o contrato de requisição/resposta de cada provedor é testado com `fetch` simulado; **uma chamada real não foi verificada** porque não havia chave disponível no ambiente de desenvolvimento.
 
-Medição de desempenho (painel do navegador embutido, 2.000 formas visíveis): ~11 ms por atualização durante arrasto e ~8,5 ms por passo de pan (JS + React, sem tempo de pintura).
+Desempenho (build de produção, i5-1135G7, Chromium, 1440×900): com zoom de trabalho, arrastar/zoom/pan ficam em ~2 quadros (≈30 ms) mesmo com 5.000 elementos; com 5.000 elementos **todos visíveis**, o trabalho de JS por passo de arrasto caiu de 68,5 ms para 9 ms no ciclo 2 e o limite passa a ser a pintura. Detalhes em [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
 ## Limitações conhecidas / próximos passos
 
+Lista completa em [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md). Principais:
+
+- Milhares de elementos visíveis ao mesmo tempo: a pintura do DOM/SVG limita pan/zoom (80–150 ms por quadro); próximo passo é um nível de detalhe com `<canvas>` em zoom distante.
+- Diário de recuperação limitado pelo `localStorage` (~5 MB): quadros acima de ~10.000 elementos.
 - Integrações Google (Calendar/Drive), GitHub e demais “Futuro” não implementadas (exigem OAuth/infra).
 - Sincronização com backend e colaboração em tempo real: arquitetura preparada (`PersistenceAdapter`), não implementada.
-- Recorte visual de frames e desvio automático de obstáculos em setas de cotovelo ainda não existem.
-- Importação de arquivos `.excalidraw` não suportada.
+- Recorte visual de frames e desvio de obstáculos em setas de cotovelo ainda não existem; importação de `.excalidraw` não suportada.
 - Bundle de ~730 KB (230 KB gzip): candidatos a carregamento sob demanda são highlight.js e o bloco de IA.
-- O servidor local não tem autenticação: é para uso local (`127.0.0.1`). Para multiusuário, substituir por backend com autenticação.
+- O servidor local não tem autenticação: é para uso local (`127.0.0.1`), protegido contra sites visitados (ver docs/SECURITY.md).

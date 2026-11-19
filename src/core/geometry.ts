@@ -231,12 +231,13 @@ export function hitTest(el: AuroraElement, p: Vec, tolerance: number, insideCoun
   }
   const lp = toLocal(el, p);
   const x = lp.x - el.x, y = lp.y - el.y, w = el.width, h = el.height;
+  // Título do frame fica ACIMA da caixa: precisa ser testado antes do descarte por "fora da caixa".
+  if (el.type === 'frame' && y >= -28 && y <= 0 && x >= 0 && x <= Math.max(120, w * 0.6)) return true;
   const inBox = x >= -tolerance && x <= w + tolerance && y >= -tolerance && y <= h + tolerance;
   if (!inBox) return false;
   if (el.type === 'frame') {
-    const titleHit = y >= -28 && y <= 0 && x >= 0 && x <= Math.max(120, w * 0.6);
     const nearEdge = x <= tolerance || x >= w - tolerance || y <= tolerance || y >= h - tolerance;
-    return titleHit || nearEdge || insideCounts;
+    return nearEdge || insideCounts;
   }
   if (el.type === 'text' || el.type === 'image' || el.type === 'widget' || el.type === 'sticky') return true;
   const filled = hasFill(el) || insideCounts;

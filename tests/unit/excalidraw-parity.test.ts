@@ -139,3 +139,56 @@ describe('comportamentos do editor', () => {
     expect(after.height).toBeGreaterThan(60); // cresceu para caber o texto quebrado
   });
 });
+
+describe('prioridade da seleção ao arrastar (Excalidraw)', () => {
+  beforeEach(() => reset());
+
+  it('arrastar dentro da caixa do selecionado move ele mesmo com outro por cima; clique simples seleciona o de cima', () => {
+    const bottom = createShape('rectangle', 0, 0, 200, 200, { backgroundColor: '#123' });
+    const top = createShape('rectangle', 50, 50, 60, 60, { backgroundColor: '#456' });
+    addElements([bottom, top]);
+    setSelection([bottom.id]);
+    // arrasto começando sobre "top", que está por cima de "bottom" (selecionado)
+    pointerDown(ptr(80, 80));
+    pointerMove(ptr(130, 80));
+    pointerUp(ptr(130, 80));
+    let s = getState();
+    expect(s.elements.find((e) => e.id === bottom.id)!.x).toBe(50);
+    expect(s.elements.find((e) => e.id === top.id)!.x).toBe(50); // não se moveu
+    expect(s.selectedIds).toEqual([bottom.id]);
+    // clique sem arrastar no mesmo ponto: seleciona o de cima
+    pointerDown(ptr(80, 80));
+    pointerUp(ptr(80, 80));
+    s = getState();
+    expect(s.selectedIds).toEqual([top.id]);
+  });
+
+  it('frames não capturam cliques no seu interior (filhos continuam clicáveis)', () => {
+    const frame = createShape('frame', 0, 0, 300, 300);
+    const child = createShape('rectangle', 100, 100, 50, 50, { backgroundColor: '#123' });
+    addElements([frame, child]);
+    setSelection([frame.id]);
+    pointerDown(ptr(120, 120));
+    pointerUp(ptr(120, 120));
+    expect(getState().selectedIds).toEqual([child.id]);
+  });
+});
+
+describe('texto dentro de formas', () => {
+  beforeEach(() => reset());
+
+  it('palavra longa ou fonte XL alarga a forma (centro mantido) em vez de quebrar no meio da palavra', async () => {
+    const { commitTextEdit, updateStyle } = await import('../../src/store/actions');
+    const r = createShape('rectangle', 0, 0, 80, 60);
+    addElements([r]);
+    commitTextEdit(r.id, 'Planejamento');
+    let el = getState().elements[0];
+    expect(el.width).toBeGreaterThan(80);
+    expect(el.x + el.width / 2).toBeCloseTo(40); // centro preservado
+    setSelection([r.id]);
+    const w1 = el.width;
+    updateStyle({ fontSize: 36 });
+    el = getState().elements[0];
+    expect(el.width).toBeGreaterThan(w1);
+  });
+});

@@ -63,6 +63,32 @@ export function normalizeElement(raw: unknown): { element: AuroraElement | null;
   return { element: parsed.data };
 }
 
+/**
+ * Repara referências internas quebradas (in-place) e retorna avisos:
+ * - vínculo de seta para elemento inexistente → ponta solta (a seta é mantida);
+ * - frame inexistente → elemento fica fora de frame;
+ * - grupo com um único membro → grupo removido (não há o que agrupar).
+ */
+export function repairReferences(elements: AuroraElement[]): string[] {
+  const warnings: string[] = [];
+  const ids = new Set(elements.map((e) => e.id));
+  const groupCount = new Map<string, number>();
+  for (const e of elements) for (const g of e.groupIds) groupCount.set(g, (groupCount.get(g) ?? 0) + 1);
+  for (const e of elements) {
+    if (e.frameId && (!ids.has(e.frameId) || e.frameId === e.id)) {
+      warnings.push(`Elemento ${e.id}: frame inexistente removido.`);
+      e.frameId = null;
+    }
+    if (e.type === 'line' || e.type === 'arrow') {
+      if (e.startBinding && !ids.has(e.startBinding.elementId)) { warnings.push(`Seta ${e.id}: início apontava para elemento inexistente.`); e.startBinding = null; }
+      if (e.endBinding && !ids.has(e.endBinding.elementId)) { warnings.push(`Seta ${e.id}: fim apontava para elemento inexistente.`); e.endBinding = null; }
+    }
+    const solo = e.groupIds.filter((g) => groupCount.get(g) === 1);
+    if (solo.length) e.groupIds = e.groupIds.filter((g) => !solo.includes(g));
+  }
+  return warnings;
+}
+
 export function migrateBoard(raw: unknown, workspaceId: string): { board: Board; warnings: string[] } {
   let b = obj(raw);
   const warnings: string[] = [];
@@ -81,10 +107,14 @@ export function migrateBoard(raw: unknown, workspaceId: string): { board: Board;
     const { element, warning } = normalizeElement(rawEl);
     if (warning) warnings.push(warning);
     if (!element) continue;
-    if (seen.has(element.id)) { element.id = uid(); }
+    if (seen.has(element.id)) {
+      warnings.push(`Id duplicado "${element.id}" renomeado.`);
+      element.id = uid();
+    }
     seen.add(element.id);
     elements.push(element);
   }
+  warnings.push(...repairReferences(elements));
   const cam = obj(b.camera);
   const now = Date.now();
   const board: Board = {

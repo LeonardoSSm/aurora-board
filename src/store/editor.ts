@@ -32,6 +32,7 @@ export const initialEditorState: EditorState = {
   bindingHint: null,
   snapGuides: [],
   interacting: false,
+  compact: false,
   libraryOpen: true,
   propertiesOpen: true,
   boardsPanelOpen: false,

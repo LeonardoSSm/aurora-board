@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ImageIcon, Search, ShieldCheck } from 'lucide-react';
-import { useEditor } from '../store/editor';
+import { setState, useEditor } from '../store/editor';
 import { addWidget, pickImages } from '../store/actions';
 import { listPlanned, listWidgets, PERMISSION_LABELS, type WidgetPlugin } from '../widgets/registry';
 import { STATUS_LABEL } from '../widgets/WidgetFrame';
@@ -22,6 +22,8 @@ function effectiveStatus(p: WidgetPlugin, aiConfigured: boolean | null) {
 
 export function LibraryPanel() {
   const open = useEditor((s) => s.libraryOpen);
+  const compact = useEditor((s) => s.compact);
+  const add = (fn: () => void) => { fn(); if (compact) setState({ libraryOpen: false }); };
   const [q, setQ] = useState('');
   const aiConfigured = useAIConfigured();
   if (!open) return null;
@@ -30,7 +32,7 @@ export function LibraryPanel() {
   const planned = listPlanned().filter((p) => !q || `${p.name} ${p.description}`.toLowerCase().includes(q.toLowerCase()));
 
   return (
-    <aside className="w-64 shrink-0 bg-panel border-r border-line flex flex-col z-20" aria-label="Biblioteca de componentes">
+    <aside className={`w-64 shrink-0 bg-panel border-r border-line flex flex-col ${compact ? 'absolute inset-y-0 left-0 z-40 max-w-[85vw] shadow-[20px_0_50px_#000a]' : 'z-20'}`} aria-label="Biblioteca de componentes">
       <div className="p-3 pb-2">
         <div className="text-[10px] font-bold tracking-widest text-soft mb-2">BIBLIOTECA</div>
         <label className="flex items-center gap-2 h-8 px-2 rounded-lg border border-line bg-[#0f1826]">
@@ -48,7 +50,7 @@ export function LibraryPanel() {
             accent="#f59abf"
             status="ready"
             dragType="tool:image"
-            onAdd={() => void pickImages()}
+            onAdd={() => add(() => void pickImages())}
           />
         )}
         {categories.map((c) => (
@@ -65,7 +67,7 @@ export function LibraryPanel() {
                 dragType={w.id}
                 permissions={w.permissions.map((p) => PERMISSION_LABELS[p])}
                 note={w.statusNote}
-                onAdd={() => addWidget(w.id)}
+                onAdd={() => add(() => addWidget(w.id))}
               />
             ))}
           </div>

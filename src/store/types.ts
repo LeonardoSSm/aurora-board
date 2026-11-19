@@ -90,6 +90,8 @@ export interface EditorState {
   snapGuides: { x1: number; y1: number; x2: number; y2: number }[];
   /** Elementos sendo transformados (para esconder alças durante o gesto). */
   interacting: boolean;
+  /** Tela estreita (celular/tablet em pé): painéis viram sobreposições. */
+  compact: boolean;
   libraryOpen: boolean;
   propertiesOpen: boolean;
   boardsPanelOpen: boolean;

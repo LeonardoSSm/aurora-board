@@ -15,6 +15,17 @@ import { isLinear } from '../core/schema';
 
 export const WIDGET_DRAG_MIME = 'application/x-aurora-widget';
 
+/**
+ * Retângulo do canvas em cache (atualizado por ResizeObserver/resize). Ler getBoundingClientRect a cada
+ * evento de ponteiro/roda forçava recálculo de layout de todos os elementos logo após cada mudança de câmera.
+ */
+let canvasRect: DOMRect | null = null;
+export function getCanvasRect(): { left: number; top: number; right: number; bottom: number } {
+  if (canvasRect) return canvasRect;
+  const el = document.querySelector('[data-testid="canvas"]');
+  return el ? el.getBoundingClientRect() : { left: 0, top: 0, right: 0, bottom: 0 };
+}
+
 const INTERACTIVE = 'input, textarea, select, button, a, [contenteditable="true"], [data-interactive], iframe, label';
 
 function useVisibleElements() {
@@ -53,10 +64,15 @@ export function Canvas() {
   // Tamanho do viewport
   useEffect(() => {
     const el = ref.current!;
-    const ro = new ResizeObserver(() => setState({ viewport: { width: el.clientWidth, height: el.clientHeight } }));
+    const update = () => {
+      canvasRect = el.getBoundingClientRect();
+      setState({ viewport: { width: el.clientWidth, height: el.clientHeight } });
+    };
+    const ro = new ResizeObserver(update);
     ro.observe(el);
-    setState({ viewport: { width: el.clientWidth, height: el.clientHeight } });
-    return () => ro.disconnect();
+    window.addEventListener('resize', update);
+    update();
+    return () => { ro.disconnect(); window.removeEventListener('resize', update); };
   }, []);
 
   // Roda do mouse / touchpad (não-passivo para poder impedir o zoom do navegador)
@@ -71,7 +87,7 @@ export function Canvas() {
         if (id && getState().selectedIds.includes(id) && scrollable && scrollable.scrollHeight > scrollable.clientHeight) return;
       }
       e.preventDefault();
-      const rect = el.getBoundingClientRect();
+      const rect = getCanvasRect();
       const anchor = { x: e.clientX - rect.left, y: e.clientY - rect.top };
       const s = getState();
       const wheelMode = s.boards.find((b) => b.id === s.boardId)?.settings.wheelMode ?? 'zoom';
@@ -97,7 +113,7 @@ export function Canvas() {
   }, []);
 
   const info = (e: { clientX: number; clientY: number; button: number; shiftKey: boolean; altKey: boolean; ctrlKey: boolean; metaKey: boolean }): PointerInfo => {
-    const rect = ref.current!.getBoundingClientRect();
+    const rect = getCanvasRect();
     const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     const pe = e as Partial<PointerEvent>;
     return {

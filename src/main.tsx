@@ -10,6 +10,12 @@ import { registerBuiltinWidgets } from './widgets/builtin';
 import { IndexedDBAdapter } from './persistence/indexeddb';
 import { initEditor } from './store/init';
 import { getState, useEditor } from './store/editor';
+import * as actions from './store/actions';
+import * as elementsApi from './core/elements';
+import { updateBoundArrows } from './core/bindings';
+import { getDataflow } from './widgets/dataflow';
+
+const coreApi = { updateBoundArrows, getDataflow };
 
 registerBuiltinWidgets();
 
@@ -26,8 +32,10 @@ const fontsReady = Promise.all(
 const timeout = new Promise((r) => setTimeout(r, 2500));
 void Promise.race([fontsReady, timeout]).then(() => initEditor(new IndexedDBAdapter()));
 
-// Acesso para depuração e testes de interação (somente leitura recomendada).
+// Acesso para depuração, testes de interação e benchmarks (mesma instância de módulo que o app usa).
 declare global {
-  interface Window { __aurora?: { getState: typeof getState; store: typeof useEditor } }
+  interface Window {
+    __aurora?: { getState: typeof getState; store: typeof useEditor; actions: typeof actions; elements: typeof elementsApi; core: typeof coreApi };
+  }
 }
-window.__aurora = { getState, store: useEditor };
+window.__aurora = { getState, store: useEditor, actions, elements: elementsApi, core: coreApi };

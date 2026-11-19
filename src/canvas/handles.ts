@@ -66,11 +66,13 @@ export function transformHandles(selected: AuroraElement[], cam: Camera): Transf
   ];
   const width = Math.hypot(ne.x - nw.x, ne.y - nw.y), height = Math.hypot(sw.x - nw.x, sw.y - nw.y);
   const single = selected.length === 1;
-  if (single && width > 36) {
+  // Texto (como no Excalidraw): só alças laterais esquerda/direita — a altura vem do conteúdo.
+  const isText = single && selected[0].type === 'text';
+  if (single && !isText && width > 36) {
     out.push({ kind: 'resize', handle: 'n', pos: mid(nw, ne), angle: frame.angle });
     out.push({ kind: 'resize', handle: 's', pos: mid(sw, se), angle: frame.angle });
   }
-  if (single && height > 36) {
+  if (single && (isText || height > 36)) {
     out.push({ kind: 'resize', handle: 'e', pos: mid(ne, se), angle: frame.angle });
     out.push({ kind: 'resize', handle: 'w', pos: mid(nw, sw), angle: frame.angle });
   }

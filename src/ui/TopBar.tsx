@@ -71,6 +71,7 @@ export function TopBar() {
   const board = useEditor((s) => s.boards.find((b) => b.id === s.boardId));
   const libraryOpen = useEditor((s) => s.libraryOpen);
   const propertiesOpen = useEditor((s) => s.propertiesOpen);
+  const compact = useEditor((s) => s.compact);
   useEditor((s) => s.history); // re-render para habilitar/desabilitar desfazer
   const [editingName, setEditingName] = useState(false);
 
@@ -99,7 +100,7 @@ export function TopBar() {
         </div>
       </div>
       <div className="w-px h-7 bg-line mx-1" />
-      <IconButton label="Biblioteca de componentes" active={libraryOpen} onClick={() => setState({ libraryOpen: !libraryOpen })}><PanelLeft size={16} /></IconButton>
+      <IconButton label="Biblioteca de componentes" active={libraryOpen} onClick={() => setState({ libraryOpen: !libraryOpen, ...(compact && !libraryOpen ? { propertiesOpen: false } : {}) })}><PanelLeft size={16} /></IconButton>
       <button
         onClick={() => setState({ boardsPanelOpen: true })}
         className="inline-flex items-center gap-1.5 h-8 px-2 rounded-lg hover:bg-panel-3 text-muted"
@@ -119,7 +120,7 @@ export function TopBar() {
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur(); }}
           />
         ) : (
-          <button data-testid="board-name" onDoubleClick={() => setEditingName(true)} onClick={() => setState({ boardsPanelOpen: true })} className="truncate max-w-[260px] text-[13px] font-bold px-2 h-8 rounded-lg hover:bg-panel-3" title="Clique: trocar de quadro · Duplo clique: renomear">
+          <button data-testid="board-name" onDoubleClick={() => setEditingName(true)} onClick={() => setState({ boardsPanelOpen: true })} className="truncate min-w-[64px] max-w-[260px] text-[13px] font-bold px-2 h-8 rounded-lg hover:bg-panel-3" title="Clique: trocar de quadro · Duplo clique: renomear">
             {board?.name ?? '…'}
           </button>
         )}
@@ -161,7 +162,7 @@ export function TopBar() {
       </Menu>
       <IconButton label="Quadros" onClick={() => setState({ boardsPanelOpen: true })} className="md:hidden"><FolderOpen size={16} /></IconButton>
       <IconButton label="Atalhos e ajuda (?)" onClick={() => setState({ shortcutsOpen: true })}><CircleHelp size={16} /></IconButton>
-      <IconButton label="Painel de propriedades" active={propertiesOpen} onClick={() => setState({ propertiesOpen: !propertiesOpen })}><PanelRight size={16} /></IconButton>
+      <IconButton label="Painel de propriedades" active={propertiesOpen} onClick={() => setState({ propertiesOpen: !propertiesOpen, ...(compact && !propertiesOpen ? { libraryOpen: false } : {}) })}><PanelRight size={16} /></IconButton>
     </header>
   );
 }

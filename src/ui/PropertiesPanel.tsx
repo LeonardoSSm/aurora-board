@@ -41,7 +41,7 @@ import { useDataflow } from '../widgets/dataflow';
 import { getWidget, PERMISSION_LABELS } from '../widgets/registry';
 import { STATUS_LABEL } from '../widgets/WidgetFrame';
 import { CONNECTION_KINDS } from './Toolbar';
-import { connectionStyle } from '../canvas/controller';
+import { connectionStyle } from '../core/connectionStyle';
 
 function common<T>(els: AuroraElement[], get: (e: AuroraElement) => T): T | null {
   if (!els.length) return null;
@@ -380,6 +380,7 @@ function BoardSettings() {
 
 export function PropertiesPanel() {
   const open = useEditor((s) => s.propertiesOpen);
+  const compact = useEditor((s) => s.compact);
   const elements = useEditor((s) => s.elements);
   const selectedIds = useEditor((s) => s.selectedIds);
   const style = useEditor((s) => s.currentStyle);
@@ -394,7 +395,7 @@ export function PropertiesPanel() {
   const grouped = els.some((e) => e.groupIds.length);
 
   return (
-    <aside className="w-72 shrink-0 bg-panel border-l border-line flex flex-col z-20" aria-label="Propriedades">
+    <aside className={`w-72 shrink-0 bg-panel border-l border-line flex flex-col ${compact ? 'absolute inset-y-0 right-0 z-40 max-w-[85vw] shadow-[-20px_0_50px_#000a]' : 'z-20'}`} aria-label="Propriedades">
       <div className="px-4 h-11 flex items-center justify-between border-b border-line">
         <h2 className="text-[11px] font-bold tracking-widest text-muted">
           {els.length === 0 ? (tool === 'select' ? 'QUADRO E ESTILO PADRÃO' : 'ESTILO DA FERRAMENTA') : els.length === 1 ? 'PROPRIEDADES' : `${els.length} SELECIONADOS`}

@@ -25,8 +25,9 @@ import { createFreedraw, createLinear, createShape, cloneElements, normalizeFree
 import { resolveLinear, unbindDeleted, updateBoundArrows } from '../core/bindings';
 import { assignFrames, expandToGroups, selectableGroupId, withFrameChildren } from '../core/groups';
 import { resizeMultiple, resizeSingle, rotateElements, type Handle } from '../core/transform';
-import { fitShapeToText } from '../core/text';
+import { fitShapeToText, fitTextElement } from '../core/text';
 import { snapBox } from '../core/snapping';
+import { connectionStyle } from '../core/connectionStyle';
 import { getState, setState, selectedSet, useEditor } from '../store/editor';
 import {
   abandonGesture,
@@ -59,7 +60,7 @@ export interface PointerInfo {
 type Gesture =
   | { type: 'pan'; start: Vec; camera: { x: number; y: number } }
   | { type: 'marquee'; start: Vec; base: string[] }
-  | { type: 'move'; start: Vec; ids: Set<string>; started: boolean; alt: boolean; hitId: string; wasSelected: boolean; shift: boolean; targets?: Box[] }
+  | { type: 'move'; start: Vec; ids: Set<string>; started: boolean; alt: boolean; hitId: string; wasSelected: boolean; shift: boolean; targets?: Box[]; clickSelect?: string | null }
   | { type: 'resize'; handle: Handle; initials: AuroraElement[]; box: Box }
   | { type: 'rotate'; center: Vec; startAngle: number; initials: AuroraElement[] }
   | { type: 'create-shape'; id: string; start: Vec; moved: boolean }
@@ -80,16 +81,8 @@ export function currentGesture() { return gesture; }
 
 const tolerance = () => 6 / getState().camera.zoom;
 
-const CONNECTION_COLORS: Record<LinkKind, { stroke: string; dash: 'solid' | 'dashed' | 'dotted' }> = {
-  visual: { stroke: '#8fa6c8', dash: 'solid' },
-  context: { stroke: '#c0a0ff', dash: 'dashed' },
-  data: { stroke: '#5addaa', dash: 'solid' },
-  execution: { stroke: '#f3a35c', dash: 'dashed' },
-};
-
-export function connectionStyle(kind: LinkKind) {
-  return CONNECTION_COLORS[kind];
-}
+export { connectionStyle };
+const CONNECTION_COLORS = { visual: connectionStyle('visual'), context: connectionStyle('context'), data: connectionStyle('data'), execution: connectionStyle('execution') };
 
 function snapPoint(p: Vec): Vec {
   const s = getState();
@@ -237,8 +230,15 @@ function selectDown(p: PointerInfo) {
     }
     return;
   }
-  // 3) Elementos
+  // 3) Dentro da caixa da seleção atual (como no Excalidraw): arrastar move a SELEÇÃO, mesmo que outro
+  //    elemento esteja por cima; um clique sem arrastar seleciona o elemento de cima.
   const hit = elementAt(p.world);
+  if (!p.shift && !p.ctrl && selected.length && !selected.every((e) => e.type === 'frame') && insideSelection(selected, p.world) && (!hit || !s.selectedIds.includes(hit.id))) {
+    const ids = withFrameChildren(s.elements, new Set(s.selectedIds));
+    gesture = { type: 'move', start: p.world, ids, started: false, alt: p.alt, hitId: selected[0].id, wasSelected: true, shift: false, clickSelect: hit?.id ?? null };
+    return;
+  }
+  // 4) Elementos
   if (hit) {
     const already = s.selectedIds.includes(hit.id);
     if (s.editingGroupId && !hit.groupIds.includes(s.editingGroupId)) setState({ editingGroupId: null });
@@ -256,7 +256,7 @@ function selectDown(p: PointerInfo) {
     gesture = { type: 'move', start: p.world, ids, started: false, alt: p.alt, hitId: hit.id, wasSelected: already, shift: p.shift || p.ctrl };
     return;
   }
-  // 4) Fundo: seleção por área
+  // 5) Fundo: seleção por área
   if (!p.shift) setState({ selectedIds: [], editingGroupId: null });
   gesture = { type: 'marquee', start: p.world, base: p.shift ? s.selectedIds : [] };
 }
@@ -313,8 +313,10 @@ export function pointerMove(p: PointerInfo) {
         const keepAspect = el.type === 'image' ? !p.shift : p.shift;
         let r = resizeSingle(el, g.handle, pt, { keepAspect, fromCenter: p.alt });
         // Como no Excalidraw: a forma não encolhe abaixo da altura do texto (que se requebra na nova largura).
-        if (r.text && acceptsBoundText(r) && !isLinear(r)) {
-          const fitted = fitShapeToText(r);
+        // Texto independente: altura sempre vem do conteúdo (requebra na nova largura / nova fonte).
+        if (r.type === 'text') r = fitTextElement(r);
+        else if (r.text && acceptsBoundText(r) && !isLinear(r)) {
+          const fitted = fitShapeToText(r, { growWidth: false });
           if (fitted.height !== r.height && g.handle.includes('n')) fitted.y = r.y + r.height - fitted.height;
           r = fitted;
         }
@@ -497,6 +499,15 @@ useEditor.subscribe((st) => st.tool, (tool) => { if (draft && tool !== 'arrow' &
 // Mudar a seleção limpa o ponto selecionado.
 useEditor.subscribe((st) => st.selectedIds, () => { if (getState().selectedPointIndex !== null) setState({ selectedPointIndex: null }); });
 
+/** O ponto está dentro da caixa da seleção (rotacionada para um único elemento)? Frames não contam. */
+function insideSelection(selected: AuroraElement[], world: Vec): boolean {
+  const own = selected.filter((e) => e.type !== 'frame');
+  if (!own.length) return false;
+  if (own.length === 1) return hitTest(own[0], world, tolerance(), true);
+  const b = getCommonBounds(own)!;
+  return world.x >= b.minX && world.x <= b.maxX && world.y >= b.minY && world.y <= b.maxY;
+}
+
 function applyChanged(baseline: AuroraElement[], changed: AuroraElement[]) {
   const map = new Map(changed.map((e) => [e.id, e]));
   const next = baseline.map((e) => map.get(e.id) ?? e);
@@ -632,6 +643,12 @@ export function pointerUp(p: PointerInfo) {
       return;
     case 'move': {
       if (!g.started) {
+        // Clique sem arrastar dentro da caixa da seleção: seleciona o elemento de cima (ou limpa, no vazio).
+        if (g.clickSelect !== undefined) {
+          if (g.clickSelect) setSelection([g.clickSelect]);
+          else setState({ selectedIds: [], editingGroupId: null });
+          return;
+        }
         // Clique simples num item de uma seleção múltipla seleciona só ele (ou seu grupo).
         if (g.wasSelected && !g.shift && s.selectedIds.length > 1) {
           const group = expandToGroups(s.elements, [g.hitId], s.editingGroupId);
@@ -738,13 +755,14 @@ export function doubleClick(world: Vec) {
   }
   if (hit.type === 'widget' || hit.type === 'image' || hit.type === 'freedraw') {
     const g = selectableGroupId(hit, s.editingGroupId);
-    if (g) { setState({ editingGroupId: g, selectedIds: [hit.id] }); }
+    if (g) { setState({ editingGroupId: g }); setSelection([hit.id]); }
     return;
   }
   const g = selectableGroupId(hit, s.editingGroupId);
   if (g) {
-    // Entra no grupo e seleciona o elemento individual; novo duplo clique edita o texto.
-    setState({ editingGroupId: g, selectedIds: [hit.id] });
+    // Entra um nível: seleciona o subgrupo (ou o elemento) dentro do grupo em edição.
+    setState({ editingGroupId: g });
+    setSelection([hit.id]);
     return;
   }
   if (hit.locked) { toast('Elemento bloqueado.', 'info'); return; }

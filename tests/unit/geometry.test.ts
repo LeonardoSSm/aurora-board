@@ -117,3 +117,12 @@ describe('transformações', () => {
     expect(a2.angle).toBeCloseTo(Math.PI);
   });
 });
+
+describe('frame', () => {
+  it('título (acima da caixa) é clicável; interior vazio não é', () => {
+    const f = createShape('frame', 0, 0, 400, 300);
+    expect(hitTest(f, { x: 30, y: -12 }, 4)).toBe(true);
+    expect(hitTest(f, { x: 200, y: 150 }, 4)).toBe(false);
+    expect(hitTest(f, { x: 1, y: 150 }, 4)).toBe(true); // borda
+  });
+});

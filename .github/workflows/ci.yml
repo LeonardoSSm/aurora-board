@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'improvement/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: 24
+  # Nenhuma chave real: o bloco de IA deve aparecer como "não configurado" nos testes.
+  OPENAI_API_KEY: ''
+  ANTHROPIC_API_KEY: ''
+  GEMINI_API_KEY: ''
+
+jobs:
+  typecheck:
+    name: Tipos (tsc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+
+  unit:
+    name: Testes unitários (Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm test -- --reporter=default --reporter=github-actions
+
+  build:
+    name: Build de produção
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with: { name: dist, path: dist, retention-days: 7 }
+
+  audit:
+    name: Segurança de dependências
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      # Bloqueia só vulnerabilidades altas/críticas em dependências de produção.
+      - run: npm audit --omit=dev --audit-level=high
+      # Relatório completo (informativo).
+      - run: npm audit || true
+
+  e2e:
+    name: E2E (${{ matrix.project }})
+    needs: [typecheck, unit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit, mobile]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - name: Versão do Playwright e navegador
+        id: pw
+        run: |
+          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+          # O projeto 'mobile' usa o Chromium: compartilha o mesmo cache de navegador.
+          B=${{ matrix.project }}; if [ "$B" = "mobile" ]; then B=chromium; fi
+          echo "browser=$B" >> "$GITHUB_OUTPUT"
+      - name: Cache dos navegadores
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ steps.pw.outputs.browser }}
+      - name: Instalar navegador
+        run: npx playwright install --with-deps ${{ steps.pw.outputs.browser }}
+      - run: npx playwright test --project=${{ matrix.project }}
+        env: { CI: 'true' }
+      - name: Artefatos de falha (relatório, traces, vídeos)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ matrix.project }}
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14

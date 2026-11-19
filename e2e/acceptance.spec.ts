@@ -3,7 +3,7 @@
  * Cada teste usa um contexto novo do navegador = IndexedDB vazio.
  */
 import { expect, test } from '@playwright/test';
-import { drag, drawShape, ready, state, toPage, waitSaved } from './helpers';
+import { drag, drawShape, emptyCanvasPoint, expectNear, ready, state, toPage, waitSaved } from './helpers';
 
 test('1-3: quadro vazio, desenhar formas e escrever dentro do retângulo com duplo clique', async ({ page }) => {
   await ready(page);
@@ -16,7 +16,8 @@ test('1-3: quadro vazio, desenhar formas e escrever dentro do retângulo com dup
   await drawShape(page, 'd', -220, 0, -40, 120);
   const s1 = await state(page);
   expect(s1.elements.map((e) => e.type)).toEqual(['rectangle', 'ellipse', 'diamond']);
-  expect(s1.elements[0]).toMatchObject({ x: 0, y: 0, width: 200, height: 120 });
+  // WebKit arredonda o mouse para pixels inteiros da página: tolerância de 1px.
+  expectNear(s1.elements[0], { x: 0, y: 0, width: 200, height: 120 });
 
   const c = await toPage(page, 100, 60);
   await page.mouse.dblclick(c.x, c.y);
@@ -68,12 +69,13 @@ test('5-7 + 16: agrupar, mover grupo, desagrupar, desfazer/refazer', async ({ pa
   expect(s.elements[1].groupIds[0]).toBe(gid);
 
   // clicar no fundo, depois arrastar pela borda do retângulo: move o grupo inteiro
-  const bg = await toPage(page, 600, 400);
+  const bg = await emptyCanvasPoint(page);
   await page.mouse.click(bg.x, bg.y);
   await drag(page, await toPage(page, 1, 50), await toPage(page, 101, 250));
   s = await state(page);
-  expect([s.elements[0].x, s.elements[0].y]).toEqual([100, 200]);
-  expect([s.elements[1].x, s.elements[1].y]).toEqual([300, 200]);
+  expectNear(s.elements[0], { x: 100, y: 200 });
+  expectNear(s.elements[1], { x: 300, y: 200 });
+  expect(s.elements[1].x - s.elements[0].x).toBe(200); // estrutura do grupo preservada exatamente
 
   await page.keyboard.press('Control+Shift+g');
   s = await state(page);
@@ -235,7 +237,7 @@ test('atalhos não interferem na digitação e copiar/colar/duplicar funcionam',
   expect((await state(page)).tool).toBe('select');
   await expect(ta).toHaveValue('rodhvat');
   // fora do campo: Ctrl+D duplica
-  const bg = await toPage(page, 1500, 1500);
+  const bg = await emptyCanvasPoint(page);
   await page.mouse.click(bg.x, bg.y);
   await drawShape(page, 'r', 0, 0, 50, 50);
   await page.keyboard.press('Control+d');

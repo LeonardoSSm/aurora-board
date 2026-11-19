@@ -84,6 +84,33 @@ export function parseImport(text: string, workspaceId: string): ImportResult {
   return { source: 'aurora', boards, assets: file.assets, warnings, stats: { boards: boards.length, elements } };
 }
 
+/**
+ * Grava o resultado de uma importação SEM sobrescrever nada:
+ * - quadros com id já existente recebem um id novo;
+ * - assets já existentes são mantidos (o do arquivo é ignorado).
+ * Retorna os ids dos quadros criados e o workspace atualizado.
+ */
+export async function applyImport(
+  adapter: { loadBoard(id: string): Promise<Board | null>; saveBoard(b: Board): Promise<void>; getAsset(id: string): Promise<Asset | null>; putAsset(a: Asset): Promise<void>; saveWorkspace(w: Workspace): Promise<void> },
+  result: ImportResult,
+  workspace: Workspace,
+  newId: () => string,
+): Promise<{ boardIds: string[]; workspace: Workspace }> {
+  for (const a of result.assets) {
+    if (!(await adapter.getAsset(a.id))) await adapter.putAsset(a);
+  }
+  const ids: string[] = [];
+  for (const b of result.boards) {
+    const exists = await adapter.loadBoard(b.id);
+    const board: Board = { ...b, id: exists ? newId() : b.id, workspaceId: workspace.id, archived: false, updatedAt: Date.now() };
+    await adapter.saveBoard(board);
+    ids.push(board.id);
+  }
+  const updated = { ...workspace, boardOrder: [...workspace.boardOrder, ...ids], updatedAt: Date.now() };
+  await adapter.saveWorkspace(updated);
+  return { boardIds: ids, workspace: updated };
+}
+
 export function downloadText(filename: string, text: string, mime = 'application/json') {
   const blob = new Blob([text], { type: mime });
   downloadBlob(filename, blob);

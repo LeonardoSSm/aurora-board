@@ -2,6 +2,8 @@
  * Interface de provedores de modelos de linguagem.
  * Para adicionar um provedor: implemente `Provider` e registre em PROVIDERS.
  */
+import { redactSecrets } from './netSafety';
+
 export type ProviderId = 'openai' | 'anthropic' | 'gemini';
 
 export interface ChatRequest {
@@ -24,29 +26,40 @@ export interface Provider {
   envKey: string;
   configured(): boolean;
   defaultModel(): string;
-  chat(req: ChatRequest): Promise<ChatResult>;
+  /** `signal`: cancelamento pelo cliente (conexão fechada). */
+  chat(req: ChatRequest, signal?: AbortSignal): Promise<ChatResult>;
 }
 
 const TIMEOUT_MS = 90_000;
 
-async function postJSON(url: string, headers: Record<string, string>, body: unknown): Promise<any> {
+async function postJSON(url: string, headers: Record<string, string>, body: unknown, external?: AbortSignal): Promise<any> {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  let timedOut = false;
+  const t = setTimeout(() => { timedOut = true; ctrl.abort(); }, TIMEOUT_MS);
+  const onExternal = () => ctrl.abort();
+  if (external?.aborted) ctrl.abort();
+  external?.addEventListener('abort', onExternal, { once: true });
   try {
     const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body), signal: ctrl.signal });
     const text = await res.text();
     let json: any = null;
     try { json = JSON.parse(text); } catch { /* resposta não JSON */ }
     if (!res.ok) {
-      const msg = json?.error?.message ?? json?.message ?? text.slice(0, 300);
+      // Provedores às vezes ecoam parte da chave na mensagem de erro: removida antes de sair do servidor.
+      const msg = redactSecrets(String(json?.error?.message ?? json?.message ?? text.slice(0, 300)));
       throw Object.assign(new Error(`Provedor respondeu ${res.status}: ${msg}`), { status: res.status === 401 || res.status === 403 ? 401 : 502 });
     }
     return json;
   } catch (e) {
-    if ((e as Error).name === 'AbortError') throw Object.assign(new Error('Tempo esgotado aguardando o provedor de IA.'), { status: 504 });
-    throw e;
+    if ((e as Error).name === 'AbortError') {
+      if (timedOut) throw Object.assign(new Error('Tempo esgotado aguardando o provedor de IA.'), { status: 504 });
+      throw Object.assign(new Error('Requisição cancelada.'), { status: 499 });
+    }
+    if ((e as { status?: number }).status) throw e;
+    throw Object.assign(new Error('Não foi possível contatar o provedor de IA.'), { status: 502 });
   } finally {
     clearTimeout(t);
+    external?.removeEventListener('abort', onExternal);
   }
 }
 
@@ -58,12 +71,13 @@ const openai: Provider = {
   envKey: 'OPENAI_API_KEY',
   configured: () => !!env('OPENAI_API_KEY'),
   defaultModel: () => env('OPENAI_MODEL') || 'gpt-4.1-mini',
-  async chat(req) {
+  async chat(req, signal) {
     const model = req.model || this.defaultModel();
     const json = await postJSON(
       'https://api.openai.com/v1/chat/completions',
       { authorization: `Bearer ${env('OPENAI_API_KEY')}` },
       { model, messages: [{ role: 'system', content: req.system }, ...req.messages] },
+      signal,
     );
     return { text: json?.choices?.[0]?.message?.content ?? '', provider: this.name, model: json?.model ?? model, usage: { input: json?.usage?.prompt_tokens, output: json?.usage?.completion_tokens } };
   },
@@ -75,12 +89,13 @@ const anthropic: Provider = {
   envKey: 'ANTHROPIC_API_KEY',
   configured: () => !!env('ANTHROPIC_API_KEY'),
   defaultModel: () => env('ANTHROPIC_MODEL') || 'claude-sonnet-5-5',
-  async chat(req) {
+  async chat(req, signal) {
     const model = req.model || this.defaultModel();
     const json = await postJSON(
       'https://api.anthropic.com/v1/messages',
       { 'x-api-key': env('ANTHROPIC_API_KEY'), 'anthropic-version': '2023-06-01' },
       { model, max_tokens: 4096, system: req.system, messages: req.messages },
+      signal,
     );
     const text = Array.isArray(json?.content) ? json.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n') : '';
     return { text, provider: this.name, model: json?.model ?? model, usage: { input: json?.usage?.input_tokens, output: json?.usage?.output_tokens } };
@@ -93,7 +108,7 @@ const gemini: Provider = {
   envKey: 'GEMINI_API_KEY',
   configured: () => !!env('GEMINI_API_KEY'),
   defaultModel: () => env('GEMINI_MODEL') || 'gemini-2.5-flash',
-  async chat(req) {
+  async chat(req, signal) {
     const model = req.model || this.defaultModel();
     const json = await postJSON(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
@@ -102,6 +117,7 @@ const gemini: Provider = {
         systemInstruction: { parts: [{ text: req.system }] },
         contents: req.messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
       },
+      signal,
     );
     const text = (json?.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? '').join('');
     return { text, provider: this.name, model, usage: { input: json?.usageMetadata?.promptTokenCount, output: json?.usageMetadata?.candidatesTokenCount } };
