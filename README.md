@@ -199,7 +199,7 @@ Antes de cada commit: `npm run verify` (tipos + unitários + build + E2E no Chro
 
 - `npm test` — testes unitários: núcleo do editor, persistência sob concorrência (gravações controladas), integridade de dados, segurança do servidor (SSRF com DNS/transporte simulados), sandbox de plugins, finanças, fluxo de dados, IA.
 - `npm run test:e2e` / `npm run test:e2e:all` — mouse e teclado reais em Chromium (padrão) ou Chromium, Firefox, WebKit e celular com toque.
-- **CI** (`.github/workflows/ci.yml`): a cada push na `main`, em branches `improvement/**` e em pull requests roda tipos, unitários, build, auditoria de dependências e E2E nos quatro projetos, publicando relatório/traces quando algo falha.
+- **CI** (`.github/workflows/ci.yml`): a cada push na `main`, em branches `improvement/**` e `feature/**` e em pull requests roda tipos, unitários, build, auditoria de dependências e E2E nos quatro projetos, publicando relatório/traces quando algo falha.
 
 Critério 18 (IA com credenciais válidas): o contrato de requisição/resposta de cada provedor é testado com `fetch` simulado; **uma chamada real não foi verificada** porque não havia chave disponível no ambiente de desenvolvimento.
 
