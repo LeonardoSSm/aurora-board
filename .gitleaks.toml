@@ -1,0 +1,10 @@
+# Configuração do gitleaks (CI › secrets). Regras padrão + exceções documentadas.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Chaves FICTÍCIAS usadas para testar a redação de segredos (não são credenciais) e o exemplo de .env sem valores."
+paths = [
+  '''tests/unit/[^/]+\.test\.ts''',
+  '''\.env\.example''',
+]

@@ -2,10 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main, 'improvement/**', 'feature/**']
+    branches: [main, 'improvement/**', 'feature/**', 'security/**']
   pull_request:
   workflow_dispatch:
 
+# Menor privilégio: só leitura do repositório. Nenhum job publica nada (sem deploy automático).
 permissions:
   contents: read
 
@@ -20,13 +21,16 @@ env:
   ANTHROPIC_API_KEY: ''
   GEMINI_API_KEY: ''
 
+# Actions fixadas por SHA de commit (ciclo S1 — S1-SEC-017); o comentário indica a versão.
+# Atualizações chegam pelo Dependabot (.github/dependabot.yml), revisadas em PR.
 jobs:
   typecheck:
     name: Tipos (tsc)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
       - run: npm ci
       - run: npm run typecheck
@@ -35,48 +39,83 @@ jobs:
     name: Testes unitários (Vitest)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
       - run: npm ci
       - run: npm test -- --reporter=default --reporter=github-actions
 
   build:
-    name: Build de produção
+    name: Build de produção (público)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
       - run: npm ci
       - run: npm run build
-      - uses: actions/upload-artifact@v4
+      # O build público não pode conter depuração privilegiada, rotas da API local, source maps nem segredos.
+      - name: Verificar o conteúdo do build público
+        run: |
+          set -e
+          ! grep -rl "__aurora" dist/ || { echo "::error::window.__aurora presente no build público"; exit 1; }
+          ! grep -rlE "/api/(ai|link-preview)" dist/ || { echo "::error::rotas /api no build público"; exit 1; }
+          ! find dist -name "*.map" | grep . || { echo "::error::source maps no build público"; exit 1; }
+          ! grep -rlE "(sk-(proj|ant)-[A-Za-z0-9_-]{16,}|sk-[A-Za-z0-9]{32,}|AIza[0-9A-Za-z_-]{30,})" dist/ || { echo "::error::possível segredo no build"; exit 1; }
+          grep -q "Content-Security-Policy" dist/index.html
+          test -f dist/_headers && test -f dist/sandbox.html
+      - name: Configuração de hospedagem gerada está atualizada
+        run: npx tsx scripts/generate-hosting-config.ts && git diff --exit-code -- public/_headers vercel.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with: { name: dist, path: dist, retention-days: 7 }
 
   audit:
     name: Segurança de dependências
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
-      # Bloqueia só vulnerabilidades altas/críticas em dependências de produção.
+      # Bloqueia vulnerabilidades altas/críticas em dependências de produção.
       - run: npm audit --omit=dev --audit-level=high
+      # Bloqueia vulnerabilidades críticas em qualquer dependência (ferramentas de build/teste incluídas).
+      - run: npm audit --audit-level=critical
       # Relatório completo (informativo).
       - run: npm audit || true
+      - name: Lockfile íntegro (npm ci falha se package.json e lockfile divergirem)
+        run: npm ci --ignore-scripts
+
+  secrets:
+    name: Varredura de segredos (gitleaks)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_COMMENTS: 'false'
 
   e2e:
     name: E2E (${{ matrix.project }})
     needs: [typecheck, unit]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
         project: [chromium, firefox, webkit, mobile]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
       - run: npm ci
       - name: Versão do Playwright e navegador
@@ -87,7 +126,7 @@ jobs:
           B=${{ matrix.project }}; if [ "$B" = "mobile" ]; then B=chromium; fi
           echo "browser=$B" >> "$GITHUB_OUTPUT"
       - name: Cache dos navegadores
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ steps.pw.outputs.browser }}
@@ -97,10 +136,39 @@ jobs:
         env: { CI: 'true' }
       - name: Artefatos de falha (relatório, traces, vídeos)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-${{ matrix.project }}
           path: |
             playwright-report
             test-results
           retention-days: 14
+
+  static:
+    name: Build público + CSP (${{ matrix.project }})
+    needs: [typecheck, unit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ matrix.project }}
+      - run: npx playwright install --with-deps ${{ matrix.project }}
+      # Fase 1: CSP só como relatório (lista violações sem bloquear).
+      - run: npx playwright test -c playwright.static.config.ts --project=${{ matrix.project }}
+        env: { CI: 'true', AURORA_CSP_MODE: report-only }
+      # Fase 2: CSP aplicada — é a configuração que vai para a hospedagem.
+      - run: npx playwright test -c playwright.static.config.ts --project=${{ matrix.project }}
+        env: { CI: 'true' }
