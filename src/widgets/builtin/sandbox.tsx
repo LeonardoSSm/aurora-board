@@ -14,34 +14,77 @@ import { WIDGET } from '../../core/widgetIds';
  *   iframe → app: { type: 'aurora:setState', state }   (JSON, até 100 KB)
  */
 const MAX_STATE = 100_000;
+/** Limite de atualizações de estado por segundo vindas de um iframe (as excedentes viram uma só: a última). */
+export const MAX_UPDATES_PER_SECOND = 10;
+
+/** CSP do documento isolado: só scripts/estilos inline; sem rede, frames, formulários, base ou objetos. */
+export const SANDBOX_CSP =
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'";
+
+/** Valida uma mensagem recebida do iframe. Retorna null se não for do protocolo. */
+export function parseSandboxMessage(data: unknown): { ok: true; state: unknown } | { ok: false; error: string } | null {
+  if (!data || typeof data !== 'object' || (data as { type?: unknown }).type !== 'aurora:setState') return null;
+  if (Object.keys(data as object).some((k) => k !== 'type' && k !== 'state')) return { ok: false, error: 'Mensagem com campos inesperados ignorada.' };
+  try {
+    const json = JSON.stringify((data as { state?: unknown }).state ?? null);
+    if (json === undefined) return { ok: false, error: 'Estado inválido recebido do widget.' };
+    if (json.length > MAX_STATE) return { ok: false, error: 'Estado excede 100 KB e foi ignorado.' };
+    return { ok: true, state: JSON.parse(json) };
+  } catch {
+    return { ok: false, error: 'Estado inválido recebido do widget.' };
+  }
+}
+
+/** Limitador "a última vence": no máximo N entregas por segundo; a última pendente é entregue depois. */
+export function createThrottle<T>(
+  deliver: (v: T) => void,
+  perSecond = MAX_UPDATES_PER_SECOND,
+  now = () => Date.now(),
+  schedule: (fn: () => void, ms: number) => unknown = (fn, ms) => setTimeout(fn, ms),
+) {
+  let windowStart = -Infinity, count = 0, pending: { v: T } | null = null, scheduled = false;
+  const flush = () => {
+    scheduled = false;
+    windowStart = now();
+    count = 0;
+    if (pending) { const p = pending; pending = null; count = 1; deliver(p.v); }
+  };
+  return (v: T) => {
+    const t = now();
+    if (t - windowStart >= 1000) { windowStart = t; count = 0; }
+    if (count < perSecond && !scheduled) { count++; deliver(v); return; }
+    pending = { v };
+    if (!scheduled) { scheduled = true; schedule(flush, Math.max(0, 1000 - (t - windowStart))); }
+  };
+}
 
 export function SandboxFrame({ html, state, onState, title }: { html: string; state: unknown; onState: (s: unknown) => void; title: string }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [error, setError] = useState('');
+  const onStateRef = useRef(onState);
+  onStateRef.current = onState;
   useEffect(() => {
+    const deliver = createThrottle<unknown>((st) => onStateRef.current(st));
     const onMessage = (e: MessageEvent) => {
-      if (e.source !== ref.current?.contentWindow) return;
-      const msg = e.data as { type?: string; state?: unknown };
-      if (msg?.type !== 'aurora:setState') return;
-      try {
-        const json = JSON.stringify(msg.state ?? null);
-        if (json.length > MAX_STATE) { setError('Estado excede 100 KB e foi ignorado.'); return; }
-        onState(JSON.parse(json));
-      } catch {
-        setError('Estado inválido recebido do widget.');
-      }
+      // Só aceita mensagens do PRÓPRIO iframe (identidade da janela; a origem do srcdoc é opaca).
+      if (!ref.current || e.source !== ref.current.contentWindow) return;
+      const r = parseSandboxMessage(e.data);
+      if (!r) return;
+      if (r.ok) deliver(r.state);
+      else setError(r.error);
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [onState]);
+  }, []);
   const bridge = `<script>window.aurora={setState:function(s){parent.postMessage({type:'aurora:setState',state:s},'*')},state:null};window.addEventListener('message',function(e){if(e.data&&e.data.type==='aurora:init'){window.aurora.state=e.data.state;window.dispatchEvent(new CustomEvent('aurora:init',{detail:e.data.state}))}});</script>`;
-  const doc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:;"><style>body{margin:0;font:13px system-ui;color:#e6ecf6;background:transparent}</style>${bridge}</head><body>${html}</body></html>`;
+  const doc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${SANDBOX_CSP}"><style>body{margin:0;font:13px system-ui;color:#e6ecf6;background:transparent}</style>${bridge}</head><body>${html}</body></html>`;
   return (
     <div className="flex flex-col h-full gap-1">
       <iframe
         ref={ref}
         title={title}
         sandbox="allow-scripts"
+        referrerPolicy="no-referrer"
         srcDoc={doc}
         className="flex-1 w-full rounded-md border border-line/60 bg-[#0a111c]"
         onLoad={() => ref.current?.contentWindow?.postMessage({ type: 'aurora:init', state }, '*')}
