@@ -5,6 +5,7 @@ import { safeHttpUrl, sanitizeDocuments, type DocumentItem, type DocumentsData }
 import { WIDGET } from '../../core/widgetIds';
 import { uid } from '../../core/elements';
 import { Empty } from '../../ui/primitives';
+import { classifyDocument, downloadableBlob, parseDataURL, safeDownloadName, type MediaVerdict } from '../../core/media';
 
 function sizeLabel(n: number) {
   if (!n) return '';
@@ -13,46 +14,64 @@ function sizeLabel(n: number) {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function dataURLToBlob(dataURL: string): Blob {
-  const [head, body] = dataURL.split(',');
-  const mime = /data:([^;]+)/.exec(head)?.[1] ?? 'application/octet-stream';
-  const bin = atob(body);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new Blob([bytes], { type: mime });
+interface PreviewState {
+  status: 'loading' | 'ready' | 'missing' | 'error';
+  verdict?: MediaVerdict;
+  imageUrl?: string;
+  text?: string;
+  downloadUrl?: string;
+  error?: string;
 }
 
+/**
+ * Prévia de documento (S1-SEC-001/002): a decisão vem dos BYTES (`classifyDocument`), nunca do MIME declarado.
+ * Não há iframe nem documento ativo: imagens em `<img>`, texto em `<pre>`, o resto só para download — e o download
+ * é sempre `application/octet-stream`, então abrir o link numa aba não renderiza HTML/SVG na origem do app.
+ */
 function Preview({ doc, getURL }: { doc: DocumentItem; getURL: (id: string) => Promise<string | null> }) {
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [text, setText] = useState<string | null>(null);
+  const [st, setSt] = useState<PreviewState>({ status: 'loading' });
   useEffect(() => {
-    let url: string | null = null;
+    const urls: string[] = [];
     let alive = true;
-    setBlobUrl(null);
-    setText(null);
+    setSt({ status: 'loading' });
     if (doc.assetId) {
-      getURL(doc.assetId).then(async (data) => {
-        if (!alive || !data) return;
-        const blob = dataURLToBlob(data);
-        if (doc.mimeType.startsWith('text/') || /\.(md|txt|csv|json|log)$/i.test(doc.name)) setText((await blob.text()).slice(0, 20000));
-        url = URL.createObjectURL(blob);
-        setBlobUrl(url);
-      });
+      getURL(doc.assetId)
+        .then((data) => {
+          if (!alive) return;
+          if (!data) { setSt({ status: 'missing' }); return; }
+          const { bytes } = parseDataURL(data);
+          const verdict = classifyDocument(bytes, doc.mimeType, doc.name);
+          const next: PreviewState = { status: 'ready', verdict };
+          if (verdict.preview === 'image') {
+            next.imageUrl = URL.createObjectURL(new Blob([bytes as BlobPart], { type: verdict.previewMime }));
+            urls.push(next.imageUrl);
+          } else if (verdict.preview === 'text') {
+            next.text = new TextDecoder('utf-8', { fatal: false }).decode(bytes.subarray(0, 80_000)).slice(0, 20_000);
+          }
+          next.downloadUrl = URL.createObjectURL(downloadableBlob(bytes));
+          urls.push(next.downloadUrl);
+          setSt(next);
+        })
+        .catch((e: Error) => alive && setSt({ status: 'error', error: e.message }));
     }
-    return () => { alive = false; if (url) URL.revokeObjectURL(url); };
+    return () => { alive = false; for (const u of urls) URL.revokeObjectURL(u); };
   }, [doc.assetId, doc.mimeType, doc.name, getURL]);
 
   if (doc.url) {
     const safe = safeHttpUrl(doc.url);
     return safe ? <a href={safe} target="_blank" rel="noopener noreferrer" className="text-accent underline text-[12px] break-all">{safe}</a> : <div className="text-warn text-[11px]">URL inválida.</div>;
   }
-  if (!blobUrl) return <div className="text-[11px] text-soft">Carregando…</div>;
+  if (st.status === 'missing') return <div data-testid="doc-missing" className="text-[11px] text-warn">Arquivo indisponível neste navegador (ausente no backup).</div>;
+  if (st.status === 'error') return <div data-testid="doc-error" className="text-[11px] text-warn">{st.error}</div>;
+  if (st.status === 'loading' || !st.verdict) return <div className="text-[11px] text-soft">Carregando…</div>;
+  const v = st.verdict;
   return (
-    <div className="flex flex-col gap-1.5">
-      {doc.mimeType.startsWith('image/') && <img src={blobUrl} alt={doc.name} className="max-h-48 object-contain rounded" />}
-      {doc.mimeType === 'application/pdf' && <iframe title={doc.name} src={blobUrl} className="w-full h-56 rounded border border-line bg-white" />}
-      {text !== null && <pre className="text-[11px] font-mono whitespace-pre-wrap max-h-48 overflow-auto bg-[#0a111c] p-2 rounded">{text}</pre>}
-      <a href={blobUrl} download={doc.name} className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline"><Download size={12} /> Baixar {doc.name}</a>
+    <div className="flex flex-col gap-1.5" data-testid="doc-preview" data-preview={v.preview} data-sniffed={v.sniffed}>
+      {v.mismatch && <div data-testid="doc-mismatch" className="text-[11px] text-warn">O conteúdo real não corresponde ao tipo informado ({doc.mimeType || 'sem tipo'}); exibido de forma segura.</div>}
+      {st.imageUrl && <img src={st.imageUrl} alt={doc.name} className="max-h-48 object-contain rounded" />}
+      {st.text !== undefined && <pre className="text-[11px] font-mono whitespace-pre-wrap max-h-48 overflow-auto bg-[#0a111c] p-2 rounded">{st.text}</pre>}
+      {v.note && <div className="text-[11px] text-soft">{v.note}</div>}
+      {st.downloadUrl && <a href={st.downloadUrl} download={safeDownloadName(doc.name)} className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline"><Download size={12} /> Baixar {doc.name}</a>}
     </div>
   );
 }

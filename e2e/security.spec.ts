@@ -33,6 +33,48 @@ test.describe('S1-SEC-001: documentos importados não executam na origem do app'
     expect(await page.locator('iframe:not([sandbox])').count()).toBe(0);
   });
 
+  test('HTML disfarçado é exibido como texto, com aviso de tipo inconsistente', async ({ page }) => {
+    await importBackup(page, docsBoard({ mimeType: 'application/pdf' }, { mimeType: 'application/pdf', dataURL: `data:text/html;base64,${b64(SENTINEL_HTML)}` }));
+    await confirmImport(page);
+    await expect(page.getByTestId('doc-preview')).toHaveAttribute('data-preview', 'text');
+    await expect(page.getByTestId('doc-mismatch')).toBeVisible();
+    await expect(page.locator('[data-testid="doc-preview"] pre')).toContainText('<script>');
+    await expectNotPwned(page);
+  });
+
+  test('PDF válido: sem prévia embutida, download disponível como octet-stream', async ({ page }) => {
+    const pdf = '%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF';
+    await importBackup(page, docsBoard({ mimeType: 'application/pdf' }, { mimeType: 'application/pdf', dataURL: `data:application/pdf;base64,${b64(pdf)}` }));
+    await confirmImport(page);
+    await expect(page.getByTestId('doc-preview')).toHaveAttribute('data-sniffed', 'pdf');
+    await expect(page.getByTestId('doc-preview')).toHaveAttribute('data-preview', 'none');
+    await expect(page.locator('iframe')).toHaveCount(0);
+    const dl = page.waitForEvent('download');
+    await page.getByRole('link', { name: /Baixar/ }).click();
+    expect((await dl).suggestedFilename()).toBe('relatorio.pdf');
+  });
+
+  test('PNG válido com MIME errado vira imagem pelo conteúdo', async ({ page }) => {
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    await importBackup(page, docsBoard({ mimeType: 'text/html', name: 'foto.html' }, { mimeType: 'text/html', dataURL: `data:text/html;base64,${png}` }));
+    await confirmImport(page);
+    await expect(page.getByTestId('doc-preview')).toHaveAttribute('data-preview', 'image');
+    await expect(page.locator('[data-testid="doc-preview"] img')).toHaveCount(1);
+  });
+
+  test('data URL malformado e asset ausente não travam o widget', async ({ page }) => {
+    await importBackup(page, docsBoard({}, { mimeType: 'application/pdf', dataURL: 'data:application/pdf;base64,@@@não-é-base64@@@' }));
+    await confirmImport(page);
+    await expect(page.getByTestId('doc-error')).toBeVisible();
+    const missing = docsBoard({ assetId: 'a_inexistente' }, {});
+    (missing as { assets: unknown[] }).assets = [];
+    await importBackup(page, missing);
+    await expect(page.getByText(/ausente no backup/).first()).toBeVisible(); // aviso da importação
+    await confirmImport(page);
+    await expect(page.getByTestId('doc-missing')).toBeVisible();
+    await expectNotPwned(page);
+  });
+
   test('HTML disfarçado com data URL application/pdf', async ({ page }) => {
     await importBackup(page, docsBoard({ mimeType: 'application/pdf' }, { mimeType: 'application/pdf', dataURL: `data:application/pdf;base64,${b64(SENTINEL_HTML)}` }));
     await confirmImport(page);
