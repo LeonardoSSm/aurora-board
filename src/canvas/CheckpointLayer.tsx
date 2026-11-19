@@ -49,7 +49,7 @@ function EdgeChip({ e, cps, open, setOpen }: { e: EdgeIndicator; cps: Map<string
         aria-expanded={group ? open : undefined}
         title={group ? e.ids.map((id) => cps.get(id)!.name).join('\n') : [first.name, first.description].filter(Boolean).join('\n')}
         onClick={() => (group ? setOpen(!open) : navigateToCheckpoint(first.id))}
-        className="flex items-center gap-1.5 h-7 max-w-[170px] px-2 rounded-full border bg-[#121a28ee] text-[11px] font-semibold text-fg-2 shadow-[0_6px_18px_#0008] backdrop-blur hover:text-fg hover:bg-[#1a2538] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+        className="flex items-center gap-1.5 h-[28px] [@media(pointer:coarse)]:h-[34px] max-w-[170px] px-2.5 rounded-full border bg-[#121a28ee] text-[11px] font-semibold text-fg-2 shadow-[0_6px_18px_#0008] backdrop-blur hover:text-fg hover:bg-[#1a2538] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
         style={{ borderColor: `${first.color}88` }}
       >
         {arrowFirst && Arrow}

@@ -87,3 +87,55 @@ test('AI Tiles no celular: inserir pela biblioteca, logo visível, mover com o d
   await page.mouse.dblclick(p.x, p.y);
   await expect(page.getByTestId('ai-tile-inspector')).toBeVisible();
 });
+
+test.describe('checkpoints no celular', () => {
+  test.use({ reducedMotion: 'no-preference' });
+  test('criar local, navegar por toque, indicador tocável, pinça sem conflito', async ({ page }) => {
+    await ready(page);
+    await page.evaluate(() => (window as any).__aurora.actions.createBoard('Locais celular'));
+    // Cria pelo painel Locais (“Salvar aqui” = centro da tela).
+    await page.getByRole('button', { name: 'Locais (checkpoints) — G' }).tap();
+    const panel = page.getByTestId('locations-panel');
+    await expect(panel).toBeVisible();
+    await panel.getByRole('button', { name: /Salvar aqui/ }).tap();
+    const dlg = page.getByTestId('checkpoint-dialog');
+    await dlg.getByLabel('Nome do checkpoint').fill('Casa');
+    await dlg.getByRole('button', { name: 'Salvar' }).tap();
+    await page.getByRole('button', { name: 'Fechar locais' }).tap();
+    const cp = (await page.evaluate(() => (window as any).__aurora.getState().checkpoints))[0];
+    // Arrasta o canvas com o dedo (ferramenta Mão) para longe: o local sai da tela e vira indicador na borda.
+    await page.getByRole('button', { name: 'Mão (pan)' }).tap();
+    const box = (await page.getByTestId('canvas').boundingBox())!;
+    const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    for (let k = 0; k < 4; k++) {
+      await touch(page, 'pointerdown', 1, start.x, start.y);
+      for (let i = 1; i <= 8; i++) await touch(page, 'pointermove', 1, start.x - i * 30, start.y);
+      await touch(page, 'pointerup', 1, start.x - 240, start.y);
+    }
+    const ind = page.getByTestId('checkpoint-indicator');
+    await expect(ind).toHaveCount(1);
+    await expect(ind).toHaveAttribute('data-side', 'left');
+    const b = (await ind.boundingBox())!;
+    expect(b.height).toBeGreaterThanOrEqual(24); // área tocável
+    expect(b.x).toBeGreaterThanOrEqual(box.x);
+    expect(b.x + b.width).toBeLessThanOrEqual(box.x + box.width);
+    // Pinça continua funcionando (gesto no canvas, não no indicador).
+    const z0 = (await state(page)).camera.zoom;
+    const c = { x: box.x + box.width * 0.6, y: box.y + box.height * 0.5 };
+    await touch(page, 'pointerdown', 1, c.x - 40, c.y);
+    await touch(page, 'pointerdown', 2, c.x + 40, c.y);
+    for (let i = 1; i <= 6; i++) { await touch(page, 'pointermove', 1, c.x - 40 - i * 10, c.y); await touch(page, 'pointermove', 2, c.x + 40 + i * 10, c.y); }
+    await touch(page, 'pointerup', 1, c.x - 100, c.y);
+    await touch(page, 'pointerup', 2, c.x + 100, c.y);
+    const z1 = (await state(page)).camera.zoom;
+    expect(z1).toBeGreaterThan(z0 * 1.3);
+    // Tocar no indicador centraliza o local.
+    await ind.tap();
+    await page.waitForFunction(() => !(window as any).__aurora.core.isCameraAnimating(), undefined, { polling: 'raf' });
+    const s = await state(page);
+    const vp = await page.evaluate(() => (window as any).__aurora.getState().viewport);
+    expect(Math.abs(s.camera.x - (vp.width / 2 - cp.x * s.camera.zoom))).toBeLessThan(0.01);
+    expect(Math.abs(s.camera.y - (vp.height / 2 - cp.y * s.camera.zoom))).toBeLessThan(0.01);
+    await expect(page.getByTestId('checkpoint-marker')).toHaveCount(1);
+  });
+});

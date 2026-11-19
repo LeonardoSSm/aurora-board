@@ -121,7 +121,7 @@ export function useKeyboard() {
         }
       }
       if (key === 'q') { setState({ toolLocked: !s.toolLocked }); return; }
-      if (key === 'g' && !e.shiftKey && !e.altKey) { setState({ locationsOpen: !s.locationsOpen }); return; }
+      if (key === 'g' && !e.shiftKey && !e.altKey) { e.preventDefault(); setState({ locationsOpen: !s.locationsOpen }); return; } // preventDefault: o “g” não vai para o filtro que recebe o foco
       const tool = TOOL_BY_KEY[key];
       if (tool && !e.altKey) { e.preventDefault(); setTool(tool); }
     };
