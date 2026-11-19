@@ -1,4 +1,4 @@
-import { memo, useEffect, useState, type CSSProperties } from 'react';
+import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { AuroraElement, LinearElement } from '../core/schema';
 import { isLinear } from '../core/schema';
 import { FONT_FAMILIES, LINE_HEIGHT } from '../core/elements';
@@ -6,6 +6,7 @@ import { boundTextBox } from '../core/text';
 import { elementParts, linearLocalPoints } from '../render/shapes';
 import { cachedAsset, getAsset } from '../store/actions';
 import { WidgetFrame } from '../widgets/WidgetFrame';
+import { checkImageBytes, dataURLHead, type ImageVerdict } from '../core/media';
 
 /** URL do asset; `undefined` enquanto carrega, `null` se o arquivo não existe mais. */
 export function useAssetURL(id: string): string | null | undefined {
@@ -44,8 +45,28 @@ function BoundText({ el }: { el: AuroraElement }) {
   );
 }
 
+/** Veredito por asset (a checagem lê só o cabeçalho, mas não precisa ser repetida a cada montagem). */
+const imageVerdicts = new Map<string, ImageVerdict>();
+
 function ImageContent({ el }: { el: Extract<AuroraElement, { type: 'image' }> }) {
   const url = useAssetURL(el.assetId);
+  // S1 (Etapa 8): o formato e as dimensões vêm dos bytes. Conteúdo que não é imagem, ou imagem com dimensões
+  // de "bomba de descompressão", não é entregue ao decodificador — o asset é preservado, só não é exibido.
+  const verdict = useMemo(() => {
+    if (!url) return null;
+    const hit = imageVerdicts.get(el.assetId);
+    if (hit) return hit;
+    const v = checkImageBytes(dataURLHead(url));
+    if (imageVerdicts.size > 2000) imageVerdicts.clear();
+    imageVerdicts.set(el.assetId, v);
+    return v;
+  }, [url, el.assetId]);
+  if (url && verdict && !verdict.ok)
+    return (
+      <div data-testid="image-blocked" className="w-full h-full grid place-items-center rounded bg-panel-2 text-warn text-xs border border-dashed border-warn/50 text-center p-2">
+        {verdict.reason}
+      </div>
+    );
   if (!url)
     return (
       <div data-testid={url === null ? 'image-missing' : 'image-loading'} className="w-full h-full grid place-items-center rounded bg-panel-2 text-muted text-xs border border-dashed border-line text-center p-2">

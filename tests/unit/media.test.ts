@@ -1,6 +1,6 @@
 /** Ciclo S1 — classificação de mídias por conteúdo (S1-SEC-001/002, Etapa 8). */
 import { describe, expect, it } from 'vitest';
-import { classifyDocument, downloadableBlob, parseDataURL, safeDownloadName, sniffBytes } from '../../src/core/media';
+import { checkImageBytes, classifyDocument, dataURLHead, downloadableBlob, imageDimensions, parseDataURL, safeDownloadName, sniffBytes } from '../../src/core/media';
 
 const bytes = (s: string) => new TextEncoder().encode(s);
 const hex = (...h: number[]) => new Uint8Array(h);
@@ -55,6 +55,36 @@ describe('classifyDocument — o conteúdo decide, não o metadado', () => {
         if (v.previewMime === 'image/svg+xml') expect(v.sniffed).toBe('svg');
       }
     }
+  });
+});
+
+describe('imagens: dimensões pelo cabeçalho e bombas de descompressão', () => {
+  const be32 = (n: number) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+  const png = (w: number, h: number) => hex(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, ...be32(w), ...be32(h), 8, 6, 0, 0, 0);
+  const gif = (w: number, h: number) => new Uint8Array([...bytes('GIF89a'), w & 255, w >> 8, h & 255, h >> 8, 0, 0, 0]);
+  const jpeg = (w: number, h: number) => hex(0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 11, 8, h >> 8, h & 255, w >> 8, w & 255, 3, 0, 0, 0);
+  it.each([
+    ['png', png(640, 480), { width: 640, height: 480 }],
+    ['gif', gif(300, 200), { width: 300, height: 200 }],
+    ['jpeg', jpeg(1920, 1080), { width: 1920, height: 1080 }],
+  ])('%s', (_k, b, d) => expect(imageDimensions(b as Uint8Array)).toEqual(d));
+  it('aceita imagem normal e SVG', () => {
+    expect(checkImageBytes(png(4000, 3000))).toMatchObject({ ok: true, width: 4000 });
+    expect(checkImageBytes(bytes('<svg xmlns="http://www.w3.org/2000/svg"/>'))).toMatchObject({ ok: true, kind: 'svg' });
+  });
+  it.each([
+    ['PNG 50 000 × 50 000', png(50_000, 50_000)],
+    ['PNG 12 000 × 12 000 (144 MP)', png(12_000, 12_000)],
+    ['GIF 65 535 × 2', gif(65_535, 2)],
+    ['JPEG 40 000 × 100', jpeg(40_000, 100)],
+  ])('recusa %s', (_n, b) => expect(checkImageBytes(b as Uint8Array)).toMatchObject({ ok: false, reason: expect.stringMatching(/grande demais/) }));
+  it('recusa HTML com extensão de imagem', () => expect(checkImageBytes(bytes(HTML))).toMatchObject({ ok: false, reason: expect.stringMatching(/não é uma imagem/) }));
+  it('dataURLHead lê só o início e tolera lixo', () => {
+    const big = 'data:image/png;base64,' + Buffer.from(png(10, 20)).toString('base64') + 'A'.repeat(1_000_000);
+    expect(dataURLHead(big, 64).length).toBeLessThanOrEqual(66);
+    expect(imageDimensions(dataURLHead(big))).toEqual({ width: 10, height: 20 });
+    expect(dataURLHead('nada')).toHaveLength(0);
+    expect(dataURLHead('data:image/png;base64,@@@')).toHaveLength(0);
   });
 });
 

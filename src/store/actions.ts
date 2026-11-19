@@ -27,6 +27,7 @@ import { confirmDialog, openDialog, toast } from './ui';
 import { flushCurrentBoard, flushSave, forgetBoard, getAdapter, markLoaded, runExclusive, syncSaveState, withoutAutosave } from '../persistence/autosave';
 import { migrateBoard, normalizeElement } from '../persistence/migrations';
 import { blockActiveContent } from '../core/widgetData';
+import { checkImageBytes } from '../core/media';
 import { dataflowSpec, findWidgetPreset, getWidget } from '../widgets/registry';
 import { finalizeDataEdges } from '../core/dataflow';
 import { WIDGET } from '../core/widgetIds';
@@ -770,6 +771,10 @@ export async function insertImageFiles(files: File[], at: Vec) {
   let offset = 0;
   for (const f of files) {
     try {
+      // O tipo declarado pelo sistema (f.type) não basta: confere assinatura e dimensões pelos bytes (Etapa 8).
+      if (f.size > MAX_ASSET_BYTES) throw new Error(`Arquivo maior que ${MAX_ASSET_BYTES / 1024 / 1024} MB.`);
+      const verdict = checkImageBytes(new Uint8Array(await f.slice(0, 256 * 1024).arrayBuffer()));
+      if (!verdict.ok) throw new Error(verdict.reason);
       const id = await putAsset(f, f.name);
       const asset = assetCache.get(id)!;
       const { width, height } = await imageSize(asset.dataURL);

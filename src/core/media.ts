@@ -129,6 +129,87 @@ export function classifyDocument(bytes: Uint8Array, declaredMime: string, name: 
   return { sniffed, preview: 'none', previewMime: '', mismatch: false, note: 'Sem prévia para este formato. Baixe o arquivo para abrir.' };
 }
 
+/* ------------------------------------------------------------------ */
+/* Imagens: tipo e dimensões pelo cabeçalho (sem decodificar)          */
+/* ------------------------------------------------------------------ */
+
+/** Limites contra "bombas de descompressão": arquivo pequeno que vira gigabytes ao decodificar. */
+export const IMAGE_LIMITS = { maxPixels: 100_000_000, maxSide: 30_000 } as const;
+
+const u16be = (b: Uint8Array, o: number) => (b[o] << 8) | b[o + 1];
+const u32be = (b: Uint8Array, o: number) => ((b[o] << 24) >>> 0) + (b[o + 1] << 16) + (b[o + 2] << 8) + b[o + 3];
+const u16le = (b: Uint8Array, o: number) => b[o] | (b[o + 1] << 8);
+const i32le = (b: Uint8Array, o: number) => b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24);
+
+/** Largura × altura lidas do cabeçalho (PNG, GIF, JPEG, WebP, BMP). `null` se desconhecido/truncado. */
+export function imageDimensions(b: Uint8Array, kind: SniffedKind = sniffBytes(b)): { width: number; height: number } | null {
+  try {
+    switch (kind) {
+      case 'png': return b.length >= 24 ? { width: u32be(b, 16), height: u32be(b, 20) } : null;
+      case 'gif': return b.length >= 10 ? { width: u16le(b, 6), height: u16le(b, 8) } : null;
+      case 'bmp': return b.length >= 26 ? { width: Math.abs(i32le(b, 18)), height: Math.abs(i32le(b, 22)) } : null;
+      case 'webp': {
+        const chunk = ascii(b, 12, 16);
+        if (chunk === 'VP8X' && b.length >= 30) return { width: 1 + (b[24] | (b[25] << 8) | (b[26] << 16)), height: 1 + (b[27] | (b[28] << 8) | (b[29] << 16)) };
+        if (chunk === 'VP8L' && b.length >= 25) { const v = b[21] | (b[22] << 8) | (b[23] << 16) | (b[24] << 24); return { width: 1 + (v & 0x3fff), height: 1 + ((v >>> 14) & 0x3fff) }; }
+        if (chunk === 'VP8 ' && b.length >= 30) return { width: u16le(b, 26) & 0x3fff, height: u16le(b, 28) & 0x3fff };
+        return null;
+      }
+      case 'jpeg': {
+        let o = 2;
+        while (o + 9 < b.length) {
+          if (b[o] !== 0xff) { o++; continue; }
+          const m = b[o + 1];
+          if (m === 0xd8 || m === 0x01 || (m >= 0xd0 && m <= 0xd7)) { o += 2; continue; }
+          const len = u16be(b, o + 2);
+          if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return { width: u16be(b, o + 7), height: u16be(b, o + 5) };
+          if (len < 2) return null;
+          o += 2 + len;
+        }
+        return null;
+      }
+      default: return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+export type ImageVerdict =
+  | { ok: true; kind: SniffedKind; width: number | null; height: number | null }
+  | { ok: false; reason: string };
+
+/** Decide se bytes podem ser exibidos como imagem (formato real + dimensões dentro do limite). */
+export function checkImageBytes(head: Uint8Array): ImageVerdict {
+  const kind = sniffBytes(head);
+  if (!(kind in RASTER_MIME) && kind !== 'svg') return { ok: false, reason: 'O arquivo não é uma imagem válida.' };
+  const dim = imageDimensions(head, kind);
+  if (dim && (dim.width > IMAGE_LIMITS.maxSide || dim.height > IMAGE_LIMITS.maxSide || dim.width * dim.height > IMAGE_LIMITS.maxPixels)) {
+    return { ok: false, reason: `Imagem grande demais para exibir com segurança (${dim.width.toLocaleString('pt-BR')} × ${dim.height.toLocaleString('pt-BR')} px).` };
+  }
+  return { ok: true, kind, width: dim?.width ?? null, height: dim?.height ?? null };
+}
+
+/** Primeiros bytes de um data URL sem decodificá-lo inteiro (cabeçalhos de imagem ficam no início). */
+export function dataURLHead(dataURL: string, maxBytes = 256 * 1024): Uint8Array {
+  const comma = dataURL.indexOf(',');
+  if (!dataURL.startsWith('data:') || comma < 0) return new Uint8Array();
+  const isB64 = /;base64$/i.test(dataURL.slice(0, comma));
+  if (!isB64) {
+    try { return new TextEncoder().encode(decodeURIComponent(dataURL.slice(comma + 1, comma + 1 + maxBytes * 3))).subarray(0, maxBytes); } catch { return new Uint8Array(); }
+  }
+  const chars = Math.ceil(maxBytes / 3) * 4;
+  const slice = dataURL.slice(comma + 1, comma + 1 + chars).replace(/[^A-Za-z0-9+/]/g, '');
+  try {
+    const bin = atob(slice.slice(0, slice.length - (slice.length % 4)));
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  } catch {
+    return new Uint8Array();
+  }
+}
+
 /** Blob para download: tipo neutro, o navegador nunca renderiza o conteúdo na origem do app. */
 export function downloadableBlob(bytes: Uint8Array): Blob {
   return new Blob([bytes as BlobPart], { type: 'application/octet-stream' });

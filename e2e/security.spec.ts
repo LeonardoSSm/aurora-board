@@ -110,6 +110,44 @@ test.describe('S1-SEC-001: documentos importados não executam na origem do app'
   });
 });
 
+test.describe('Etapa 8: mídias validadas pelo conteúdo', () => {
+  const pngHeader = (w: number, h: number) => {
+    const b = Buffer.alloc(33);
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]).copy(b, 0);
+    b.write('IHDR', 12, 'ascii');
+    b.writeUInt32BE(w, 16);
+    b.writeUInt32BE(h, 20);
+    return b.toString('base64');
+  };
+
+  test('imagem importada que é HTML ou PNG-bomba não é decodificada; o asset é preservado', async ({ page }) => {
+    const data = backup(
+      [el({ id: 'i1', type: 'image', assetId: 'a_html', width: 120, height: 90 }), el({ id: 'i2', type: 'image', assetId: 'a_bomb', x: 400, width: 120, height: 90 })],
+      [
+        { id: 'a_html', name: 'foto.png', mimeType: 'image/png', size: 10, createdAt: 1, dataURL: `data:image/png;base64,${b64(SENTINEL_HTML)}` },
+        { id: 'a_bomb', name: 'bomba.png', mimeType: 'image/png', size: 33, createdAt: 1, dataURL: `data:image/png;base64,${pngHeader(60_000, 60_000)}` },
+      ],
+    );
+    await importBackup(page, data);
+    await confirmImport(page);
+    await expect(page.getByTestId('image-blocked')).toHaveCount(2);
+    await expect(page.getByTestId('image-blocked').first()).toContainText(/não é uma imagem válida|grande demais/);
+    const stored = await page.evaluate(async () => !!(await (window as any).__aurora.actions.getAsset('a_bomb')));
+    expect(stored).toBe(true);
+    await expectNotPwned(page);
+  });
+
+  test('upload local: HTML renomeado para .png é recusado', async ({ page }) => {
+    const before = (await state(page)).elements.length;
+    await page.evaluate(async (html) => {
+      const f = new File([html], 'falsa.png', { type: 'image/png' });
+      await (window as any).__aurora.actions.insertImageFiles([f], { x: 0, y: 0 });
+    }, SENTINEL_HTML);
+    await expect(page.getByText(/não é uma imagem válida/)).toBeVisible();
+    expect((await state(page)).elements.length).toBe(before);
+  });
+});
+
 test.describe('S1-SEC-004/005/006: importação recusada não altera nada', () => {
   async function refusedDialog(page: import('@playwright/test').Page, re: RegExp) {
     const dlg = page.getByRole('dialog');
