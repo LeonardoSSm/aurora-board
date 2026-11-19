@@ -62,6 +62,7 @@ Estado ao final do ciclo 2. Itens marcados com ⚠ afetam uso real; os demais s�
 - Firefox do Playwright não inicia no Windows de desenvolvimento usado (`browserType.launch: spawn UNKNOWN`) — infraestrutura; roda e passa no CI (Linux). Ciclo S1: persiste mesmo após `playwright install --force firefox` (o Windows bloqueia o executável não assinado).
 - WebKit: atalhos sintéticos de copiar/colar não disparam eventos de área de transferência (teste pulado nesse navegador; o recurso é coberto no Chromium/Firefox).
 - WebKit: o `dragTo` do Playwright não conclui arrastar-e-soltar HTML5 nativo; no teste dos AI Tiles, nesse navegador, a sequência `dragstart → dragover → drop` é disparada com um `DataTransfer` real (o arrasto nativo é coberto no Chromium/Firefox).
+- WebKit local (Windows): `editing.spec.ts` › histórico de desfazer por quadro falha de forma intermitente porque o painel de quadros às vezes continua aberto após o clique e captura o Ctrl+Z. Reproduzido também no commit do ciclo 5 (`709f0dc`) — preexistente, não relacionado ao S1; passa na CI.
 - Chromium headless não cria seleção de texto por arrasto sintético; o teste verifica a seleção nativa por duplo clique (o arrasto foi verificado manualmente no Chromium real).
 - IA com credenciais reais não verificada (sem chave no ambiente); o contrato com cada provedor é testado com `fetch` simulado.
 
