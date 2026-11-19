@@ -39,6 +39,7 @@ export const initialEditorState: EditorState = {
   shortcutsOpen: false,
   dialog: null,
   contextMenu: null,
+  inspectorFocus: null,
   toasts: [],
   dataflowVersion: 0,
 };

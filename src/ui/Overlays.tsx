@@ -21,6 +21,7 @@ import {
 } from '../store/actions';
 import { acceptsBoundText, isText } from '../core/schema';
 import { exportImage } from './fileActions';
+import { getWidget } from '../widgets/registry';
 import { TOOLS } from './tools';
 
 export function ZoomControls() {
@@ -54,6 +55,8 @@ export function ContextMenu() {
   if (!menu) return null;
   const target = elements.find((e) => e.id === menu.targetId);
   const selected = elements.filter((e) => sel.includes(e.id));
+  const plugin = target?.type === 'widget' ? getWidget(target.widgetType) : undefined;
+  const widgetItems = target?.type === 'widget' && plugin?.menuItems && selected.length <= 1 ? plugin.menuItems(target, plugin.sanitize(target.data)) : [];
   const run = (fn: () => void) => () => { setState({ contextMenu: null }); fn(); };
   const Item = ({ label, hint, onClick, disabled }: { label: string; hint?: string; onClick: () => void; disabled?: boolean }) => (
     <button role="menuitem" disabled={disabled} onClick={run(onClick)} className="w-full flex justify-between gap-6 px-2.5 py-1.5 rounded-md text-left text-[12px] text-fg-2 hover:bg-panel-3 disabled:opacity-30">
@@ -62,12 +65,18 @@ export function ContextMenu() {
     </button>
   );
   const Sep = () => <div className="h-px bg-line my-1" />;
-  const x = Math.min(menu.x, window.innerWidth - 230), y = Math.min(menu.y, window.innerHeight - (target ? 420 : 220));
+  const x = Math.min(menu.x, window.innerWidth - 230), y = Math.min(menu.y, window.innerHeight - (target ? 430 + widgetItems.length * 30 : 220));
   return (
     <div ref={ref} role="menu" data-testid="context-menu" className="fixed z-[70] w-56 glass rounded-xl p-1" style={{ left: x, top: Math.max(8, y) }}>
       {target ? (
         <>
           {(isText(target) || acceptsBoundText(target) || target.type === 'frame') && <Item label="Editar texto" hint="Enter" onClick={() => startTextEdit(target.id)} />}
+          {widgetItems.length > 0 && (
+            <>
+              {widgetItems.map((i) => <Item key={i.id} label={i.label} disabled={i.disabled} onClick={i.run} />)}
+              <Sep />
+            </>
+          )}
           <Item label="Recortar" hint="Ctrl+X" onClick={() => cutSelection()} />
           <Item label="Copiar" hint="Ctrl+C" onClick={() => copySelection()} />
           <Item label="Colar" hint="Ctrl+V" onClick={() => void pasteContent(null, [], menu.world)} />

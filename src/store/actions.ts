@@ -12,6 +12,7 @@ import {
   syncLinearBounds,
   uid,
 } from '../core/elements';
+import { safeExternalUrl } from '../core/aiTiles';
 import { resolveLinear, updateBoundArrows, unbindDeleted } from '../core/bindings';
 import { assignFrames, expandToGroups, groupElements, reorder, ungroupElements, type ReorderOp } from '../core/groups';
 import { emptyHistory, pushEntry, redoStep, undoStep } from '../core/history';
@@ -22,7 +23,7 @@ import type { Tool } from './types';
 import { confirmDialog, openDialog, toast } from './ui';
 import { flushCurrentBoard, flushSave, forgetBoard, getAdapter, markLoaded, runExclusive, syncSaveState, withoutAutosave } from '../persistence/autosave';
 import { migrateBoard } from '../persistence/migrations';
-import { getWidget } from '../widgets/registry';
+import { findWidgetPreset, getWidget } from '../widgets/registry';
 import { WIDGET } from '../core/widgetIds';
 
 /* ================================================================== */
@@ -234,6 +235,30 @@ export function zoomToSelection() {
   const box = getCommonBounds(selectedElements());
   if (!box) { zoomToFit(); return; }
   zoomToBox(box, 2);
+}
+
+/** Seleciona e enquadra um elemento (ex.: “Abrir assistente” de um AI Tile). */
+export function focusElement(id: string) {
+  const el = getState().elements.find((e) => e.id === id);
+  if (!el) return false;
+  setSelection([id], false);
+  zoomToBox(getCommonBounds([el])!, 1.25);
+  return true;
+}
+
+/** Abre o painel de propriedades nas configurações do widget (duplo clique / “Editar”). */
+export function openWidgetInspector(id: string, section?: string) {
+  const s = getState();
+  setSelection([id], false);
+  setState({ propertiesOpen: true, ...(s.compact ? { libraryOpen: false } : {}), inspectorFocus: { id, section, nonce: Date.now() } });
+}
+
+/** Abre um link externo em nova aba, só se for https válido. */
+export function openExternalUrl(url: string) {
+  const safe = safeExternalUrl(url);
+  if (!safe) { toast('Link inválido: use um endereço https://', 'warning'); return false; }
+  window.open(safe, '_blank', 'noopener,noreferrer');
+  return true;
 }
 
 export function resetZoom() {
@@ -710,15 +735,17 @@ export function pickImages(at?: Vec) {
 /* Widgets                                                             */
 /* ================================================================== */
 
-export function addWidget(type: string, at?: Vec, dataPatch?: Record<string, unknown>) {
+export function addWidget(type: string, at?: Vec, dataPatch?: Record<string, unknown>, opts: { size?: { width: number; height: number }; title?: string; accent?: string } = {}) {
+  const preset = findWidgetPreset(type);
+  if (preset) return addWidget(preset.plugin.id, at, { ...(preset.preset.data as object), ...dataPatch }, { size: preset.preset.size, title: preset.preset.title ?? preset.preset.name, accent: preset.preset.accent, ...opts });
   const plugin = getWidget(type);
   if (!plugin) { toast(`Widget "${type}" não registrado.`, 'error'); return null; }
   if (plugin.status === 'planned') { toast(`${plugin.name} ainda não está disponível.`, 'warning'); return null; }
   const pos = at ?? viewportCenterWorld();
-  const { width, height } = plugin.defaultSize;
+  const { width, height } = opts.size ?? plugin.defaultSize;
   const data = dataPatch ? plugin.sanitize({ ...(plugin.createData() as object), ...dataPatch }) : plugin.createData();
-  const el = createWidget(plugin.id, plugin.version, plugin.name, pos.x - width / 2, pos.y - height / 2, width, height, data);
-  el.style.strokeColor = plugin.accent;
+  const el = createWidget(plugin.id, plugin.version, opts.title ?? plugin.name, pos.x - width / 2, pos.y - height / 2, width, height, data);
+  el.style.strokeColor = opts.accent ?? plugin.accent;
   addElements([el]);
   setState({ tool: 'select' });
   return el;

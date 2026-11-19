@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import {
   AlignCenter,
   AlignLeft,
@@ -29,6 +29,7 @@ import {
   updateBoardMeta,
   updateElements,
   updateStyle,
+  updateWidgetData,
 } from '../store/actions';
 import type { Arrowhead, AuroraElement, ElementStyle, LinearElement, LinkKind, WidgetElement } from '../core/schema';
 import { acceptsBoundText, isLinear, isText } from '../core/schema';
@@ -39,7 +40,7 @@ import { Button, Label, Segmented } from './primitives';
 import { IconArrowPath, IconEdges, IconFill, IconRoughness, IconStrokeStyle, IconStrokeWidth } from './icons';
 import { useDataflow } from '../widgets/dataflow';
 import { getWidget, PERMISSION_LABELS } from '../widgets/registry';
-import { STATUS_LABEL } from '../widgets/WidgetFrame';
+import { makeHostApi, STATUS_LABEL } from '../widgets/WidgetFrame';
 import { CONNECTION_KINDS } from './Toolbar';
 import { connectionStyle } from '../core/connectionStyle';
 
@@ -307,6 +308,7 @@ function WidgetInfo({ el }: { el: WidgetElement }) {
           ))}
         </>
       )}
+      {p.Inspector && <WidgetInspector el={el} />}
       {p.permissions.length > 0 && (
         <>
           <Label>Permissões</Label>
@@ -315,6 +317,20 @@ function WidgetInfo({ el }: { el: WidgetElement }) {
       )}
     </div>
   );
+}
+
+/** Configurações próprias do widget (contrato WidgetPlugin.Inspector). */
+function WidgetInspector({ el }: { el: WidgetElement }) {
+  const p = getWidget(el.widgetType)!;
+  const data = useMemo(() => p.sanitize(el.data), [p, el.data]);
+  const api = useMemo(() => makeHostApi(el.id), [el.id]);
+  const update = (updater: unknown, opts?: { coalesce?: boolean }) =>
+    updateWidgetData(el.id, (raw) => {
+      const cur = p.sanitize(raw);
+      return typeof updater === 'function' ? (updater as (d: unknown) => unknown)(cur) : { ...(cur as object), ...(updater as object) };
+    }, opts?.coalesce);
+  const Inspector = p.Inspector!;
+  return <Inspector element={el} data={data} update={update as never} selected inputs={{}} outputs={{}} api={api} />;
 }
 
 function Geometry({ el }: { el: AuroraElement }) {

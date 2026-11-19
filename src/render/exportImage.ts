@@ -75,6 +75,14 @@ async function elementSVG(el: AuroraElement): Promise<string> {
   } else if (el.type === 'text') {
     const lines = el.autoSize ? el.text.split('\n') : wrapText(el.text, el.style, el.width - 4);
     inner = textLines(lines, 2, 0, el.width - 4, el.style);
+  } else if (el.type === 'widget' && getWidget(el.widgetType)?.exportSVG) {
+    // Widget com exportação fiel (ex.: AI Tile com logo): mesmo layout da tela.
+    const p = getWidget(el.widgetType)!;
+    try {
+      inner = await p.exportSVG!(p.sanitize(el.data), el);
+    } catch {
+      inner = `<rect width="${el.width}" height="${el.height}" rx="12" fill="#182436" stroke="#2e405a"/>`;
+    }
   } else if (el.type === 'widget') {
     const p = getWidget(el.widgetType);
     const body = wrapText(summarizeElement(el).slice(0, 1200), { fontFamily: 'sans', fontSize: 12 }, el.width - 24).slice(0, Math.max(1, Math.floor((el.height - 56) / 16)));
