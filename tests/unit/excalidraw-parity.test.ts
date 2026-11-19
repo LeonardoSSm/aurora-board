@@ -173,3 +173,22 @@ describe('prioridade da seleção ao arrastar (Excalidraw)', () => {
     expect(getState().selectedIds).toEqual([child.id]);
   });
 });
+
+describe('texto dentro de formas', () => {
+  beforeEach(() => reset());
+
+  it('palavra longa ou fonte XL alarga a forma (centro mantido) em vez de quebrar no meio da palavra', async () => {
+    const { commitTextEdit, updateStyle } = await import('../../src/store/actions');
+    const r = createShape('rectangle', 0, 0, 80, 60);
+    addElements([r]);
+    commitTextEdit(r.id, 'Planejamento');
+    let el = getState().elements[0];
+    expect(el.width).toBeGreaterThan(80);
+    expect(el.x + el.width / 2).toBeCloseTo(40); // centro preservado
+    setSelection([r.id]);
+    const w1 = el.width;
+    updateStyle({ fontSize: 36 });
+    el = getState().elements[0];
+    expect(el.width).toBeGreaterThan(w1);
+  });
+});

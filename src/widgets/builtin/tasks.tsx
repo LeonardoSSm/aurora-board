@@ -96,7 +96,7 @@ export const tasksPlugin: WidgetPlugin<TasksData> = {
                 aria-label="Prazo"
                 value={i.dueDate}
                 onChange={(e) => patch(i.id, { dueDate: e.target.value })}
-                className={`bg-transparent text-[10px] text-muted w-[92px] outline-none ${i.dueDate ? '' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'}`}
+                className={`bg-transparent text-[10px] text-muted outline-none transition-[width] ${i.dueDate ? 'w-[92px]' : 'w-0 opacity-0 group-hover:w-[92px] group-hover:opacity-100 focus:w-[92px] focus:opacity-100'}`}
               />
               <button aria-label="Remover tarefa" onClick={() => update((d) => ({ ...d, items: d.items.filter((x) => x.id !== i.id) }))} className="text-soft hover:text-danger opacity-0 group-hover:opacity-100">
                 <Trash2 size={13} />

@@ -316,7 +316,7 @@ export function pointerMove(p: PointerInfo) {
         // Texto independente: altura sempre vem do conteúdo (requebra na nova largura / nova fonte).
         if (r.type === 'text') r = fitTextElement(r);
         else if (r.text && acceptsBoundText(r) && !isLinear(r)) {
-          const fitted = fitShapeToText(r);
+          const fitted = fitShapeToText(r, { growWidth: false });
           if (fitted.height !== r.height && g.handle.includes('n')) fitted.y = r.y + r.height - fitted.height;
           r = fitted;
         }

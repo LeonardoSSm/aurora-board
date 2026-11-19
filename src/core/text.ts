@@ -88,9 +88,30 @@ export function boundTextBox(el: { type: string; width: number; height: number }
   return { x: p, y: p, width: Math.max(4, w - 2 * p), height: Math.max(4, h - 2 * p) };
 }
 
-/** Aumenta a altura da forma, se necessário, para o texto interno caber. */
-export function fitShapeToText<T extends { type: string; width: number; height: number; y: number; text: string; style: ElementStyle }>(el: T): T {
+/** Largura total da forma para que a caixa de texto interna tenha `boxWidth`. */
+function shapeWidthForBox(type: string, boxWidth: number): number {
+  const p = TEXT_PADDING;
+  if (type === 'ellipse') return (boxWidth + p) / Math.SQRT1_2;
+  if (type === 'diamond') return (boxWidth + p) * 2;
+  if (type === 'sticky') return boxWidth + 2 * p + 12;
+  return boxWidth + 2 * p;
+}
+
+/**
+ * Ajusta a forma ao texto interno: cresce em altura para caber as linhas e — com `growWidth` —
+ * alarga (mantendo o centro) quando uma palavra sozinha não cabe, evitando quebrar no meio da palavra.
+ * No redimensionamento manual usa-se `growWidth: false` para respeitar a largura escolhida.
+ */
+export function fitShapeToText<T extends { type: string; x?: number; width: number; height: number; y: number; text: string; style: ElementStyle }>(el: T, opts: { growWidth?: boolean } = {}): T {
   if (!el.text) return el;
+  if (opts.growWidth !== false) {
+    const longest = Math.max(0, ...el.text.split(/\s+/).filter(Boolean).map((w) => measureLine(w, el.style)));
+    const box0 = boundTextBox(el);
+    if (longest > box0.width) {
+      const w = Math.ceil(shapeWidthForBox(el.type, longest + 2));
+      el = { ...el, width: w, ...(typeof el.x === 'number' ? { x: el.x - (w - el.width) / 2 } : {}) };
+    }
+  }
   const box = boundTextBox(el);
   const needed = measureTextBlock(el.text, el.style, box.width).height;
   if (needed <= box.height + 0.5) return el;
