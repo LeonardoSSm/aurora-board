@@ -247,3 +247,44 @@ describe('quadros grandes', () => {
     expect(ms).toBeLessThan(15000);
   });
 });
+
+describe('persistência sob concorrência: finanças visuais', () => {
+  beforeEach(setup);
+
+  it('edições rápidas de um valor durante gravações pendentes: o último valor é o gravado, com conexões e nomes', async () => {
+    const { createLinear, createWidget } = await import('../../src/core/elements');
+    const { createValueData } = await import('../../src/core/valueTile');
+    const { updateElements } = await import('../../src/store/actions');
+    (await import('../../src/widgets/builtin')).registerBuiltinWidgets();
+    const v = createWidget('aurora.value', '1.0.0', 'Aluguel', 0, 0, 176, 76, createValueData({ amountCents: 100000, financialRole: 'expense' }));
+    const m = createWidget('aurora.finance-period', '1.0.0', 'Janeiro 2027', 300, 0, 220, 150, { period: '2027-01', currency: 'BRL' });
+    const l = createLinear('arrow', 0, 0, [[0, 0], [1, 1]], {}, 'data');
+    l.startBinding = { elementId: v.id, fixedPoint: null };
+    l.endBinding = { elementId: m.id, fixedPoint: null };
+    addElements([v, m], false);
+    addElements([l], false);
+    adapter.gated = true;
+    const saves: Promise<void>[] = [];
+    for (let i = 1; i <= 20; i++) {
+      updateElements(new Set([v.id]), (e) => ({ ...e, data: { ...(e as { data: object }).data, amountCents: 100000 + i * 100 } }) as AuroraElement);
+      saves.push(flushSave());
+      await tick();
+      if (i % 3 === 0 && adapter.gates.length) await adapter.gates.shift()!.release();
+    }
+    let done = false;
+    const all = Promise.all(saves).then(() => { done = true; });
+    for (let k = 0; k < 200 && !done; k++) {
+      if (adapter.gates.length) await adapter.gates.shift()!.release();
+      await tick();
+    }
+    await all;
+    await settle();
+    const saved = (await adapter.loadBoard(boardA.id))!;
+    const sv = saved.elements.find((e) => e.id === v.id) as AuroraElement & { data: { amountCents: number } };
+    expect(sv.data.amountCents).toBe(102000);
+    const se = saved.elements.find((e) => e.id === l.id) as AuroraElement & { connection: { variable?: string; sourcePort?: string } };
+    expect(se.connection).toMatchObject({ kind: 'data', sourcePort: 'value', targetPort: 'entries', variable: 'aluguel' });
+    expect(getState().saveState).toBe('saved');
+    expect(journalFor(boardA.id)).toBeUndefined();
+  });
+});
