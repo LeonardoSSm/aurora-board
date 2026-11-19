@@ -21,7 +21,7 @@ import { resolveLinear } from '../core/bindings';
 import { WIDGET } from '../core/widgetIds';
 import { MAX_CENTS } from '../core/decimal';
 import { computeFinance, emptyFinance, formatMoney, sanitizeFinance, type Currency, type FinanceData, type FinanceEntry } from '../core/finance';
-import { createValueData, VALUE_SIZES, type ValueTileData } from '../core/valueTile';
+import { createValueData, sanitizeValue, VALUE_SIZES, type ValueTileData } from '../core/valueTile';
 import { PERIOD_RE, ROLE_LABEL, normalizeName, periodLabel, type FinancialRole } from '../core/scalar';
 import { sanitizeAI, sanitizeTasks } from '../core/widgetData';
 import { appendTasks } from '../widgets/builtin/tasks';
@@ -168,6 +168,8 @@ export interface ParsedProposal {
   actions: ProposedAction[];
   rejected: RejectedAction[];
   notices: string[];
+  /** Trecho da resposta de onde a proposta foi lida ('' quando não veio da resposta). */
+  raw: string;
 }
 
 function issueText(error: z.ZodError): string {
@@ -236,10 +238,35 @@ function validateOne(raw: unknown, validIds: ReadonlySet<string>): Validated {
   }
 }
 
-/** Último bloco ```json da resposta (o contrato pede um único bloco, ao final). */
-function lastJsonBlock(text: string): string | null {
-  const blocks = [...text.matchAll(/```json\s*([\s\S]*?)```/g)];
-  return blocks.length ? blocks[blocks.length - 1][1] : null;
+const PROPOSAL_MARKERS = ['{"version"', '{"actions"', '{"notes"', '{"tasks"', '{"connections"'];
+
+/**
+ * Onde está a proposta na resposta. O contrato pede um único bloco ```json ao final, mas modelos reais desviam
+ * (observado com gpt-4.1-mini: JSON puro, sem cerca). Em ordem:
+ * 1. último bloco ```json / ```JSON, ou ``` sem linguagem cujo conteúdo começa com "{";
+ * 2. a resposta inteira, se for um objeto JSON;
+ * 3. um objeto JSON no FIM da resposta que comece por uma chave do contrato ({"version", {"actions"…).
+ * `raw` é o trecho exato (para ocultá-lo do texto exibido). Tudo continua passando pela validação.
+ */
+function proposalSource(text: string): { raw: string; json: string } | null {
+  const fenced = [...text.matchAll(/```(json|JSON)?[ \t]*\r?\n?([\s\S]*?)```/g)];
+  for (let i = fenced.length - 1; i >= 0; i--) {
+    const body = fenced[i][2].trim();
+    if (fenced[i][1] || body.startsWith('{')) return { raw: fenced[i][0], json: body };
+  }
+  const t = text.trim();
+  if (t.startsWith('{') && t.endsWith('}')) return { raw: t, json: t };
+  if (!t.endsWith('}')) return null;
+  const starts = PROPOSAL_MARKERS.map((m) => t.indexOf(m)).filter((i) => i >= 0);
+  if (!starts.length) return null;
+  const tail = t.slice(Math.min(...starts));
+  return { raw: tail, json: tail };
+}
+
+/** Texto da resposta sem o trecho da proposta (o que a conversa exibe). */
+export function proposalDisplayText(text: string, proposal: ParsedProposal | null): string {
+  if (!proposal) return text;
+  return text.replace(proposal.raw, '').replace(/```(json|JSON)\s*[\s\S]*?```/g, '').trim();
 }
 
 /** Converte o formato v1 ({ notes, tasks, connections }) em ações v2. */
@@ -257,11 +284,11 @@ function legacyItems(o: Record<string, unknown>): unknown[] {
  * Retorna null quando não há proposta (sem bloco json, json inválido ou nada aproveitável).
  */
 export function parseAIProposal(text: string, validIds: ReadonlySet<string>): ParsedProposal | null {
-  const raw = lastJsonBlock(text);
-  if (raw === null) return null;
+  const src = proposalSource(text);
+  if (src === null) return null;
   let json: unknown;
   try {
-    json = JSON.parse(raw);
+    json = JSON.parse(src.json);
   } catch {
     return null;
   }
@@ -296,7 +323,7 @@ export function parseAIProposal(text: string, validIds: ReadonlySet<string>): Pa
     actions.push(r.action);
   });
   if (!actions.length && !rejected.length) return null;
-  return { version: v2 ? 2 : 1, actions, rejected, notices: [...new Set(notices)] };
+  return { version: v2 ? 2 : 1, actions, rejected, notices: [...new Set(notices)], raw: src.raw };
 }
 
 /* ------------------------------------------------------------------ */
@@ -398,7 +425,20 @@ export function aiEntryId(messageId: string, index: number) {
 
 const sameText = (a: string, b: string) => normalizeName(a.trim()) === normalizeName(b.trim());
 
-export function resolveMoney(a: MoneyAction, dest: Destination, targets: FinanceTarget[], entryId: string): ResolvedMoney {
+/**
+ * Bloco de valor já existente com o mesmo papel, valor e moeda. Cobre a duplicidade ENTRE mensagens
+ * (ex.: interpretação local numa resposta e a mesma ação vinda da IA na resposta seguinte).
+ */
+export function equalValueTile(a: MoneyAction, currency: Currency, elements: AuroraElement[]): WidgetElement | null {
+  for (const e of elements) {
+    if (e.type !== 'widget' || e.widgetType !== WIDGET.value) continue;
+    const d = sanitizeValue(e.data);
+    if (d.valueType === 'money' && d.financialRole === a.role && d.amountCents === a.amountCents && d.currency === currency) return e;
+  }
+  return null;
+}
+
+export function resolveMoney(a: MoneyAction, dest: Destination, targets: FinanceTarget[], entryId: string, elements?: AuroraElement[]): ResolvedMoney {
   const defaults: string[] = [];
   const warnings: string[] = [];
   const errors: string[] = [];
@@ -417,6 +457,8 @@ export function resolveMoney(a: MoneyAction, dest: Destination, targets: Finance
     if (!period) defaults.push('Competência: do mês conectado (padrão)');
     if (!a.category) defaults.push('Categoria: nenhuma');
     if (a.paid) warnings.push('“Pago” não se aplica a bloco de valor e será ignorado.');
+    const dup = elements ? equalValueTile(a, currency, elements) : null;
+    if (dup) warnings.push(`Já existe bloco de valor igual no quadro (“${dup.title}”, ${formatMoney(a.amountCents, currency)}) — confira se não é duplicado.`);
     const valueData = createValueData({ valueType: 'money', currency, amountCents: a.amountCents, financialRole: a.role, period, category: a.category, note: a.note });
     return {
       dest, currency, defaults, warnings, errors, valueData, valueTitle: title,
@@ -462,7 +504,7 @@ export function resolveMoney(a: MoneyAction, dest: Destination, targets: Finance
 /* ------------------------------------------------------------------ */
 
 export interface WidgetDataUpdate { id: string; update: (raw: unknown) => unknown }
-export interface ApplyPlan { add: AuroraElement[]; updates: WidgetDataUpdate[]; lines: string[]; financial: boolean }
+export interface ApplyPlan { add: AuroraElement[]; updates: WidgetDataUpdate[]; lines: string[]; warnings: string[]; financial: boolean }
 
 export interface PlanInput {
   actions: ProposedAction[];
@@ -487,6 +529,7 @@ export function buildApplyPlan(p: PlanInput): { ok: true; plan: ApplyPlan } | { 
   const targets = financeTargets(p.elements, p.ai.id, p.validIds);
   const add: AuroraElement[] = [];
   const lines: string[] = [];
+  const warnings: string[] = [];
   const entriesByTarget = new Map<string, FinanceEntry[]>();
   let financial = false;
   const x0 = p.ai.x + p.ai.width + 60;
@@ -524,12 +567,13 @@ export function buildApplyPlan(p: PlanInput): { ok: true; plan: ApplyPlan } | { 
         errors.push('Escolha o destino de cada valor financeiro.');
         return;
       }
-      const r = resolveMoney(a, dest, targets, aiEntryId(p.applyKey, i));
+      const r = resolveMoney(a, dest, targets, aiEntryId(p.applyKey, i), p.elements);
       if (r.errors.length) {
         errors.push(...r.errors);
         return;
       }
       lines.push(r.effect);
+      warnings.push(...r.warnings);
       if (dest.kind === 'value') {
         const w = createWidget(WIDGET.value, '1.0.0', r.valueTitle!, x0, place(VALUE_SIZES.normal.height), VALUE_SIZES.normal.width, VALUE_SIZES.normal.height, r.valueData);
         w.style.strokeColor = '#8fb4ff';
@@ -558,7 +602,7 @@ export function buildApplyPlan(p: PlanInput): { ok: true; plan: ApplyPlan } | { 
   }));
   if (!add.length && !updates.length) return { ok: false, errors: ['Nenhuma ação selecionada.'] };
   updates.push({ id: p.ai.id, update: (raw) => { const d = sanitizeAI(raw); return { ...d, applied: { ...d.applied, [p.applyKey]: Date.now() } }; } });
-  return { ok: true, plan: { add, updates, lines, financial } };
+  return { ok: true, plan: { add, updates, lines, warnings: [...new Set(warnings)], financial } };
 }
 
 function titleOf(el: AuroraElement | undefined): string {
@@ -659,5 +703,5 @@ export const ACTIONS_PROMPT = [
   '"Crie um bloco de receita/despesa/valor" → create_value (não use create_note para valores). "Lance/adicione nas finanças" → add_finance_entry. Se não estiver claro se é bloco independente ou lançamento, use create_value com "ambiguous":true: o usuário escolhe o destino.',
   'Omita os campos que o usuário não informou (título, data, competência, categoria, descrição): não invente dados. Use em "target" e "connect" apenas ids que aparecem no contexto.',
   'Exemplo — "Crie um bloco de receita de R$ 2.000,00" → {"version":2,"actions":[{"type":"create_value","role":"income","currency":"BRL","amount":"2000.00"}]}',
-  'Nada será criado ou alterado sem a confirmação do usuário.',
+  'Não peça confirmação em texto e não pergunte "Confirma?": a interface do Aurora Board mostra a prévia e pede a confirmação do usuário antes de criar ou alterar qualquer coisa. Inclua o bloco json já nesta resposta, sempre entre ```json e ```.',
 ].join('\n');
