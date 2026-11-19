@@ -4,6 +4,7 @@ import { ExportFileSchema, SCHEMA_VERSION } from '../core/schema';
 import { migrateBoard } from './migrations';
 import { importLegacy, isLegacyFormat } from './legacy';
 import { checkGenericBudget, checkImportBudget, IMPORT_LIMITS, ImportBudgetError } from './importBudget';
+import { blockActiveContent } from '../core/widgetData';
 import type { PersistenceAdapter } from './adapter';
 
 export const APP_VERSION = 'Aurora Board 1.0.0';
@@ -26,7 +27,8 @@ export interface ImportResult {
   boards: Board[];
   assets: Asset[];
   warnings: string[];
-  stats: { boards: number; elements: number };
+  /** `activeContent`: widgets HTML importados DESATIVADOS (exigem ativação consciente). */
+  stats: { boards: number; elements: number; activeContent: number };
 }
 
 export function assetIdsOf(elements: AuroraElement[]): Set<string> {
@@ -73,7 +75,8 @@ export function parseImport(text: string, workspaceId: string): ImportResult {
   if (isLegacyFormat(data)) {
     const r = importLegacy(data, workspaceId);
     if (!r.boards.length) throw new ImportError('Arquivo v0.2/v0.3 sem quadros.');
-    return { source: 'legacy-v0.3', boards: r.boards, assets: r.assets, warnings: r.warnings, stats: { boards: r.stats.boards, elements: r.stats.elements + r.stats.connections + r.stats.strokes } };
+    const activeContent = r.boards.reduce((n, b) => n + blockActiveContent(b.elements as never, 'import'), 0);
+    return { source: 'legacy-v0.3', boards: r.boards, assets: r.assets, warnings: r.warnings, stats: { boards: r.stats.boards, elements: r.stats.elements + r.stats.connections + r.stats.strokes, activeContent } };
   }
   const parsed = ExportFileSchema.safeParse(data);
   if (!parsed.success) {
@@ -109,7 +112,9 @@ export function parseImport(text: string, workspaceId: string): ImportResult {
   for (const b of boards) {
     for (const id of assetIdsOf(b.elements)) if (!available.has(id)) warnings.push(`Quadro "${b.name}": arquivo/imagem ${id} ausente no backup.`);
   }
-  return { source: 'aurora', boards, assets, warnings, stats: { boards: boards.length, elements } };
+  // Conteúdo ativo importado começa desativado, sobrescrevendo qualquer marcação vinda do arquivo (S1-SEC-003).
+  const activeContent = boards.reduce((n, b) => n + blockActiveContent(b.elements as never, 'import'), 0);
+  return { source: 'aurora', boards, assets, warnings, stats: { boards: boards.length, elements, activeContent } };
 }
 
 /**

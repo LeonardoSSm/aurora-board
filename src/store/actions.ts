@@ -25,7 +25,8 @@ import { getState, setState, selectedSet } from './editor';
 import type { Tool } from './types';
 import { confirmDialog, openDialog, toast } from './ui';
 import { flushCurrentBoard, flushSave, forgetBoard, getAdapter, markLoaded, runExclusive, syncSaveState, withoutAutosave } from '../persistence/autosave';
-import { migrateBoard } from '../persistence/migrations';
+import { migrateBoard, normalizeElement } from '../persistence/migrations';
+import { blockActiveContent } from '../core/widgetData';
 import { dataflowSpec, findWidgetPreset, getWidget } from '../widgets/registry';
 import { finalizeDataEdges } from '../core/dataflow';
 import { WIDGET } from '../core/widgetIds';
@@ -685,7 +686,17 @@ export async function pasteContent(text: string | null, files: File[], at: Vec |
   try {
     const parsed = JSON.parse(raw);
     if (parsed?.type === CLIPBOARD_TYPE && Array.isArray(parsed.elements)) {
-      const els = parsed.elements as AuroraElement[];
+      // Texto vindo da área de transferência do sistema pode ter sido preparado por qualquer site (S1-SEC-010):
+      // só o que este app copiou nesta sessão é confiável. O resto passa pela mesma validação da importação,
+      // e HTML personalizado entra desativado (S1-SEC-003).
+      const external = raw !== internalClipboard;
+      let els = parsed.elements as AuroraElement[];
+      if (external) {
+        if (els.length > 5_000) { toast('Conteúdo colado grande demais (máximo de 5 000 elementos).', 'warning'); return; }
+        els = els.map((e) => normalizeElement(e).element).filter((e): e is AuroraElement => !!e);
+        if (!els.length) return;
+        blockActiveContent(els, 'paste', WIDGET.sandbox);
+      }
       const box = getCommonBounds(els)!;
       pasteCount++;
       const offset = at

@@ -178,10 +178,77 @@ test.describe('S1-SEC-003: HTML importado e isolamento do sandbox', () => {
     expect(page.url()).not.toContain('s1-top-nav');
   });
 
-  test('[reprodução] navegação do próprio frame é detectada e o widget é bloqueado', async ({ page }) => {
-    const html = `<script>setTimeout(function(){ location.href = 'data:text/html,<p>pagina externa</p>'; }, 50)</script>`;
-    await page.evaluate((h) => (window as any).__aurora.actions.addWidget('aurora.sandbox-html', { x: 200, y: 200 }, { html: h }), html);
-    await expect(page.getByTestId('sandbox-navigated')).toBeVisible({ timeout: 5000 });
+  for (const target of ['data:text/html,<p>pagina externa</p>', 'http://localhost:5173/favicon.svg?s1nav']) {
+    test(`[reprodução] navegação do próprio frame é bloqueada e detectada (${target.slice(0, 5)})`, async ({ page }) => {
+      const html = `<script>aurora.setState({ antes: 1 }); setTimeout(function(){ location.href = ${JSON.stringify(target)}; }, 50)</script>`;
+      await page.evaluate((h) => (window as any).__aurora.actions.addWidget('aurora.sandbox-html', { x: 200, y: 200 }, { html: h }), html);
+      await expect(page.getByTestId('sandbox-navigated')).toBeVisible({ timeout: 5000 });
+      // Nenhum frame do app chegou ao destino (frame-src 'none' da página bloqueia a navegação).
+      expect(page.frames().some((f) => f.url().includes('s1nav') || f.url().startsWith('data:'))).toBe(false);
+      await page.getByRole('button', { name: 'Recarregar widget' }).click();
+      await expect(page.locator('iframe[sandbox]')).toHaveCount(1);
+    });
+  }
+
+  test('HTML importado: ativação consciente executa; a decisão persiste após recarregar', async ({ page }) => {
+    const html = '<p id="x">inicial</p><script>document.getElementById("x").textContent="executou"; aurora.setState({ rodou: true })</script>';
+    // Um backup que tenta se declarar "já ativado" continua desativado: a marcação é do importador.
+    const data = sandboxBoard(html);
+    (data.boards[0].elements[0] as any).data.activation = { state: 'allowed', source: 'import', at: 1 };
+    await importBackup(page, data);
+    await expect(page.getByTestId('import-active-content')).toContainText('1 widget');
+    await confirmImport(page);
+    await expect(page.getByTestId('sandbox-inactive')).toBeVisible();
+    await page.getByRole('button', { name: 'Ver código' }).click();
+    await expect(page.getByTestId('sandbox-inactive').locator('pre')).toContainText('executou');
+    await page.getByTestId('sandbox-activate').click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Ativar este widget' }).click();
+    await expect(page.locator('iframe[sandbox]')).toHaveCount(1);
+    await expect(page.frameLocator('iframe[sandbox]').locator('#x')).toHaveText('executou');
+    await expect.poll(async () => (await state(page)).elements.find((e) => e.widgetType === 'aurora.sandbox-html')?.data.state).toEqual({ rodou: true });
+    await page.waitForFunction(() => (window as any).__aurora.getState().saveState === 'saved');
+    await page.reload();
+    await page.waitForFunction(() => (window as any).__aurora?.getState().status === 'ready');
+    await expect(page.locator('iframe[sandbox]')).toHaveCount(1);
+    await expectNotPwned(page);
+  });
+
+  test('colar JSON externo: elementos validados e HTML desativado', async ({ page }) => {
+    const payload = JSON.stringify({ type: 'aurora-board/clipboard', version: 1, elements: [
+      { id: 'p1', type: 'widget', widgetType: 'aurora.sandbox-html', x: 0, y: 0, width: 300, height: 200, data: { html: '<b>colado</b>', activation: { state: 'allowed' } } },
+      { id: 'p2', type: 'rectangle', x: 'NaN', y: 0, width: 10, height: 10, style: { strokeColor: 'red"><script>' } },
+      { id: 'p3', type: 'desconhecido' },
+    ] });
+    await page.evaluate((text) => {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', text);
+      document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+    }, payload);
+    await expect(page.getByTestId('sandbox-inactive')).toBeVisible();
+    const els = (await state(page)).elements;
+    const rectEl = els.find((e) => e.type === 'rectangle')!;
+    expect(rectEl.x).toBe(rectEl.x); // número finito, não NaN
+    expect(Number.isFinite(rectEl.x)).toBe(true);
+    expect(rectEl.style.strokeColor).not.toContain('<');
+    expect(els.some((e) => e.type === ('desconhecido' as string))).toBe(false);
+  });
+
+  test('modo seguro (?safe) desliga todo HTML personalizado', async ({ page }) => {
+    await page.evaluate(() => (window as any).__aurora.actions.addWidget('aurora.sandbox-html', { x: 200, y: 200 }));
+    await expect(page.locator('iframe[sandbox]')).toHaveCount(1);
+    await page.waitForFunction(() => (window as any).__aurora.getState().saveState === 'saved');
+    await page.goto('/?safe');
+    await page.waitForFunction(() => (window as any).__aurora?.getState().status === 'ready');
+    await expect(page.getByTestId('sandbox-safe-mode')).toBeVisible();
+    await expect(page.locator('iframe[sandbox]')).toHaveCount(0);
+  });
+
+  test('limite de iframes simultâneos: excedentes ficam pausados', async ({ page }) => {
+    // Todos dentro da tela (widgets fora do viewport já são desmontados pelo canvas).
+    await page.evaluate(() => { for (let i = 0; i < 23; i++) (window as any).__aurora.actions.addWidget('aurora.sandbox-html', { x: 100 + (i % 6) * 120, y: 100 + Math.floor(i / 6) * 100 }, { html: `<p>${i}</p>` }, { size: { width: 110, height: 90 } }); });
+    await page.evaluate(() => (window as any).__aurora.actions.zoomToFit());
+    await expect(page.locator('iframe[sandbox]')).toHaveCount(20);
+    await expect(page.getByTestId('sandbox-paused')).toHaveCount(3);
   });
 
   test('mensagens inválidas, enormes ou em excesso não corrompem o estado', async ({ page }) => {

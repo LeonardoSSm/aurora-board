@@ -142,8 +142,28 @@ export const sanitizeChart = (raw: unknown): ChartData => {
 };
 
 /* HTML isolado (plugin de terceiros / experimento) ------------------ */
-export interface SandboxData { html: string; state: unknown }
+/**
+ * Política de conteúdo ativo (S1-SEC-003): HTML que chegou por importação ou colagem externa fica
+ * `blocked` até o usuário ativá-lo. A marcação é feita pelo IMPORTADOR (sobrescreve o que vier no arquivo),
+ * então um backup não consegue se declarar "já ativado". Ausente = conteúdo criado neste navegador.
+ */
+export interface SandboxActivation { state: 'blocked' | 'allowed'; source: 'import' | 'paste'; at: number }
+export interface SandboxData { html: string; state: unknown; activation?: SandboxActivation }
 export const sanitizeSandbox = (raw: unknown): SandboxData => {
   const d = obj(raw);
-  return { html: str(d.html), state: d.state ?? null };
+  const a = obj(d.activation);
+  const out: SandboxData = { html: str(d.html), state: d.state ?? null };
+  if (a.state === 'blocked' || a.state === 'allowed') out.activation = { state: a.state, source: a.source === 'paste' ? 'paste' : 'import', at: Number(a.at) || 0 };
+  return out;
 };
+
+/** Marca widgets HTML como desativados (importação/colagem). Retorna quantos foram marcados. */
+export function blockActiveContent(elements: { type: string; widgetType?: string; data?: unknown }[], source: SandboxActivation['source'], sandboxType = 'aurora.sandbox-html'): number {
+  let n = 0;
+  for (const el of elements) {
+    if (el.type !== 'widget' || el.widgetType !== sandboxType) continue;
+    el.data = { ...obj(el.data), activation: { state: 'blocked', source, at: Date.now() } satisfies SandboxActivation };
+    n++;
+  }
+  return n;
+}
