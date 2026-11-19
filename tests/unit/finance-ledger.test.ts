@@ -3,13 +3,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { dedupeKeys, planImport } from '../../src/finance/importPlan';
 import type { TransactionDraft } from '../../src/finance/drafts';
 import { parseCsvStatement } from '../../src/finance/csv';
-import { IndexedDBFinanceRepository, MemoryFinanceRepository } from '../../src/finance/repository';
+import { IndexedDBFinanceRepository, MemoryFinanceRepository, type FinanceRepository } from '../../src/finance/repository';
 import * as F from '../../src/finance/store';
 import { accountBalance, billMonth, cardSummary, consolidate, recurring, summarizeFlows } from '../../src/finance/reports';
 
 const d = (line: number, postedDate: string, amountCents: number, description: string, extra: Partial<TransactionDraft> = {}): TransactionDraft => ({ line, postedDate, amountCents, description, status: 'posted', ...extra });
 
-async function fresh(repo = new MemoryFinanceRepository()) {
+async function fresh<R extends FinanceRepository = MemoryFinanceRepository>(repo: R = new MemoryFinanceRepository() as unknown as R): Promise<R> {
   F.resetFinanceForTests(repo);
   await F.ensureFinanceLoaded();
   return repo;
@@ -262,7 +262,7 @@ describe('persistência IndexedDB (atômica e isolada)', () => {
     expect(snap.imports.some((i) => i.id === 'imp_x')).toBe(false);
   });
   it('erro de gravação não altera a memória (sem estado fantasma)', async () => {
-    const repo = await fresh();
+    const repo = await fresh(new MemoryFinanceRepository());
     const acc = await F.createAccount({ institutionName: 'A', name: 'A', type: 'checking' });
     const plan = F.prepareImport(acc.id, { drafts: [d(1, '2026-11-01', -100, 'A')], invalid: [], ignored: [], warnings: [] });
     repo.failNextWrite = true;

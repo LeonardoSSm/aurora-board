@@ -47,6 +47,17 @@ export interface FinanceRepository {
   deleteTransactions(ids: string[]): Promise<void>;
   /** Apaga todos os dados financeiros locais (mantém só o identificador do razão). */
   wipe(): Promise<void>;
+  /** Restauração de backup: só ACRESCENTA registros (ids já existentes são ignorados pelo chamador). Atômica. */
+  commitRestore(batch: RestoreBatch): Promise<void>;
+}
+
+export interface RestoreBatch {
+  institutions: FinancialInstitution[];
+  accounts: FinancialAccount[];
+  transactions: BankTransaction[];
+  imports: ImportSession[];
+  categories: Category[];
+  rules: CategoryRule[];
 }
 
 interface FinanceDB extends DBSchema {
@@ -227,6 +238,24 @@ export class IndexedDBFinanceRepository implements FinanceRepository {
       for (const s of ['institutions', 'accounts', 'transactions', 'imports', 'consents', 'categories', 'rules'] as const) await tx.objectStore(s).clear();
     });
   }
+  async commitRestore(b: RestoreBatch) {
+    const db = await this.dbp;
+    const count = await db.count('transactions');
+    if (count + b.transactions.length > STORAGE_LIMITS.maxTransactions) throw new FinanceStorageError(`Limite local de ${STORAGE_LIMITS.maxTransactions} movimentações atingido. Nada foi restaurado.`);
+    structuredClone(b);
+    await this.atomic(['institutions', 'accounts', 'transactions', 'imports', 'categories', 'rules'], async (tx) => {
+      for (const i of b.institutions) await tx.objectStore('institutions').add(i);
+      for (const a of b.accounts) await tx.objectStore('accounts').add(a);
+      const ts = tx.objectStore('transactions');
+      for (const t of b.transactions) {
+        if (await ts.index('byDedupe').getKey([t.accountId, t.dedupeKey])) throw new FinanceStorageError('Movimentação duplicada no backup. Nada foi restaurado.');
+        await ts.add(t);
+      }
+      for (const i of b.imports) await tx.objectStore('imports').add(i);
+      for (const c of b.categories) await tx.objectStore('categories').add(c);
+      for (const r of b.rules) await tx.objectStore('rules').add(r);
+    });
+  }
 }
 
 /** Mesmo contrato em memória (testes e fallback quando o IndexedDB não abre). */
@@ -310,5 +339,20 @@ export class MemoryFinanceRepository implements FinanceRepository {
   async wipe() {
     this.maybeFail();
     for (const m of [this.institutions, this.accounts, this.transactions, this.imports, this.consents, this.categories, this.rules]) (m as Map<string, unknown>).clear();
+  }
+  async commitRestore(b: RestoreBatch) {
+    if (this.transactions.size + b.transactions.length > STORAGE_LIMITS.maxTransactions) throw new FinanceStorageError('Limite local atingido. Nada foi restaurado.');
+    const staged = structuredClone(b);
+    const keys = new Set([...this.transactions.values()].map((t) => `${t.accountId}|${t.dedupeKey}`));
+    const clash = (m: Map<string, unknown>, ids: { id: string }[]) => ids.some((x) => m.has(x.id));
+    if (clash(this.institutions, staged.institutions) || clash(this.accounts, staged.accounts) || clash(this.transactions, staged.transactions) || clash(this.imports, staged.imports) || clash(this.categories, staged.categories) || clash(this.rules, staged.rules)) throw new FinanceStorageError('Registro já existente no backup. Nada foi restaurado.');
+    for (const t of staged.transactions) { const k = `${t.accountId}|${t.dedupeKey}`; if (keys.has(k)) throw new FinanceStorageError('Movimentação duplicada no backup. Nada foi restaurado.'); keys.add(k); }
+    this.maybeFail();
+    for (const i of staged.institutions) this.institutions.set(i.id, i);
+    for (const a of staged.accounts) this.accounts.set(a.id, a);
+    for (const t of staged.transactions) this.transactions.set(t.id, t);
+    for (const i of staged.imports) this.imports.set(i.id, i);
+    for (const c of staged.categories) this.categories.set(c.id, c);
+    for (const r of staged.rules) this.rules.set(r.id, r);
   }
 }

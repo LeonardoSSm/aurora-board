@@ -14,6 +14,7 @@ import { materializePlan, planImport, safeImportFileName, type ImportPlan } from
 import { applyPairs, findPairs, unlinkPair, type PairSuggestion } from './reconcile';
 import { applyRules, classifyNew } from './classify';
 import { MemoryFinanceRepository, type FinanceRepository } from './repository';
+import { planRestore, type FinanceBackup } from './backup';
 
 export type LedgerStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -372,6 +373,15 @@ export async function wipeFinanceData(): Promise<void> {
 }
 
 export function setTestMode(on: boolean) { set({ testMode: on }); }
+
+/** Restaura um backup financeiro já validado: só acrescenta, numa transação. */
+export async function restoreFinanceBackup(b: FinanceBackup): Promise<{ added: number; skipped: number }> {
+  requireReady();
+  const { batch, skipped } = planRestore(getFinance(), b);
+  await financeRepository().commitRestore(batch);
+  await reloadFinance();
+  return { added: batch.transactions.length, skipped };
+}
 
 /** Substitui o estado a partir do disco (após restaurar backup, por exemplo). */
 export async function reloadFinance(): Promise<void> {
