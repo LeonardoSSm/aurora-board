@@ -198,7 +198,7 @@ export const formulaPlugin: WidgetPlugin<FormulaData> = {
   hideInLibrary: true,
   presets: [
     { id: 'blank', name: 'Fórmula', description: 'Fórmula livre com os valores conectados.', icon: Sigma, keywords: ['fórmula', 'cálculo', 'soma'], data: sanitizeFormula({}), size: FORMULA_SIZES.normal, title: 'Fórmula' },
-    ...FORMULA_TEMPLATES.slice(0, 2).map((t) => ({ id: t.id, name: t.label, description: t.hint, icon: Sigma, keywords: ['fórmula', 'modelo'], data: sanitizeFormula({ expression: t.expression }), size: FORMULA_SIZES.normal, title: t.label })),
+    ...FORMULA_TEMPLATES.slice(0, 2).map((t) => ({ id: t.id, name: t.id === 'balance' ? 'Saldo' : 'Comprometido', description: t.hint, icon: Sigma, keywords: ['fórmula', 'modelo'], data: sanitizeFormula({ expression: t.expression }), size: FORMULA_SIZES.normal, title: t.label })),
   ],
   createData: () => sanitizeFormula({}),
   sanitize: sanitizeFormula,
