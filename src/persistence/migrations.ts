@@ -2,6 +2,7 @@
 import type { AuroraElement, Board } from '../core/schema';
 import { ElementSchema, SCHEMA_VERSION } from '../core/schema';
 import { DEFAULT_BOARD_SETTINGS, DEFAULT_STYLE, randomSeed, uid } from '../core/elements';
+import { sanitizeCheckpoints } from '../core/checkpoints';
 
 type Raw = Record<string, unknown>;
 const obj = (v: unknown): Raw => (v && typeof v === 'object' ? (v as Raw) : {});
@@ -116,6 +117,8 @@ export function migrateBoard(raw: unknown, workspaceId: string): { board: Board;
   }
   warnings.push(...repairReferences(elements));
   const cam = obj(b.camera);
+  const cps = sanitizeCheckpoints(b.checkpoints, () => uid('cp_'));
+  warnings.push(...cps.warnings);
   const now = Date.now();
   const board: Board = {
     id: typeof b.id === 'string' && b.id ? b.id : uid('b_'),
@@ -127,6 +130,7 @@ export function migrateBoard(raw: unknown, workspaceId: string): { board: Board;
     archived: b.archived === true,
     settings: { ...DEFAULT_BOARD_SETTINGS, ...obj(b.settings) } as Board['settings'],
     camera: { x: num(cam.x, 0), y: num(cam.y, 0), zoom: Math.min(10, Math.max(0.05, num(cam.zoom, 1))) },
+    checkpoints: cps.checkpoints,
     elements,
     schemaVersion: SCHEMA_VERSION,
   };

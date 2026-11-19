@@ -28,6 +28,7 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let retryAttempt = 0;
 let suppressed = 0;
 let lastSavedElements: AuroraElement[] | null = null;
+let lastSavedCheckpoints: unknown = null;
 let queue: Promise<void> = Promise.resolve();
 let activeSaves = 0;
 let revision = 0;
@@ -65,16 +66,18 @@ export function withoutAutosave<T>(fn: () => T): T {
 
 export function markLoaded(elements: AuroraElement[], _camera?: unknown) {
   lastSavedElements = elements;
+  lastSavedCheckpoints = getState().checkpoints;
 }
 
 export function snapshotCurrentBoard(): Board | null {
   const s = getState();
   const meta = s.boards.find((b) => b.id === s.boardId);
   if (!meta) return null;
-  const changed = s.elements !== lastSavedElements;
+  const changed = s.elements !== lastSavedElements || s.checkpoints !== lastSavedCheckpoints;
   return {
     ...meta,
     camera: s.camera,
+    checkpoints: s.checkpoints,
     elements: s.elements,
     updatedAt: changed ? Date.now() : meta.updatedAt,
     schemaVersion: SCHEMA_VERSION,
@@ -274,6 +277,7 @@ export function startAutosave(): () => void {
   const unsubs = [
     useEditor.subscribe((s) => s.elements, () => scheduleSave()),
     useEditor.subscribe((s) => s.camera, () => scheduleSave()),
+    useEditor.subscribe((s) => s.checkpoints, () => scheduleSave()),
     useEditor.subscribe((s) => s.boards, (boards, prev) => {
       // Mudanças de metadados (nome, descrição...) do quadro ativo.
       const id = getState().boardId;

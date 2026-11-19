@@ -5,12 +5,16 @@
  * um snapshot é apenas um array de referências — custo O(n) ponteiros, sem cópia profunda.
  */
 import type { AuroraElement } from './schema';
+import type { SpatialCheckpoint } from './checkpoints';
 
 export interface HistoryEntry {
   before: AuroraElement[];
   after: AuroraElement[];
   selectionBefore: string[];
   selectionAfter: string[];
+  /** Checkpoints antes/depois (só em entradas que os alteram; elementos ficam iguais). */
+  checkpointsBefore?: SpatialCheckpoint[];
+  checkpointsAfter?: SpatialCheckpoint[];
   /** Chave para agrupar alterações consecutivas (ex.: digitação em um widget). */
   coalesceKey?: string;
   at: number;
@@ -29,7 +33,7 @@ export function emptyHistory(): HistoryStack {
 }
 
 export function pushEntry(stack: HistoryStack, entry: HistoryEntry): HistoryStack {
-  if (entry.before === entry.after) return stack;
+  if (entry.before === entry.after && entry.checkpointsBefore === entry.checkpointsAfter) return stack;
   const last = stack.undo[stack.undo.length - 1];
   if (last && entry.coalesceKey && last.coalesceKey === entry.coalesceKey && entry.at - last.at < COALESCE_MS) {
     const merged: HistoryEntry = { ...last, after: entry.after, selectionAfter: entry.selectionAfter, at: entry.at };

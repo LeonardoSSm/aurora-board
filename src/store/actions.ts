@@ -178,7 +178,7 @@ export function undo() {
   const r = undoStep(s.history[s.boardId] ?? emptyHistory());
   if (!r) return;
   const ids = new Set(r.entry.before.map((e) => e.id));
-  setState({ elements: r.entry.before, selectedIds: r.entry.selectionBefore.filter((id) => ids.has(id)), history: { ...s.history, [s.boardId]: r.stack } });
+  setState({ elements: r.entry.before, ...(r.entry.checkpointsBefore ? { checkpoints: r.entry.checkpointsBefore } : {}), selectedIds: r.entry.selectionBefore.filter((id) => ids.has(id)), history: { ...s.history, [s.boardId]: r.stack } });
 }
 
 export function redo() {
@@ -187,7 +187,7 @@ export function redo() {
   const r = redoStep(s.history[s.boardId] ?? emptyHistory());
   if (!r) return;
   const ids = new Set(r.entry.after.map((e) => e.id));
-  setState({ elements: r.entry.after, selectedIds: r.entry.selectionAfter.filter((id) => ids.has(id)), history: { ...s.history, [s.boardId]: r.stack } });
+  setState({ elements: r.entry.after, ...(r.entry.checkpointsAfter ? { checkpoints: r.entry.checkpointsAfter } : {}), selectedIds: r.entry.selectionAfter.filter((id) => ids.has(id)), history: { ...s.history, [s.boardId]: r.stack } });
 }
 
 /* ================================================================== */
@@ -869,6 +869,9 @@ export async function openBoard(id: string) {
       boardId: board.id,
       elements: board.elements,
       camera: board.camera,
+      checkpoints: board.checkpoints ?? [],
+      checkpointEditor: null,
+      checkpointFlash: null,
       selectedIds: [],
       editingGroupId: null,
       editingTextId: null,
