@@ -13,6 +13,8 @@ import {
   uid,
 } from '../core/elements';
 import { safeExternalUrl } from '../core/aiTiles';
+import { MAX_ZOOM, MIN_ZOOM, nextZoomStep, sanitizeZoomPrefs, zoomAround } from '../core/camera';
+import { cameraTarget, cancelCameraAnimation, fitCameraToBounds, panCamera, zoomToLevel } from './cameraMotion';
 import { createValueData, parseTextToValue, VALUE_SIZES } from '../core/valueTile';
 import { resolveLinear, updateBoundArrows, unbindDeleted } from '../core/bindings';
 import { assignFrames, expandToGroups, groupElements, reorder, ungroupElements, type ReorderOp } from '../core/groups';
@@ -218,8 +220,7 @@ export function selectedElements(): AuroraElement[] {
 /* Câmera                                                              */
 /* ================================================================== */
 
-export const MIN_ZOOM = 0.1;
-export const MAX_ZOOM = 8;
+export { MIN_ZOOM, MAX_ZOOM };
 
 export function screenToWorld(p: Vec, cam = getState().camera): Vec {
   return { x: (p.x - cam.x) / cam.zoom, y: (p.y - cam.y) / cam.zoom };
@@ -229,35 +230,30 @@ export function worldToScreen(p: Vec, cam = getState().camera): Vec {
   return { x: p.x * cam.zoom + cam.x, y: p.y * cam.zoom + cam.y };
 }
 
+/** Zoom imediato ancorado (pinça, testes). Cancela qualquer animação de câmera em andamento. */
 export function zoomAt(nextZoom: number, anchor?: Vec) {
   const s = getState();
-  const cam = s.camera;
-  const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, nextZoom));
+  cancelCameraAnimation();
   const a = anchor ?? { x: s.viewport.width / 2, y: s.viewport.height / 2 };
-  setState({ camera: { zoom: z, x: a.x - ((a.x - cam.x) * z) / cam.zoom, y: a.y - ((a.y - cam.y) * z) / cam.zoom } });
+  setState({ camera: zoomAround(s.camera, nextZoom, a) });
 }
 
 export function zoomBy(factor: number, anchor?: Vec) {
   zoomAt(getState().camera.zoom * factor, anchor);
 }
 
+/** Botões +/− e Ctrl+= / Ctrl+−: próximo nível a partir do DESTINO atual (cliques rápidos acumulam). */
 export function zoomStep(direction: 1 | -1) {
-  const steps = [0.1, 0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5, 6, 8];
-  const z = getState().camera.zoom;
-  const next = direction > 0 ? steps.find((v) => v > z + 0.001) ?? MAX_ZOOM : [...steps].reverse().find((v) => v < z - 0.001) ?? MIN_ZOOM;
-  zoomAt(next);
+  zoomToLevel(nextZoomStep(cameraTarget().zoom, direction));
 }
 
 export function panBy(dx: number, dy: number) {
-  const c = getState().camera;
-  setState({ camera: { ...c, x: c.x + dx, y: c.y + dy } });
+  panCamera(dx, dy);
 }
 
+/** Enquadra uma área com transição suave (imediato com movimento reduzido). */
 export function zoomToBox(box: Box, maxZoom = 1, padding = 80) {
-  const { viewport } = getState();
-  const w = Math.max(box.maxX - box.minX, 1), h = Math.max(box.maxY - box.minY, 1);
-  const zoom = Math.min(maxZoom, Math.max(MIN_ZOOM, Math.min((viewport.width - padding * 2) / w, (viewport.height - padding * 2) / h)));
-  setState({ camera: { zoom, x: Math.round(viewport.width / 2 - ((box.minX + box.maxX) / 2) * zoom), y: Math.round(viewport.height / 2 - ((box.minY + box.maxY) / 2) * zoom) } });
+  fitCameraToBounds(box, maxZoom, padding);
 }
 
 export function zoomToFit() {
@@ -318,11 +314,19 @@ export function openExternalUrl(url: string) {
   return true;
 }
 
+/** Sensibilidade do zoom: preferência geral, gravada nas configurações locais (não no quadro). */
+export async function setZoomPrefs(p: Partial<import('../core/camera').ZoomPreferences>) {
+  const next = sanitizeZoomPrefs({ ...getState().zoomPrefs, ...p });
+  setState({ zoomPrefs: next });
+  await getAdapter().setSetting('zoomPreferences', next);
+}
+
 export function resetZoom() {
-  zoomAt(1);
+  zoomToLevel(1);
 }
 
 export function resetCamera() {
+  cancelCameraAnimation();
   const { viewport } = getState();
   // Pixel inteiro: linhas de 1px nítidas e coordenadas exatas do mouse.
   setState({ camera: { x: Math.round(viewport.width / 2), y: Math.round(viewport.height / 2), zoom: 1 } });
@@ -859,6 +863,7 @@ export async function openBoard(id: string) {
     if (!(await getAdapter().getSetting(key))) await getAdapter().setSetting(key, { savedAt: Date.now(), board: raw });
     toast(`${warnings.length} problema(s) de integridade corrigido(s) neste quadro. Detalhes no console.`, 'warning', 6000);
   }
+  cancelCameraAnimation(); // animação do quadro anterior nunca continua no novo
   withoutAutosave(() =>
     setState({
       boardId: board.id,

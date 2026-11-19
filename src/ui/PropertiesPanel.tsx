@@ -30,6 +30,7 @@ import {
   updateElements,
   updateStyle,
   updateWidgetData,
+  setZoomPrefs,
 } from '../store/actions';
 import type { Arrowhead, AuroraElement, ElementStyle, LinearElement, LinkKind, WidgetElement } from '../core/schema';
 import { acceptsBoundText, isLinear, isText } from '../core/schema';
@@ -47,6 +48,7 @@ import { formatMoney } from '../core/finance';
 import { makeHostApi, STATUS_LABEL } from '../widgets/WidgetFrame';
 import { CONNECTION_KINDS } from './Toolbar';
 import { connectionStyle } from '../core/connectionStyle';
+import { CUSTOM_RANGE, SENSITIVITY_LABEL, sensitivityOf, type ZoomSensitivityPreset } from '../core/camera';
 
 function common<T>(els: AuroraElement[], get: (e: AuroraElement) => T): T | null {
   if (!els.length) return null;
@@ -445,7 +447,25 @@ function BoardSettings() {
         </div>
         <div className="text-[10px] text-soft">Touchpad: dois dedos navegam, pinça faz zoom. Ctrl+roda sempre faz zoom.</div>
       </div>
+      <ZoomSensitivity />
     </>
+  );
+}
+
+/** Sensibilidade do zoom — preferência geral (vale para todos os quadros). */
+function ZoomSensitivity() {
+  const prefs = useEditor((s) => s.zoomPrefs);
+  const presets: ZoomSensitivityPreset[] = ['precise', 'smooth', 'normal', 'fast', 'custom'];
+  const pct = Math.round((Math.exp(0.15 * sensitivityOf(prefs)) - 1) * 100);
+  return (
+    <div className="mt-3" data-testid="zoom-sensitivity">
+      <Label>Sensibilidade do zoom</Label>
+      <Segmented<ZoomSensitivityPreset> label="Sensibilidade do zoom" value={prefs.preset} onChange={(preset) => void setZoomPrefs({ preset })} options={presets.map((p) => ({ value: p, label: p === 'custom' ? 'Pers.' : SENSITIVITY_LABEL[p], title: SENSITIVITY_LABEL[p] }))} />
+      {prefs.preset === 'custom' && (
+        <input type="range" aria-label="Sensibilidade personalizada" min={CUSTOM_RANGE.min} max={CUSTOM_RANGE.max} step={0.05} value={prefs.custom} onChange={(e) => void setZoomPrefs({ custom: Number(e.target.value) })} className="w-full mt-2 accent-accent" />
+      )}
+      <div className="text-[10px] text-soft mt-1">≈ {pct}% por clique da roda. Vale para todos os quadros; “Roda do mouse” acima é deste quadro.</div>
+    </div>
   );
 }
 

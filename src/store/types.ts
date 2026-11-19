@@ -102,6 +102,8 @@ export interface EditorState {
   inspectorFocus: { id: string; section?: string; nonce: number } | null;
   /** Widget em edição rápida no próprio bloco (duplo clique), ex.: valor ou fórmula. */
   editingWidgetId: string | null;
+  /** Preferência GERAL do usuário (não do quadro): sensibilidade do zoom. */
+  zoomPrefs: import('../core/camera').ZoomPreferences;
   toasts: Toast[];
   /** Último snapshot de dados de fluxo calculado (cache para widgets). */
   dataflowVersion: number;
