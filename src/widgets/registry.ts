@@ -92,6 +92,11 @@ export interface WidgetPlugin<D = unknown> {
   compute?(data: D, inputs: Record<string, InputValue[]>, element: WidgetElement): Record<string, unknown>;
   /** Resumo textual (contexto para IA, exportação SVG, busca). */
   summarize(data: D, element: WidgetElement): string;
+  /**
+   * Ciclo F1: conteúdo enviado à IA quando difere do resumo. `allowed: false` impede o envio (ex.: dados
+   * financeiros sem autorização confirmada no próprio bloco), mesmo com conexão de contexto/dados.
+   */
+  aiContext?(data: D, element: WidgetElement): { allowed: boolean; text: string; reason?: string };
   Component: ComponentType<WidgetProps<D>>;
   /** Configurações exibidas no painel de propriedades quando o widget está selecionado sozinho. */
   Inspector?: ComponentType<WidgetProps<D>>;
@@ -210,6 +215,18 @@ export function dataflowSpec(widgetType: string, el?: WidgetElement): DataflowNo
     outputs: ports?.outputs ?? p.outputs,
     compute: p.compute ? (e, inputs) => p.compute!(p.sanitize(e.data), inputs, e) : undefined,
   };
+}
+
+/** Política de IA de um elemento: null = sem política própria (usa o resumo). */
+export function aiPolicyOf(el: AuroraElement): { allowed: boolean; text: string; reason?: string } | null {
+  if (el.type !== 'widget') return null;
+  const p = widgets.get(el.widgetType);
+  if (!p?.aiContext) return null;
+  try {
+    return p.aiContext(p.sanitize(el.data), el);
+  } catch {
+    return { allowed: false, text: '', reason: 'Não foi possível preparar o conteúdo com segurança.' };
+  }
 }
 
 export function summarizeElement(el: AuroraElement): string {

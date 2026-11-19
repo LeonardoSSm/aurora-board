@@ -11,6 +11,7 @@ import { buildContextText, buildSystemPrompt, contextSources, type QuickMode } f
 import { interpretFinancialRequest, localMoneyAction, parseAIProposal, proposalDisplayText, proposalKey, type FinancialRequest, type ParsedProposal } from '../../integrations/aiActions';
 import { renderMarkdown } from './notes';
 import { ProposalCard } from './aiProposal';
+import { CategorySuggestionCard } from './aiFinanceSuggestions';
 
 const QUICK: { label: string; prompt: string; mode: QuickMode }[] = [
   { label: 'Resumir', prompt: 'Resuma o contexto conectado em tópicos curtos.', mode: 'chat' },
@@ -43,6 +44,7 @@ function MessageView({ m, request, props, validIds, elements }: { m: AIMessage; 
       {m.role === 'assistant' && <div className="text-[9px] text-soft mt-1">{m.provider} · {m.model}</div>}
       {/* key: se a lista de ações mudar (ex.: fonte desautorizada), o estado do cartão recomeça alinhado. */}
       {proposal && <ProposalCard key={JSON.stringify(proposal.actions)} proposal={proposal} origin="ai" applyKey={proposalKey(m.id, 'ai')} request={request} props={props} elements={elements} validIds={validIds} />}
+      {m.role === 'assistant' && m.content.includes('categorize') && <CategorySuggestionCard reply={m.content} messageId={m.id} props={props} elements={elements} validIds={validIds} />}
       {local && <ProposalCard proposal={local} origin="local" applyKey={proposalKey(m.id, 'local')} request={request} props={props} elements={elements} validIds={validIds} />}
     </div>
   );
@@ -165,11 +167,15 @@ export const aiPlugin: WidgetPlugin<AIData> = {
                 className="accent-accent-2"
               />
               <span className="truncate flex-1">{s.title}</span>
-              <span className="text-[9px] text-soft">{s.includable ? s.kind : `${s.kind} · não enviado`}</span>
+              <span className="text-[9px] text-soft" title={s.note}>{s.includable ? s.kind : `${s.kind} · não enviado`}</span>
               {!s.includable && s.kind === 'visual' && (
                 <button className="text-[9px] text-accent underline" onClick={() => api.updateElement(s.edgeId, { connection: { kind: 'context', relation: '' } } as never)}>tornar contexto</button>
               )}
+              {s.note && <span className="sr-only">{s.note}</span>}
             </label>
+          ))}
+          {sources.filter((s) => s.note).map((s) => (
+            <div key={`note-${s.id}`} className="text-[10px] text-warn" data-testid="ai-source-note">🔒 {s.title}: {s.note}</div>
           ))}
           {showPayload && (
             <pre className="mt-1.5 max-h-40 overflow-auto text-[10px] whitespace-pre-wrap text-muted bg-[#0a111c] p-1.5 rounded" data-scrollable>

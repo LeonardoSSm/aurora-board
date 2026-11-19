@@ -23,6 +23,11 @@ export interface MoneyValue {
   /** Competência declarada (AAAA-MM), se houver. */
   period?: string;
   category?: string;
+  /**
+   * Ciclo F1 (opcional): chaves estáveis dos lançamentos que compõem este total (ex.: `bank:tx:<id>`).
+   * O mês recusa um total cujos membros já foram contados por outra conexão (sem contagem dupla).
+   */
+  members?: string[];
 }
 export interface NumberValue { t: 'number'; v: string }
 export interface PercentValue { t: 'percent'; v: string }
