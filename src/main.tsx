@@ -18,6 +18,7 @@ import { dataflowSpec } from './widgets/registry';
 import { isCameraAnimating } from './store/cameraMotion';
 import * as checkpointActions from './store/checkpointActions';
 import { getDataflow } from './widgets/dataflow';
+import { EXPOSE_TEST_HOOKS } from './config/runtime';
 
 const coreApi = { updateBoundArrows, getDataflow, computeDataflow, dataflowSpec, isCameraAnimating };
 
@@ -37,9 +38,11 @@ const timeout = new Promise((r) => setTimeout(r, 2500));
 void Promise.race([fontsReady, timeout]).then(() => initEditor(new IndexedDBAdapter()));
 
 // Acesso para depuração, testes de interação e benchmarks (mesma instância de módulo que o app usa).
+// S1-SEC-009: ausente no build público padrão — só em desenvolvimento ou num build gerado explicitamente com
+// VITE_AURORA_TEST_HOOKS=1 (constante de build; não existe flag de runtime que o ative).
 declare global {
   interface Window {
     __aurora?: { getState: typeof getState; store: typeof useEditor; actions: typeof actions; elements: typeof elementsApi; core: typeof coreApi; checkpoints: typeof checkpointActions };
   }
 }
-window.__aurora = { getState, store: useEditor, actions, elements: elementsApi, core: coreApi, checkpoints: checkpointActions };
+if (EXPOSE_TEST_HOOKS) window.__aurora = { getState, store: useEditor, actions, elements: elementsApi, core: coreApi, checkpoints: checkpointActions };

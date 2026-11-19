@@ -3,17 +3,64 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { NotebookPen } from 'lucide-react';
 import type { WidgetPlugin } from '../registry';
-import { sanitizeNotes, type NotesData } from '../../core/widgetData';
+import { safeHttpUrl, sanitizeNotes, type NotesData } from '../../core/widgetData';
 import { WIDGET } from '../../core/widgetIds';
 import { Segmented } from '../../ui/primitives';
 
 marked.setOptions({ gfm: true, breaks: true });
 
+/**
+ * Privacidade (S1-SEC-011): imagens remotas no Markdown não são carregadas automaticamente — abrir um quadro
+ * importado não pode avisar um servidor de terceiros (IP, horário). A imagem vira um marcador; o clique carrega.
+ * Só data: (embutidas) carregam direto. Hook registrado uma vez; a sanitização em si continua com o DOMPurify.
+ */
+let hooked = false;
+function ensureHooks() {
+  if (hooked) return;
+  hooked = true;
+  DOMPurify.addHook('afterSanitizeAttributes', (raw) => {
+    if (!raw || typeof (raw as Element).getAttribute !== 'function') return;
+    const node = raw as Element;
+    node.removeAttribute('srcset');
+    node.removeAttribute('ping');
+    if (node.tagName === 'IMG') {
+      const src = node.getAttribute('src') ?? '';
+      if (src && !/^data:image\//i.test(src)) {
+        let host = '';
+        try { host = new URL(src).host; } catch { /* relativa ou inválida */ }
+        node.removeAttribute('src');
+        if (host) node.setAttribute('data-ext-src', src);
+        node.setAttribute('class', 'ext-img');
+        node.setAttribute('alt', host ? `🖼 Imagem externa (${host}) — clique para carregar` : '🖼 Imagem indisponível');
+        node.setAttribute('referrerpolicy', 'no-referrer');
+      }
+    }
+  });
+}
+
+/** Tags que fariam requisições ou imitariam a interface do app (formulários/campos). */
+const FORBID_TAGS = ['style', 'iframe', 'form', 'input', 'button', 'select', 'textarea', 'option', 'video', 'audio', 'source', 'track', 'picture', 'object', 'embed', 'link', 'meta', 'base'];
+
 export function renderMarkdown(md: string): string {
+  ensureHooks();
   const html = marked.parse(md || '', { async: false }) as string;
-  const clean = DOMPurify.sanitize(html, { USE_PROFILES: { html: true }, FORBID_TAGS: ['style', 'iframe', 'form'], FORBID_ATTR: ['style'] });
+  const clean = DOMPurify.sanitize(html, { USE_PROFILES: { html: true }, FORBID_TAGS, FORBID_ATTR: ['style', 'srcset', 'ping', 'poster', 'background'] });
   // Links sempre em nova aba e sem acesso ao opener.
   return clean.replace(/<a /g, '<a target="_blank" rel="noopener noreferrer" ');
+}
+
+/** Clique num marcador de imagem externa: carrega só aquela imagem, sem referrer. */
+export function loadExternalImage(e: { target: EventTarget | null }) {
+  const img = e.target instanceof HTMLImageElement ? e.target : null;
+  const src = img?.getAttribute('data-ext-src');
+  if (!img || !src) return;
+  const safe = safeHttpUrl(src);
+  if (!safe) return;
+  img.removeAttribute('data-ext-src');
+  img.referrerPolicy = 'no-referrer';
+  img.alt = '';
+  img.src = safe;
+  img.classList.remove('ext-img');
 }
 
 export const notesPlugin: WidgetPlugin<NotesData> = {
@@ -55,7 +102,7 @@ export const notesPlugin: WidgetPlugin<NotesData> = {
             onChange={(e) => update({ markdown: e.target.value }, { coalesce: true })}
           />
         ) : (
-          <div className="md flex-1 text-fg-2" dangerouslySetInnerHTML={{ __html: html || '<p class="text-soft italic">Nota vazia.</p>' }} />
+          <div className="md flex-1 text-fg-2" onClick={loadExternalImage} dangerouslySetInnerHTML={{ __html: html || '<p class="text-soft italic">Nota vazia.</p>' }} />
         )}
       </div>
     );
