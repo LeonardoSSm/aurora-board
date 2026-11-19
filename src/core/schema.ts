@@ -6,6 +6,7 @@
  * importação e tipagem estática nunca divergem.
  */
 import { z } from 'zod';
+import { CheckpointSchema } from './checkpoints';
 
 /** Versão atual do esquema persistido. v0.2/v0.3 do protótipo usavam `version: 2`. */
 export const SCHEMA_VERSION = 3;
@@ -158,6 +159,8 @@ export const BoardSettingsSchema = z.object({
   snapToObjects: z.boolean().default(true),
   /** Roda do mouse: zoom (padrão pedido) ou pan (estilo Excalidraw). Touchpad sempre faz pan. */
   wheelMode: z.enum(['zoom', 'pan']),
+  /** Indicadores de checkpoints nas bordas da tela (ciclo 5). Ausente = ligado. */
+  showCheckpointIndicators: z.boolean().optional(),
 });
 
 export const BoardSchema = z.object({
@@ -170,6 +173,8 @@ export const BoardSchema = z.object({
   archived: z.boolean(),
   settings: BoardSettingsSchema,
   camera: CameraSchema,
+  /** Checkpoints espaciais (metadados de navegação; nunca elementos). Ausente em quadros antigos. */
+  checkpoints: z.array(CheckpointSchema).optional(),
   elements: z.array(ElementSchema),
   schemaVersion: z.number().int(),
 });

@@ -18,6 +18,9 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: CI ? 'retain-on-failure' : 'off',
     acceptDownloads: true,
+    // Câmera sem animação por padrão: testes antigos leem a câmera logo após cada ação.
+    // Os testes de câmera/checkpoints ativam o movimento com test.use({ reducedMotion: 'no-preference' }).
+    reducedMotion: 'reduce',
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } }, testIgnore: ['**/mobile.spec.ts', '**/perf/**'] },

@@ -4,6 +4,7 @@
  * Toda coordenada é convertida para o espaço do mundo antes de qualquer cálculo,
  * então desenho, seleção e transformações são consistentes em qualquer zoom.
  */
+import { cancelCameraAnimation } from '../store/cameraMotion';
 import type { AuroraElement, Binding, FreedrawElement, LinearElement, LinkKind, ShapeElement } from '../core/schema';
 import { isBindable, isLinear, acceptsBoundText } from '../core/schema';
 import {
@@ -114,6 +115,7 @@ export function bindingTargetAt(world: Vec, excludeId?: string): Binding | null 
 /* ------------------------------------------------------------------ */
 
 export function pointerDown(p: PointerInfo) {
+  cancelCameraAnimation(); // pan, arrasto, desenho ou pinça: coordenadas precisas, sem câmera em movimento
   const s = getState();
   if (s.contextMenu) setState({ contextMenu: null });
 

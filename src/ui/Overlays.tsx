@@ -23,6 +23,7 @@ import {
 import { acceptsBoundText, isText } from '../core/schema';
 import { exportImage } from './fileActions';
 import { getWidget } from '../widgets/registry';
+import { openCheckpointCreate } from '../store/checkpointActions';
 import { parseTextToValue } from '../core/valueTile';
 import { TOOLS } from './tools';
 
@@ -102,6 +103,8 @@ export function ContextMenu() {
       ) : (
         <>
           <Item label="Colar aqui" hint="Ctrl+V" onClick={() => void pasteContent(null, [], menu.world)} />
+          <Item label="Adicionar checkpoint aqui" onClick={() => openCheckpointCreate(menu.world)} />
+          <Item label="Salvar localização atual" hint="centro da tela" onClick={() => openCheckpointCreate()} />
           <Item label="Selecionar tudo" hint="Ctrl+A" onClick={selectAll} />
           <Item label="Enquadrar tudo" hint="Shift+1" onClick={zoomToFit} />
           <Item label="Zoom 100%" hint="Ctrl+0" onClick={resetZoom} />
@@ -180,6 +183,8 @@ const SHORTCUTS: [string, string][] = [
   ['Ctrl + Alt + C / V', 'Copiar / colar estilo'],
   ['Ctrl ao arrastar', 'Liga/desliga o encaixe nos objetos'],
   ['Shift + 1 / Shift + 2', 'Enquadrar tudo / zoom na seleção'],
+  ['G', 'Locais (checkpoints): lista, ir, editar'],
+  ['Esc (durante navegação)', 'Interrompe o movimento da câmera'],
   ['Ctrl + + / − / 0', 'Zoom / 100%'],
   ['Espaço + arrastar, botão do meio', 'Navegar (pan)'],
   ['Shift ao desenhar', 'Proporção fixa / ângulos de 15°'],

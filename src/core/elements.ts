@@ -66,6 +66,7 @@ export const DEFAULT_BOARD_SETTINGS: BoardSettings = {
   snapToGrid: false,
   snapToObjects: true,
   wheelMode: 'zoom',
+  showCheckpointIndicators: true,
 };
 
 function base(type: AuroraElement['type'], x: number, y: number, width: number, height: number, style: Partial<ElementStyle> = {}) {
@@ -219,6 +220,7 @@ export function createBoard(workspaceId: string, name: string, description = '')
     updatedAt: now,
     archived: false,
     settings: { ...DEFAULT_BOARD_SETTINGS },
+    checkpoints: [],
     camera: { x: 0, y: 0, zoom: 1 },
     elements: [],
     schemaVersion: SCHEMA_VERSION,

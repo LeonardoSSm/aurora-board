@@ -13,6 +13,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { useEditor, setState } from '../store/editor';
+import { MapPin } from 'lucide-react';
 import { canRedo, canUndo, createBoard, createWorkspace, redo, switchWorkspace, undo, updateBoardMeta } from '../store/actions';
 import { promptDialog } from '../store/ui';
 import { exportCurrentBoardJSON, exportImage, exportWorkspaceJSON, importLegacyFromBrowser, pickImportFile } from './fileActions';
@@ -70,6 +71,7 @@ export function TopBar() {
   const workspaceId = useEditor((s) => s.workspaceId);
   const board = useEditor((s) => s.boards.find((b) => b.id === s.boardId));
   const libraryOpen = useEditor((s) => s.libraryOpen);
+  const locationsOpen = useEditor((s) => s.locationsOpen);
   const propertiesOpen = useEditor((s) => s.propertiesOpen);
   const compact = useEditor((s) => s.compact);
   useEditor((s) => s.history); // re-render para habilitar/desabilitar desfazer
@@ -109,6 +111,7 @@ export function TopBar() {
       >
         <LayoutGrid size={15} />
       </button>
+      <IconButton label="Locais (checkpoints) — G" active={locationsOpen} onClick={() => setState({ locationsOpen: !locationsOpen })}><MapPin size={16} /></IconButton>
       <div className="min-w-0 flex items-center gap-1">
         {editingName ? (
           <input

@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEven
 import { useEditor, getState, setState } from '../store/editor';
 import { boxesIntersect, getElementBounds } from '../core/geometry';
 import { addWidget, insertImageFiles, panBy, pickImages, putAsset, screenToWorld, zoomAt } from '../store/actions';
+import { cameraTarget, cancelCameraAnimation, zoomTowardAnchor } from '../store/cameraMotion';
+import { CheckpointLayer } from './CheckpointLayer';
+import { isWheelNotch, normalizeWheel, wheelZoomFactor } from '../core/camera';
 import { toast } from '../store/ui';
 import { WIDGET } from '../core/widgetIds';
 import { uid } from '../core/elements';
@@ -66,6 +69,8 @@ export function Canvas() {
     const el = ref.current!;
     const update = () => {
       canvasRect = el.getBoundingClientRect();
+      const vp = getState().viewport;
+      if (vp.width !== el.clientWidth || vp.height !== el.clientHeight) cancelCameraAnimation();
       setState({ viewport: { width: el.clientWidth, height: el.clientHeight } });
     };
     const ro = new ResizeObserver(update);
@@ -92,20 +97,21 @@ export function Canvas() {
       const s = getState();
       const wheelMode = s.boards.find((b) => b.id === s.boardId)?.settings.wheelMode ?? 'zoom';
       const pixelMode = e.deltaMode === 0;
+      // Touchpad (rolagem com dois dedos) continua fazendo pan no modo "zoom": deslocamento horizontal
+      // ou eventos pequenos fracionários. Rodas (cliques ou alta resolução) dão zoom.
       const trackpadLike = pixelMode && (Math.abs(e.deltaX) > 0 || (Math.abs(e.deltaY) < 40 && !Number.isInteger(e.deltaY)));
+      const { dx, dy } = normalizeWheel(e, window.innerHeight);
       if (e.ctrlKey || e.metaKey) {
-        // Pinça do touchpad ou Ctrl+roda: zoom suave
-        const factor = Math.exp(-e.deltaY * (pixelMode ? 0.01 : 0.1));
-        zoomAt(s.camera.zoom * factor, anchor);
+        const factor = wheelZoomFactor(e, s.zoomPrefs, window.innerHeight);
+        // Pinça do touchpad: aplicada direto (segue os dedos). Ctrl + clique de roda: suave e acumulado.
+        if (isWheelNotch(e)) zoomTowardAnchor(factor, anchor);
+        else zoomAt(cameraTarget().zoom * factor, anchor);
       } else if (e.shiftKey) {
-        panBy(-(e.deltaY || e.deltaX), 0);
+        panBy(-(dy || dx), 0);
       } else if (wheelMode === 'zoom' && !trackpadLike) {
-        // ~10% por "clique" da roda (deltaY ≈ 100), contínuo para rodas de alta resolução.
-        const delta = Math.max(-200, Math.min(200, pixelMode ? e.deltaY : e.deltaY * 33));
-        zoomAt(s.camera.zoom * Math.exp(-delta * 0.001), anchor);
+        zoomTowardAnchor(wheelZoomFactor(e, s.zoomPrefs, window.innerHeight), anchor);
       } else {
-        const mult = pixelMode ? 1 : 33;
-        panBy(-e.deltaX * mult, -e.deltaY * mult);
+        panBy(-dx, -dy);
       }
     };
     el.addEventListener('wheel', onWheel, { passive: false });
@@ -261,6 +267,7 @@ export function Canvas() {
         <TextEditor />
       </div>
       <Overlay />
+      <CheckpointLayer />
     </div>
   );
 }

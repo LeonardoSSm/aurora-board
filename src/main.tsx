@@ -15,9 +15,11 @@ import * as elementsApi from './core/elements';
 import { updateBoundArrows } from './core/bindings';
 import { computeDataflow } from './core/dataflow';
 import { dataflowSpec } from './widgets/registry';
+import { isCameraAnimating } from './store/cameraMotion';
+import * as checkpointActions from './store/checkpointActions';
 import { getDataflow } from './widgets/dataflow';
 
-const coreApi = { updateBoundArrows, getDataflow, computeDataflow, dataflowSpec };
+const coreApi = { updateBoundArrows, getDataflow, computeDataflow, dataflowSpec, isCameraAnimating };
 
 registerBuiltinWidgets();
 
@@ -37,7 +39,7 @@ void Promise.race([fontsReady, timeout]).then(() => initEditor(new IndexedDBAdap
 // Acesso para depuração, testes de interação e benchmarks (mesma instância de módulo que o app usa).
 declare global {
   interface Window {
-    __aurora?: { getState: typeof getState; store: typeof useEditor; actions: typeof actions; elements: typeof elementsApi; core: typeof coreApi };
+    __aurora?: { getState: typeof getState; store: typeof useEditor; actions: typeof actions; elements: typeof elementsApi; core: typeof coreApi; checkpoints: typeof checkpointActions };
   }
 }
-window.__aurora = { getState, store: useEditor, actions, elements: elementsApi, core: coreApi };
+window.__aurora = { getState, store: useEditor, actions, elements: elementsApi, core: coreApi, checkpoints: checkpointActions };

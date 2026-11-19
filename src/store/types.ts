@@ -102,6 +102,16 @@ export interface EditorState {
   inspectorFocus: { id: string; section?: string; nonce: number } | null;
   /** Widget em edição rápida no próprio bloco (duplo clique), ex.: valor ou fórmula. */
   editingWidgetId: string | null;
+  /** Checkpoints do quadro ativo (gravados com o quadro). */
+  checkpoints: import('../core/checkpoints').SpatialCheckpoint[];
+  /** Painel “Locais”. */
+  locationsOpen: boolean;
+  /** Formulário de criar/editar checkpoint. */
+  checkpointEditor: { mode: 'create'; x: number; y: number; zoom: number } | { mode: 'edit'; id: string } | null;
+  /** Destaque breve do checkpoint ao chegar. */
+  checkpointFlash: { id: string; at: number } | null;
+  /** Preferência GERAL do usuário (não do quadro): sensibilidade do zoom. */
+  zoomPrefs: import('../core/camera').ZoomPreferences;
   toasts: Toast[];
   /** Último snapshot de dados de fluxo calculado (cache para widgets). */
   dataflowVersion: number;

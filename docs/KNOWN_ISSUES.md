@@ -12,6 +12,14 @@ Estado ao final do ciclo 2. Itens marcados com ⚠ afetam uso real; os demais s�
 - Redimensionar manualmente uma forma muito estreita pode quebrar uma palavra no meio (largura escolhida pelo usuário é respeitada); digitar ou trocar a fonte alarga a forma para não quebrar.
 - Importação de arquivos `.excalidraw` não suportada.
 
+## Navegação espacial
+
+- Área útil dos indicadores estimada por margens fixas (barra superior, controles de zoom); um menu aberto pode cobrir um indicador temporariamente.
+- Com 50–100 checkpoints, ocasionalmente um quadro perdido no pan (p95 ≈ 26–28 ms).
+- Distinguir roda de touchpad continua heurístico (deslocamento horizontal ou eventos pequenos fracionários = touchpad). A classificação só decide pan × zoom no modo “Zoom” e o ganho da pinça; touchpads que enviam saltos inteiros grandes podem ser tratados como roda.
+- Checkpoints não aparecem em PNG/SVG (por desenho) e não há opção de incluí-los.
+- Firefox do Playwright não abre no Windows de desenvolvimento (`spawn UNKNOWN`); validado no CI.
+
 ## Finanças visuais
 
 - Períodos só mensais; sem conversão de moedas (por desenho); sem integração bancária.

@@ -59,6 +59,8 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | [docs/VISUAL_FINANCE.md](docs/VISUAL_FINANCE.md) | Finanças visuais: valores, meses, regras de cálculo, precisão, uso e desempenho |
 | [docs/FORMULA_ENGINE.md](docs/FORMULA_ENGINE.md) | Motor de fórmulas: gramática, funções, tipos, variáveis |
 | [docs/DATAFLOW_PORTS.md](docs/DATAFLOW_PORTS.md) | Fluxo de dados: portas explícitas, tipos, estados das conexões, compatibilidade |
+| [docs/SPATIAL_NAVIGATION.md](docs/SPATIAL_NAVIGATION.md) | Checkpoints espaciais: criar, indicadores nas bordas, navegar, persistência |
+| [docs/CAMERA_ENGINE.md](docs/CAMERA_ENGINE.md) | Motor de câmera: zoom suave, sensibilidade, animação, cancelamento, movimento reduzido |
 | [docs/AUDIT-CYCLE2.md](docs/AUDIT-CYCLE2.md) | Auditoria inicial do ciclo 2 (baseline) |
 
 ---
@@ -68,6 +70,7 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuração externa · 🔜 previsto na arquitetura, não implementado.
 
 ### Editor visual
+- ✅ **Navegação espacial (ciclo 5):** zoom suave e ancorado no cursor, com sensibilidade ajustável (Preciso/Suave/Normal/Rápido/Personalizado); **checkpoints** nomeados em qualquer ponto do quadro, com indicadores presos às bordas apontando na direção real, painel **Locais** (`G`) e viagem suave até cada local. Ver [docs/SPATIAL_NAVIGATION.md](docs/SPATIAL_NAVIGATION.md).
 - ✅ Canvas infinito: zoom pela roda (configurável para “navegar”), pinça do touchpad, Ctrl+roda, botões, zoom focado no cursor, enquadrar tudo, zoom na seleção, pan com mão / Espaço / botão do meio / dois dedos.
 - ✅ Ferramentas: seleção, mão, retângulo, losango, elipse, seta, linha, desenho livre (pressão de caneta), texto, nota adesiva, borracha, frame, imagem, conectar.
 - ✅ Selecionar (clique, Shift+clique, área; arrastar dentro da caixa da seleção move a seleção mesmo com outro elemento por cima), arrastar, redimensionar (8 alças, Shift = proporção, Alt = do centro), rotacionar (Shift = 15°), duplicar (Ctrl+D, Alt+arrastar), copiar/recortar/colar (também imagens e texto da área de transferência; URL colada vira bloco de Link), excluir, bloquear, camadas, agrupar/desagrupar (grupos aninhados; duplo clique entra no grupo), alinhar, mover com setas do teclado, desfazer/refazer (histórico por quadro).
@@ -195,7 +198,7 @@ Pontos de extensão:
 
 `V`/`1` seleção · `H` mão · `R`/`2` retângulo · `D`/`3` losango · `O`/`4` elipse · `A`/`5` seta · `L`/`6` linha · `P`/`7` desenho · `T`/`8` texto · `I`/`9` imagem · `E`/`0` borracha · `N` nota adesiva · `F` frame · `C` conectar · `Q` manter ferramenta
 
-`Ctrl+setas` fluxograma · `Alt+setas` navegar · `Ctrl+Alt+C/V` estilo · `Ctrl+A/C/X/V/D` · `Ctrl+G` / `Ctrl+Shift+G` · `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y` · `Ctrl+Shift+L` bloquear · `Ctrl+]`/`[` camadas · `Delete` · `Esc` · `Enter` editar texto · setas movem · `Shift+1` enquadrar · `Shift+2` zoom na seleção · `Ctrl+0/+/−` zoom · `?` ajuda. Atalhos de letra são ignorados enquanto se digita em campos.
+`Ctrl+setas` fluxograma · `Alt+setas` navegar · `Ctrl+Alt+C/V` estilo · `Ctrl+A/C/X/V/D` · `Ctrl+G` / `Ctrl+Shift+G` · `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y` · `Ctrl+Shift+L` bloquear · `Ctrl+]`/`[` camadas · `Delete` · `Esc` · `Enter` editar texto · setas movem · `Shift+1` enquadrar · `Shift+2` zoom na seleção · `Ctrl+0/+/−` zoom · `G` Locais (checkpoints) · `Esc` interrompe a navegação · `?` ajuda. Atalhos de letra são ignorados enquanto se digita em campos.
 
 ---
 

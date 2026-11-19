@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { EditorState } from './types';
 import { DEFAULT_STYLE } from '../core/elements';
+import { DEFAULT_ZOOM_PREFS } from '../core/camera';
 
 export const initialEditorState: EditorState = {
   status: 'loading',
@@ -41,6 +42,11 @@ export const initialEditorState: EditorState = {
   contextMenu: null,
   inspectorFocus: null,
   editingWidgetId: null,
+  checkpoints: [],
+  locationsOpen: false,
+  checkpointEditor: null,
+  checkpointFlash: null,
+  zoomPrefs: { ...DEFAULT_ZOOM_PREFS },
   toasts: [],
   dataflowVersion: 0,
 };

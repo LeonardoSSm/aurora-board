@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { cancelCameraAnimation, isCameraAnimating } from '../store/cameraMotion';
 import { getState, setState } from '../store/editor';
 import {
   cancelTextEdit,
@@ -91,6 +92,7 @@ export function useKeyboard() {
       switch (e.key) {
         case 'Escape':
           cancelGesture();
+          if (isCameraAnimating()) { cancelCameraAnimation(); return; } // Esc interrompe a navegação animada
           if (s.contextMenu) setState({ contextMenu: null });
           else if (s.tool !== 'select') setTool('select');
           else if (s.editingGroupId) setState({ editingGroupId: null, selectedIds: [] });
@@ -119,6 +121,7 @@ export function useKeyboard() {
         }
       }
       if (key === 'q') { setState({ toolLocked: !s.toolLocked }); return; }
+      if (key === 'g' && !e.shiftKey && !e.altKey) { e.preventDefault(); setState({ locationsOpen: !s.locationsOpen }); return; } // preventDefault: o “g” não vai para o filtro que recebe o foco
       const tool = TOOL_BY_KEY[key];
       if (tool && !e.altKey) { e.preventDefault(); setTool(tool); }
     };

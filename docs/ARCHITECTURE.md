@@ -18,6 +18,9 @@ core/          regras puras, sem React (testadas isoladamente)
   finance.ts      regras financeiras (centavos, parcelas, períodos, entradas)
   dataflow.ts     fluxo de dados tipado + ciclos (Tarjan)
   connectionStyle.ts  aparência por tipo de conexão
+  camera.ts       conversões tela↔mundo, zoom ancorado, interpolação, roda e sensibilidade
+  checkpoints.ts  modelo e saneamento dos checkpoints espaciais
+  edgeIndicators.ts  projeção dos indicadores na borda, histerese, agrupamento
 canvas/        controlador de ponteiro (máquina de estados), alças, overlay, editor de texto, render de elementos
 render/        geração de SVG (tela e exportação), PNG/SVG
 store/         Zustand: estado, comandos com histórico, inicialização, demonstração
@@ -39,6 +42,8 @@ Dependências apontam para baixo: `ui/canvas/widgets → store → persistence/c
 | Hit-test geométrico no controlador (não por alvo DOM) | precisão independente do zoom; widgets são a exceção (controles internos recebem eventos nativos) |
 | Persistência atrás de `PersistenceAdapter` | testes com adaptador em memória/controlado; sincronização futura com backend sem tocar no editor |
 | Autosave com revisões por quadro + diário síncrono por quadro | nenhuma gravação antiga confirma revisão nova; recuperação após fechar a aba (docs/PERSISTENCE.md) |
+| Câmera animada gravada no estado a cada quadro (`store/cameraMotion.ts`), nunca transição CSS | o que se vê é exatamente o que o hit-test usa; um só laço rAF, destino substituível |
+| Checkpoints nos metadados do quadro, não em `elements` | não entram em seleção, Enquadrar tudo, fluxo de dados nem exportação de imagem; desfazer pelo mesmo histórico |
 | Servidor local mínimo (Node `http`) | só proxy de IA e pré-visualização; chaves fora do frontend; proteções em docs/SECURITY.md |
 | Plugins de terceiros em iframe sandbox + CSP | isolamento real sem confiar no código do plugin |
 
