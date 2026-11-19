@@ -110,6 +110,40 @@ test.describe('S1-SEC-001: documentos importados não executam na origem do app'
   });
 });
 
+test.describe('S1-SEC-004/005/006: importação recusada não altera nada', () => {
+  async function refusedDialog(page: import('@playwright/test').Page, re: RegExp) {
+    const dlg = page.getByRole('dialog');
+    await expect(dlg).toContainText(/Importação recusada/);
+    await expect(dlg).toContainText(re);
+    await expect(dlg).toContainText(/Nenhum dado foi alterado/);
+    await dlg.getByRole('button', { name: 'Ok' }).click();
+  }
+
+  test('JSON malformado, aninhamento profundo e excesso de elementos são recusados; quadro atual intacto', async ({ page }) => {
+    await page.evaluate(() => (window as any).__aurora.actions.addElements([(window as any).__aurora.elements.createShape('rectangle', 0, 0, 100, 80)]));
+    const before = await state(page);
+    await importBackup(page, '{"format":"aurora-board", "boards": [');
+    await refusedDialog(page, /JSON válido/);
+    let deep = '1';
+    for (let i = 0; i < 5000; i++) deep = `[${deep}]`;
+    await importBackup(page, `{"format":"aurora-board","schemaVersion":3,"exportedAt":1,"app":"x","boards":[{"id":"b","name":"b","elements":[{"id":"w","type":"widget","widgetType":"aurora.notes","x":0,"y":0,"width":1,"height":1,"data":{"markdown":"","x":${deep}}}]}],"assets":[]}`);
+    await refusedDialog(page, /aninhada/);
+    const many = backup(Array.from({ length: 100_001 }, (_, i) => ({ id: `e${i}`, type: 'rectangle', x: i, y: 0, width: 1, height: 1 })));
+    await importBackup(page, many);
+    await refusedDialog(page, /elementos/);
+    const after = await state(page);
+    expect(after.boards.map((b) => b.id)).toEqual(before.boards.map((b) => b.id));
+    expect(after.elements.map((e) => e.id)).toEqual(before.elements.map((e) => e.id));
+    // Depois de recusas, uma importação válida funciona normalmente e persiste após recarregar.
+    await importBackup(page, backup([el({ id: 'n1', type: 'widget', widgetType: 'aurora.notes', title: 'Nota S1', data: { markdown: 'ok', mode: 'edit' } })], [], 'Quadro válido S1'));
+    await confirmImport(page);
+    await expect.poll(async () => (await state(page)).boards.some((b) => b.name === 'Quadro válido S1')).toBe(true);
+    await page.reload();
+    await page.waitForFunction(() => (window as any).__aurora?.getState().status === 'ready');
+    expect((await state(page)).boards.filter((b) => b.name === 'Quadro válido S1')).toHaveLength(1);
+  });
+});
+
 test.describe('S1-SEC-003: HTML importado e isolamento do sandbox', () => {
   const sandboxBoard = (html: string) => backup([el({ id: 'w_sb', type: 'widget', widgetType: 'aurora.sandbox-html', title: 'HTML', data: { html, state: null } })], [], 'Quadro com HTML');
 

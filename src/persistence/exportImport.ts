@@ -3,13 +3,23 @@ import type { Asset, AuroraElement, Board, Workspace } from '../core/schema';
 import { ExportFileSchema, SCHEMA_VERSION } from '../core/schema';
 import { migrateBoard } from './migrations';
 import { importLegacy, isLegacyFormat } from './legacy';
+import { checkGenericBudget, checkImportBudget, IMPORT_LIMITS, ImportBudgetError } from './importBudget';
+import type { PersistenceAdapter } from './adapter';
 
 export const APP_VERSION = 'Aurora Board 1.0.0';
-export const MAX_IMPORT_BYTES = 200 * 1024 * 1024;
-const MAX_BOARDS = 500;
-const MAX_ELEMENTS = 100_000;
+export const MAX_IMPORT_BYTES = IMPORT_LIMITS.maxFileBytes;
+const MAX_BOARDS = IMPORT_LIMITS.maxBoards;
+const MAX_ELEMENTS = IMPORT_LIMITS.maxElementsPerBoard;
 
 export class ImportError extends Error {}
+
+/** Checagem antes de ler o arquivo (S1-SEC-004): evita carregar na memória o que já excede o limite. */
+export function checkImportFileSize(size: number): void {
+  if (size > MAX_IMPORT_BYTES) throw new ImportError(`Arquivo grande demais (${(size / 1024 / 1024).toFixed(0)} MB; limite de ${MAX_IMPORT_BYTES / 1024 / 1024} MB).`);
+}
+
+/** Formato mínimo aceito para o conteúdo de um asset. */
+const DATA_URL_HEAD = /^data:[\w.+-]*(\/[\w.+-]+)?(;[\w.+-]+(=[\w.+-]+)?)*,/i;
 
 export interface ImportResult {
   source: 'aurora' | 'legacy-v0.3';
@@ -52,6 +62,14 @@ export function parseImport(text: string, workspaceId: string): ImportResult {
   } catch {
     throw new ImportError('O arquivo não é um JSON válido.');
   }
+  // Orçamento de complexidade ANTES da validação/migração completas (S1-SEC-004/005).
+  try {
+    if (isLegacyFormat(data)) checkGenericBudget(data);
+    else checkImportBudget(data);
+  } catch (e) {
+    if (e instanceof ImportBudgetError) throw new ImportError(`Importação recusada por segurança: ${e.message}`);
+    throw e;
+  }
   if (isLegacyFormat(data)) {
     const r = importLegacy(data, workspaceId);
     if (!r.boards.length) throw new ImportError('Arquivo v0.2/v0.3 sem quadros.');
@@ -76,38 +94,66 @@ export function parseImport(text: string, workspaceId: string): ImportResult {
     elements += board.elements.length;
     boards.push(board);
   }
-  // Valida referências de assets.
-  const available = new Set(file.assets.map((a) => a.id));
+  // Valida os assets: data URL malformado é descartado com aviso (o elemento continua e mostra "arquivo
+  // indisponível"); ids repetidos mantêm a primeira cópia. Assets sem referência conhecida são preservados
+  // (podem pertencer a widgets de versões futuras).
+  const assets: Asset[] = [];
+  const seenAssets = new Set<string>();
+  for (const a of file.assets) {
+    if (seenAssets.has(a.id)) { warnings.push(`Arquivo/imagem ${a.id} repetido no backup: mantida a primeira cópia.`); continue; }
+    seenAssets.add(a.id);
+    if (!DATA_URL_HEAD.test(a.dataURL)) { warnings.push(`Arquivo "${a.name.slice(0, 60)}" (${a.id}) com conteúdo inválido descartado.`); continue; }
+    assets.push(a);
+  }
+  const available = new Set(assets.map((a) => a.id));
   for (const b of boards) {
     for (const id of assetIdsOf(b.elements)) if (!available.has(id)) warnings.push(`Quadro "${b.name}": arquivo/imagem ${id} ausente no backup.`);
   }
-  return { source: 'aurora', boards, assets: file.assets, warnings, stats: { boards: boards.length, elements } };
+  return { source: 'aurora', boards, assets, warnings, stats: { boards: boards.length, elements } };
 }
 
 /**
  * Grava o resultado de uma importação SEM sobrescrever nada:
  * - quadros com id já existente recebem um id novo;
  * - assets já existentes são mantidos (o do arquivo é ignorado).
+ *
+ * Atômica quando o adaptador oferece `commitImport` (IndexedDB e memória): assets, quadros e workspace entram
+ * numa única transação — ou tudo é gravado, ou nada (S1-SEC-006). Antes, cada quadro precisa ser clonável
+ * (clone estruturado), então um quadro "envenenado" é recusado sem efeito colateral.
  * Retorna os ids dos quadros criados e o workspace atualizado.
  */
 export async function applyImport(
-  adapter: { loadBoard(id: string): Promise<Board | null>; saveBoard(b: Board): Promise<void>; getAsset(id: string): Promise<Asset | null>; putAsset(a: Asset): Promise<void>; saveWorkspace(w: Workspace): Promise<void> },
+  adapter: Pick<PersistenceAdapter, 'loadBoard' | 'saveBoard' | 'getAsset' | 'putAsset' | 'saveWorkspace'> & Partial<Pick<PersistenceAdapter, 'commitImport'>>,
   result: ImportResult,
   workspace: Workspace,
   newId: () => string,
 ): Promise<{ boardIds: string[]; workspace: Workspace }> {
-  for (const a of result.assets) {
-    if (!(await adapter.getAsset(a.id))) await adapter.putAsset(a);
-  }
+  const assets: Asset[] = [];
+  for (const a of result.assets) if (!(await adapter.getAsset(a.id))) assets.push(a);
   const ids: string[] = [];
+  const boards: Board[] = [];
+  const taken = new Set<string>();
   for (const b of result.boards) {
-    const exists = await adapter.loadBoard(b.id);
-    const board: Board = { ...b, id: exists ? newId() : b.id, workspaceId: workspace.id, archived: false, updatedAt: Date.now() };
-    await adapter.saveBoard(board);
-    ids.push(board.id);
+    let id = b.id;
+    if (taken.has(id) || (await adapter.loadBoard(id))) id = newId();
+    taken.add(id);
+    const board: Board = { ...b, id, workspaceId: workspace.id, archived: false, updatedAt: Date.now() };
+    try {
+      structuredClone(board);
+    } catch {
+      throw new ImportError(`Quadro "${b.name}" não pode ser gravado (estrutura inválida). Nenhum dado foi alterado.`);
+    }
+    boards.push(board);
+    ids.push(id);
   }
   const updated = { ...workspace, boardOrder: [...workspace.boardOrder, ...ids], updatedAt: Date.now() };
-  await adapter.saveWorkspace(updated);
+  if (adapter.commitImport) {
+    await adapter.commitImport({ assets, boards, workspace: updated });
+  } else {
+    for (const a of assets) await adapter.putAsset(a);
+    for (const b of boards) await adapter.saveBoard(b);
+    await adapter.saveWorkspace(updated);
+  }
   return { boardIds: ids, workspace: updated };
 }
 

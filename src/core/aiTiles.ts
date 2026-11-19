@@ -210,7 +210,8 @@ function luminance(hex: string): number {
 function ellipsize(text: string, size: number, weight: number, maxWidth: number): string {
   const style = { fontFamily: 'sans' as const, fontSize: size * (weight >= 600 ? 1.04 : 1) };
   if (measureLine(text, style) <= maxWidth) return text;
-  let t = text;
+  // Começa de um prefixo que certamente cabe ≤ maxWidth (glifo mais estreito ≈ 0,15 em): o laço fica O(largura), não O(texto) (S1-SEC-018).
+  let t = text.slice(0, Math.ceil(maxWidth / Math.max(1, style.fontSize * 0.15)) + 1);
   while (t.length > 1 && measureLine(t + '…', style) > maxWidth) t = t.slice(0, -1);
   return t.length ? t.trimEnd() + '…' : '';
 }

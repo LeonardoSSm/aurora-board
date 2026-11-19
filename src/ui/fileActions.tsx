@@ -4,7 +4,7 @@ import { getState, setState } from '../store/editor';
 import { getAsset, openBoard, refreshBoards, selectedElements } from '../store/actions';
 import { openDialog, toast } from '../store/ui';
 import { flushSave, getAdapter, snapshotCurrentBoard } from '../persistence/autosave';
-import { applyImport, assetIdsOf, buildExport, downloadBlob, downloadText, ImportError, parseImport, safeFileName } from '../persistence/exportImport';
+import { applyImport, assetIdsOf, buildExport, checkImportFileSize, downloadBlob, downloadText, ImportError, parseImport, safeFileName } from '../persistence/exportImport';
 import { LEGACY_STORAGE_KEY } from '../persistence/legacy';
 import { exportPNG, exportSVG } from '../render/exportImage';
 
@@ -65,7 +65,15 @@ export function pickImportFile() {
   input.accept = 'application/json,.json';
   input.onchange = () => {
     const f = input.files?.[0];
-    if (f) void importFromText(f.name, f.text());
+    if (!f) return;
+    // Tamanho checado ANTES de ler: um arquivo gigante nunca é carregado na memória (S1-SEC-004).
+    try {
+      checkImportFileSize(f.size);
+    } catch (e) {
+      void openDialog({ title: 'Importação recusada', message: `“${f.name}”: ${(e as Error).message} Nenhum dado foi alterado.`, buttons: [{ label: 'Ok', value: 'ok', variant: 'primary' }] });
+      return;
+    }
+    void importFromText(f.name, f.text());
   };
   input.click();
 }
@@ -114,7 +122,15 @@ export async function importFromText(name: string, textP: Promise<string>) {
   });
   if (button !== 'ok') return;
   const ws = getState().workspaces.find((w) => w.id === getState().workspaceId)!;
-  const { boardIds: ids, workspace: updated } = await applyImport(getAdapter(), r, ws, () => uid('b_'));
+  let ids: string[], updated;
+  try {
+    ({ boardIds: ids, workspace: updated } = await applyImport(getAdapter(), r, ws, () => uid('b_')));
+  } catch (e) {
+    // A gravação é uma transação única: se falhou, nada foi gravado (S1-SEC-006).
+    const msg = e instanceof ImportError ? e.message : `Falha ao gravar: ${(e as Error).message}`;
+    await openDialog({ title: 'Importação interrompida', message: `“${name}”: ${msg} Nenhum quadro ou arquivo foi gravado; seus quadros existentes não foram alterados.`, buttons: [{ label: 'Ok', value: 'ok', variant: 'primary' }] });
+    return;
+  }
   setState({ workspaces: getState().workspaces.map((w) => (w.id === ws.id ? updated : w)) });
   await refreshBoards();
   await openBoard(ids[0]);
