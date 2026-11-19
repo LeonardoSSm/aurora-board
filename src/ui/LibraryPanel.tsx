@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ImageIcon, Search, ShieldCheck } from 'lucide-react';
 import { setState, useEditor } from '../store/editor';
 import { addWidget, pickImages } from '../store/actions';
-import { listPlanned, listWidgets, PERMISSION_LABELS, type WidgetPlugin } from '../widgets/registry';
+import { listPlanned, listWidgets, PERMISSION_LABELS, presetDragType, type WidgetPlugin, type WidgetPreset } from '../widgets/registry';
 import { STATUS_LABEL } from '../widgets/WidgetFrame';
 import { WIDGET_DRAG_MIME } from '../canvas/Canvas';
 import { fetchAIStatus, type AIStatus } from '../integrations/aiClient';
@@ -27,7 +27,17 @@ export function LibraryPanel() {
   const [q, setQ] = useState('');
   const aiConfigured = useAIConfigured();
   if (!open) return null;
-  const widgets = listWidgets().filter((w) => !q || `${w.name} ${w.description}`.toLowerCase().includes(q.toLowerCase()));
+  const needle = q.trim().toLowerCase();
+  const all = listWidgets();
+  const widgets = all.filter((w) => !w.hideInLibrary && (!needle || `${w.name} ${w.description}`.toLowerCase().includes(needle)));
+  const presetSections = all
+    .filter((w) => w.presets?.length)
+    .map((w) => ({
+      plugin: w,
+      title: w.librarySection ?? w.name,
+      presets: w.presets!.filter((p) => !needle || [p.name, p.description ?? '', ...(p.keywords ?? []), w.librarySection ?? ''].join(' ').toLowerCase().includes(needle)),
+    }))
+    .filter((s) => s.presets.length);
   const categories = [...new Set(widgets.map((w) => w.category))];
   const planned = listPlanned().filter((p) => !q || `${p.name} ${p.description}`.toLowerCase().includes(q.toLowerCase()));
 
@@ -53,6 +63,14 @@ export function LibraryPanel() {
             onAdd={() => add(() => void pickImages())}
           />
         )}
+        {presetSections.map((s) => (
+          <section key={s.plugin.id} className="mt-2" aria-label={s.title} data-testid={`library-section-${s.plugin.id}`}>
+            <div className="text-[10px] font-bold tracking-wider text-soft px-1.5 mb-1.5 uppercase">{s.title}</div>
+            <div className="grid grid-cols-3 gap-1.5 px-0.5">
+              {s.presets.map((p) => <PresetItem key={p.id} plugin={s.plugin} preset={p} onAdd={() => add(() => addWidget(presetDragType(s.plugin.id, p.id)))} />)}
+            </div>
+          </section>
+        ))}
         {categories.map((c) => (
           <div key={c} className="mt-2">
             <div className="text-[10px] font-bold tracking-wider text-soft px-1.5 mb-1 uppercase">{c}</div>
@@ -92,6 +110,28 @@ export function LibraryPanel() {
         </div>
       </div>
     </aside>
+  );
+}
+
+function PresetItem({ plugin, preset, onAdd }: { plugin: WidgetPlugin; preset: WidgetPreset; onAdd: () => void }) {
+  const type = presetDragType(plugin.id, preset.id);
+  return (
+    <button
+      draggable
+      data-library-item={type}
+      onDragStart={(e) => {
+        e.dataTransfer.setData(WIDGET_DRAG_MIME, type);
+        e.dataTransfer.effectAllowed = 'copy';
+      }}
+      onClick={onAdd}
+      title={[preset.name, preset.description, 'Clique para inserir no centro ou arraste para o quadro.'].filter(Boolean).join('\n')}
+      className="flex flex-col items-center gap-1 py-2 rounded-lg border border-transparent hover:border-line hover:bg-panel-3 transition-colors"
+    >
+      <span className="w-10 h-10 grid place-items-center rounded-[11px] bg-[#131d2c] border border-[#2e405a] shadow-[0_4px_10px_rgba(0,0,0,.3)]">
+        <preset.icon size={22} />
+      </span>
+      <span className="text-[10px] font-semibold text-fg-2 leading-tight text-center px-0.5">{preset.name}</span>
+    </button>
   );
 }
 

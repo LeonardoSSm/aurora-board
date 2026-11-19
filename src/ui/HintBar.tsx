@@ -1,6 +1,7 @@
 import { useShallow } from 'zustand/react/shallow';
 import { useEditor } from '../store/editor';
 import { isLinear } from '../core/schema';
+import { getWidget } from '../widgets/registry';
 
 /** Dica contextual sob a barra de ferramentas (como no Excalidraw). */
 export function useHint(): string {
@@ -35,6 +36,7 @@ export function useHint(): string {
     const el = selected[0];
     if (el.locked) return 'Elemento bloqueado · Ctrl+Shift+L desbloqueia';
     if (isLinear(el)) return selectedPoint !== null ? 'Delete remove o ponto selecionado · arraste para mover · Shift: 15°' : 'Arraste os pontos · arraste ◦ entre pontos para criar um novo · clique num ponto e Delete remove · duplo clique: rótulo';
+    if (el.type === 'widget' && getWidget(el.widgetType)?.frame === 'bare') return 'Arraste para mover · duplo clique abre as configurações · botão direito: mais ações · Alt+arrastar duplica';
     if (el.type === 'widget') return 'Selecionado: o conteúdo fica interativo (selecionar texto, rolar) · mova pelo cabeçalho · duplo clique no título renomeia';
     if (['rectangle', 'ellipse', 'diamond', 'sticky'].includes(el.type)) return 'Enter para escrever · Ctrl+setas cria um fluxo conectado · Alt+setas navega · Alt+arrastar duplica';
     return 'Alt+arrastar duplica · Shift ao redimensionar mantém proporção';

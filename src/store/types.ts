@@ -98,6 +98,8 @@ export interface EditorState {
   shortcutsOpen: boolean;
   dialog: DialogState | null;
   contextMenu: ContextMenuState | null;
+  /** Pedido para o painel de propriedades mostrar/focar as configurações de um widget. */
+  inspectorFocus: { id: string; section?: string; nonce: number } | null;
   toasts: Toast[];
   /** Último snapshot de dados de fluxo calculado (cache para widgets). */
   dataflowVersion: number;

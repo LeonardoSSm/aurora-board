@@ -22,6 +22,7 @@ import {
   type Vec,
 } from '../core/geometry';
 import { createFreedraw, createLinear, createShape, cloneElements, normalizeFreedraw, syncLinearBounds } from '../core/elements';
+import { getWidget } from '../widgets/registry';
 import { resolveLinear, unbindDeleted, updateBoundArrows } from '../core/bindings';
 import { assignFrames, expandToGroups, selectableGroupId, withFrameChildren } from '../core/groups';
 import { resizeMultiple, resizeSingle, rotateElements, type Handle } from '../core/transform';
@@ -755,7 +756,8 @@ export function doubleClick(world: Vec) {
   }
   if (hit.type === 'widget' || hit.type === 'image' || hit.type === 'freedraw') {
     const g = selectableGroupId(hit, s.editingGroupId);
-    if (g) { setState({ editingGroupId: g }); setSelection([hit.id]); }
+    if (g) { setState({ editingGroupId: g }); setSelection([hit.id]); return; }
+    if (hit.type === 'widget') getWidget(hit.widgetType)?.onDoubleClick?.(hit);
     return;
   }
   const g = selectableGroupId(hit, s.editingGroupId);

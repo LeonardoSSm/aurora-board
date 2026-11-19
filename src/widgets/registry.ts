@@ -9,6 +9,7 @@ import type { ComponentType } from 'react';
 import { z } from 'zod';
 import type { AuroraElement, LinearElement, WidgetElement } from '../core/schema';
 import type { DataflowNodeSpec, InputValue, PortDef } from '../core/dataflow';
+import { setWidgetDataRemapper } from '../core/elements';
 
 export type WidgetStatus = 'ready' | 'needs-config' | 'planned' | 'experimental';
 
@@ -89,8 +90,50 @@ export interface WidgetPlugin<D = unknown> {
   /** Resumo textual (contexto para IA, exportação SVG, busca). */
   summarize(data: D, element: WidgetElement): string;
   Component: ComponentType<WidgetProps<D>>;
+  /** Configurações exibidas no painel de propriedades quando o widget está selecionado sozinho. */
   Inspector?: ComponentType<WidgetProps<D>>;
   actions?: WidgetAction<D>[];
+  /**
+   * Moldura: 'standard' (cabeçalho, título, estado) ou 'bare' (o componente ocupa a área inteira,
+   * sem cabeçalho; o corpo não captura o ponteiro — clicar e arrastar move o elemento).
+   */
+  frame?: 'standard' | 'bare';
+  /** Variações prontas exibidas na biblioteca (clique insere, arrastar posiciona). */
+  presets?: WidgetPreset<D>[];
+  /** Título da seção da biblioteca para os presets (padrão: nome do widget). */
+  librarySection?: string;
+  /** Oculta a entrada genérica do widget na biblioteca (quando os presets já cobrem os casos). */
+  hideInLibrary?: boolean;
+  /** Duplo clique no widget (fora de modo de edição de grupo). */
+  onDoubleClick?(element: WidgetElement): void;
+  /** Itens extras no menu de contexto (as ações genéricas continuam). */
+  menuItems?(element: WidgetElement, data: D): WidgetMenuItem[];
+  /** Conteúdo SVG fiel para exportação (coordenadas locais 0..width × 0..height). Sem isso, exporta um resumo. */
+  exportSVG?(data: D, element: WidgetElement): string | Promise<string>;
+  /** Ao copiar/duplicar: troca ids de outros elementos citados nos dados (mapa antigo → novo). */
+  remapIds?(data: D, idMap: ReadonlyMap<string, string>): D;
+}
+
+export interface WidgetPreset<D = unknown> {
+  id: string;
+  name: string;
+  description?: string;
+  keywords?: string[];
+  /** Ícone da biblioteca (ex.: logo). */
+  icon: ComponentType<{ size?: number; className?: string }>;
+  /** Campos aplicados sobre `createData()`. */
+  data: Partial<D>;
+  size?: { width: number; height: number };
+  /** Título inicial do elemento (padrão: `name`). */
+  title?: string;
+  accent?: string;
+}
+
+export interface WidgetMenuItem {
+  id: string;
+  label: string;
+  disabled?: boolean;
+  run(): void;
 }
 
 /** Integrações futuras listadas na biblioteca, claramente marcadas como não implementadas. */
@@ -104,6 +147,11 @@ export interface PlannedIntegration {
 }
 
 const widgets = new Map<string, WidgetPlugin<any>>();
+
+setWidgetDataRemapper((type, data, idMap) => {
+  const p = widgets.get(type);
+  return p?.remapIds ? p.remapIds(p.sanitize(data), idMap) : data;
+});
 const planned: PlannedIntegration[] = [];
 
 export function registerWidget<D>(plugin: WidgetPlugin<D>) {
@@ -125,6 +173,19 @@ export function listWidgets(): WidgetPlugin<any>[] {
 
 export function listPlanned(): PlannedIntegration[] {
   return planned;
+}
+
+/** Tipo de arrasto da biblioteca para um preset: `<pluginId>#<presetId>`. */
+export function presetDragType(pluginId: string, presetId: string) {
+  return `${pluginId}#${presetId}`;
+}
+
+export function findWidgetPreset(type: string): { plugin: WidgetPlugin<any>; preset: WidgetPreset<any> } | null {
+  const i = type.indexOf('#');
+  if (i < 0) return null;
+  const plugin = widgets.get(type.slice(0, i));
+  const preset = plugin?.presets?.find((p) => p.id === type.slice(i + 1));
+  return plugin && preset ? { plugin, preset } : null;
 }
 
 export function widgetData<D>(el: WidgetElement): D {

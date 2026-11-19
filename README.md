@@ -55,6 +55,7 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Testes, depuração de falhas, CI e artefatos, reprodução de bugs |
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Benchmark, medições antes/depois, limites |
 | [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Problemas e limitações conhecidos |
+| [docs/AI_TILES.md](docs/AI_TILES.md) | AI Tiles: decisões, modos visual/funcional, procedência e condições de uso das logos |
 | [docs/AUDIT-CYCLE2.md](docs/AUDIT-CYCLE2.md) | Auditoria inicial do ciclo 2 (baseline) |
 
 ---
@@ -90,6 +91,7 @@ Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuraç
 | Assistente IA | 🟡 | OpenAI, Claude e Gemini via servidor local; só envia contexto conectado e autorizado; respostas estruturadas viram blocos/tarefas/conexões **somente após confirmação** |
 | Gráfico | ✅ | Barras/rosca a partir de blocos financeiros conectados |
 | HTML isolado | ✅ experimental | Base de plugins de terceiros (iframe sandbox + CSP) |
+| AI Tiles | ✅ | ChatGPT, Codex, Claude, Claude Code, Gemini e Grok com logos locais; modos compacto, normal e detalhado; arrastar da biblioteca, conectar, agrupar, exportar PNG/SVG com a logo. Não exige API; vínculo opcional com um bloco Assistente IA. Ver [docs/AI_TILES.md](docs/AI_TILES.md) |
 | Google Calendar, Google Drive, GitHub, API externa, Indicadores, Dashboard, Ferramentas de dev | 🔜 | Listados na biblioteca como “Futuro”, com o requisito de ativação |
 
 ### Dados
@@ -197,7 +199,7 @@ Antes de cada commit: `npm run verify` (tipos + unitários + build + E2E no Chro
 
 - `npm test` — testes unitários: núcleo do editor, persistência sob concorrência (gravações controladas), integridade de dados, segurança do servidor (SSRF com DNS/transporte simulados), sandbox de plugins, finanças, fluxo de dados, IA.
 - `npm run test:e2e` / `npm run test:e2e:all` — mouse e teclado reais em Chromium (padrão) ou Chromium, Firefox, WebKit e celular com toque.
-- **CI** (`.github/workflows/ci.yml`): a cada push na `main`, em branches `improvement/**` e em pull requests roda tipos, unitários, build, auditoria de dependências e E2E nos quatro projetos, publicando relatório/traces quando algo falha.
+- **CI** (`.github/workflows/ci.yml`): a cada push na `main`, em branches `improvement/**` e `feature/**` e em pull requests roda tipos, unitários, build, auditoria de dependências e E2E nos quatro projetos, publicando relatório/traces quando algo falha.
 
 Critério 18 (IA com credenciais válidas): o contrato de requisição/resposta de cada provedor é testado com `fetch` simulado; **uma chamada real não foi verificada** porque não havia chave disponível no ambiente de desenvolvimento.
 
