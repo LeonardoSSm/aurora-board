@@ -3,14 +3,14 @@ import { Eye, Loader2, RefreshCw, Send, Sparkles, Trash2 } from 'lucide-react';
 import type { WidgetPlugin, WidgetProps } from '../registry';
 import { sanitizeAI, type AIData, type AIMessage } from '../../core/widgetData';
 import { WIDGET } from '../../core/widgetIds';
-import { createLinear, createWidget, uid } from '../../core/elements';
-import { resolveLinear } from '../../core/bindings';
+import { uid } from '../../core/elements';
+import type { AuroraElement } from '../../core/schema';
 import { useEditor } from '../../store/editor';
 import { fetchAIStatus, sendChat, type AIStatus, type ProviderId } from '../../integrations/aiClient';
-import { buildContextText, buildSystemPrompt, contextSources, parseProposal, stripProposal, type AIProposal, type QuickMode } from '../../integrations/aiContext';
+import { buildContextText, buildSystemPrompt, contextSources, stripProposal, type QuickMode } from '../../integrations/aiContext';
+import { interpretFinancialRequest, localMoneyAction, parseAIProposal, proposalKey, type FinancialRequest, type ParsedProposal } from '../../integrations/aiActions';
 import { renderMarkdown } from './notes';
-import { appendTasks } from './tasks';
-import { sanitizeTasks } from '../../core/widgetData';
+import { ProposalCard } from './aiProposal';
 
 const QUICK: { label: string; prompt: string; mode: QuickMode }[] = [
   { label: 'Resumir', prompt: 'Resuma o contexto conectado em tópicos curtos.', mode: 'chat' },
@@ -27,83 +27,23 @@ function useAIStatus() {
   return { status, refresh };
 }
 
-function ProposalCard({ proposal, props }: { proposal: AIProposal; props: WidgetProps<AIData> }) {
-  const { element, api } = props;
-  const [applied, setApplied] = useState(false);
-  // Destinos de execução: setas "execution" saindo deste bloco para blocos de Tarefas.
-  const taskTargets = api
-    .connections()
-    .filter((c) => c.connection.kind === 'execution' && c.startBinding?.elementId === element.id && c.endBinding)
-    .map((c) => api.getElement(c.endBinding!.elementId))
-    .filter((e): e is Extract<NonNullable<typeof e>, { type: 'widget' }> => !!e && e.type === 'widget' && e.widgetType === WIDGET.tasks);
-
-  const createOnBoard = async () => {
-    const ok = await api.confirm(
-      'Criar elementos sugeridos pela IA',
-      `Serão criados: ${proposal.notes.length} nota(s), ${proposal.tasks.length ? '1 lista com ' + proposal.tasks.length + ' tarefa(s)' : '0 listas'}, ${proposal.connections.length} conexão(ões). Você pode desfazer com Ctrl+Z.`,
-      'Criar no quadro',
-    );
-    if (!ok) return;
-    const x0 = element.x + element.width + 60;
-    let y = element.y;
-    const created = [];
-    for (const n of proposal.notes) {
-      const w = createWidget(WIDGET.notes, '1.0.0', n.title || 'Nota', x0, y, 320, 220, { markdown: n.content, mode: 'preview' });
-      w.style.strokeColor = '#f3c577';
-      created.push(w);
-      y += 240;
-    }
-    if (proposal.tasks.length) {
-      const t = createWidget(WIDGET.tasks, '1.0.0', 'Tarefas sugeridas', x0 + (proposal.notes.length ? 350 : 0), element.y, 320, 300, appendTasks(sanitizeTasks({}), proposal.tasks));
-      t.style.strokeColor = '#5addaa';
-      created.push(t);
-    }
-    const byId = new Map(api.getElements().map((e) => [e.id, e]));
-    for (const c of proposal.connections) {
-      const a = createLinear('arrow', 0, 0, [[0, 0], [1, 1]], { roughness: 0, strokeColor: '#8fa6c8' }, 'visual');
-      a.startBinding = { elementId: c.from, fixedPoint: null };
-      a.endBinding = { elementId: c.to, fixedPoint: null };
-      a.text = c.label ?? '';
-      a.connection.relation = 'sugerida pela IA';
-      created.push(resolveLinear(a, byId));
-    }
-    api.addElements(created, true);
-    setApplied(true);
-    api.toast('Elementos criados. Ctrl+Z desfaz.', 'success');
-  };
-
-  const sendToTasks = async (targetId: string, title: string) => {
-    const ok = await api.confirm('Enviar tarefas', `Adicionar ${proposal.tasks.length} tarefa(s) ao bloco “${title}”? (conexão de execução)`, 'Enviar');
-    if (!ok) return;
-    api.updateWidgetData(targetId, (d) => appendTasks(sanitizeTasks(d), proposal.tasks));
-    api.toast(`Tarefas enviadas para “${title}”.`, 'success');
-  };
-
-  return (
-    <div className="mt-1.5 rounded-lg border border-accent-2/40 bg-accent-2/10 p-2 text-[11px]">
-      <div className="font-bold text-accent-2 uppercase tracking-wider text-[10px] mb-1">Proposta estruturada</div>
-      <div className="text-fg-2">
-        {proposal.notes.length} nota(s) · {proposal.tasks.length} tarefa(s) · {proposal.connections.length} conexão(ões)
-      </div>
-      <div className="flex flex-wrap gap-1.5 mt-1.5">
-        <button disabled={applied} onClick={createOnBoard} className="h-7 px-2 rounded-md bg-[#5b46a8] text-white font-semibold">{applied ? 'Criado' : 'Criar no quadro…'}</button>
-        {proposal.tasks.length > 0 && taskTargets.map((t) => (
-          <button key={t.id} onClick={() => sendToTasks(t.id, t.title)} className="h-7 px-2 rounded-md border border-ok/50 text-ok">Enviar para “{t.title}”…</button>
-        ))}
-      </div>
-      <div className="text-[10px] text-soft mt-1">Nada é criado ou enviado sem sua confirmação.</div>
-    </div>
-  );
-}
-
-function MessageView({ m, props, validIds }: { m: AIMessage; props: WidgetProps<AIData>; validIds: Set<string> }) {
-  const proposal = useMemo(() => (m.role === 'assistant' ? parseProposal(m.content, validIds) : null), [m, validIds]);
+function MessageView({ m, request, props, validIds, elements }: { m: AIMessage; request: FinancialRequest | null; props: WidgetProps<AIData>; validIds: Set<string>; elements: AuroraElement[] }) {
+  const proposal = useMemo(() => (m.role === 'assistant' ? parseAIProposal(m.content, validIds) : null), [m, validIds]);
+  // A IA não propôs nenhuma ação financeira, mas o pedido é inequívoco ("Crie um bloco de receita de R$ 2.000,00"):
+  // oferece a interpretação local, também só com prévia e confirmação.
+  const local = useMemo<ParsedProposal | null>(() => {
+    if (m.role !== 'assistant' || proposal?.actions.some((a) => a.type === 'money')) return null;
+    const a = localMoneyAction(request);
+    return a ? { version: 2, actions: [a], rejected: [], notices: [] } : null;
+  }, [m.role, proposal, request]);
   const html = useMemo(() => (m.role === 'assistant' ? renderMarkdown(proposal ? stripProposal(m.content) : m.content) : ''), [m, proposal]);
   return (
     <div className={`rounded-lg px-2.5 py-1.5 text-[12px] ${m.role === 'user' ? 'bg-panel-3 self-end max-w-[90%] whitespace-pre-wrap' : 'bg-[#0f1826] border border-line/60'}`}>
       {m.role === 'assistant' ? <div className="md" dangerouslySetInnerHTML={{ __html: html }} /> : m.content}
       {m.role === 'assistant' && <div className="text-[9px] text-soft mt-1">{m.provider} · {m.model}</div>}
-      {proposal && <ProposalCard proposal={proposal} props={props} />}
+      {/* key: se a lista de ações mudar (ex.: fonte desautorizada), o estado do cartão recomeça alinhado. */}
+      {proposal && <ProposalCard key={JSON.stringify(proposal.actions)} proposal={proposal} origin="ai" applyKey={proposalKey(m.id, 'ai')} request={request} props={props} elements={elements} validIds={validIds} />}
+      {local && <ProposalCard proposal={local} origin="local" applyKey={proposalKey(m.id, 'local')} request={request} props={props} elements={elements} validIds={validIds} />}
     </div>
   );
 }
@@ -132,6 +72,16 @@ export const aiPlugin: WidgetPlugin<AIData> = {
     const elements = useEditor((s) => s.elements);
     const sources = useMemo(() => contextSources(elements, element.id, data.authorized), [elements, element.id, data.authorized]);
     const validIds = useMemo(() => new Set(sources.filter((s) => s.authorized).map((s) => s.id)), [sources]);
+    // Pedido do usuário que originou cada resposta (conferência local de valores financeiros).
+    const requests = useMemo(() => {
+      const out = new Map<string, FinancialRequest | null>();
+      let last: FinancialRequest | null = null;
+      for (const m of data.messages) {
+        if (m.role === 'user') last = interpretFinancialRequest(m.content);
+        else out.set(m.id, last);
+      }
+      return out;
+    }, [data.messages]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -235,7 +185,7 @@ export const aiPlugin: WidgetPlugin<AIData> = {
 
         {/* Conversa */}
         <div ref={listRef} className="flex-1 min-h-[60px] overflow-auto flex flex-col gap-1.5" data-scrollable>
-          {data.messages.map((m) => <MessageView key={m.id} m={m} props={props} validIds={validIds} />)}
+          {data.messages.map((m) => <MessageView key={m.id} m={m} request={requests.get(m.id) ?? null} props={props} validIds={validIds} elements={elements} />)}
           {loading && <div className="text-[11px] text-muted flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Aguardando {provider?.name}… <button className="underline" onClick={() => abortRef.current?.abort()}>cancelar</button></div>}
           {error && <div className="text-[11px] text-danger">{error}</div>}
         </div>

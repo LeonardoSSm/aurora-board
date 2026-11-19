@@ -64,6 +64,7 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Testes, depuração de falhas, CI e artefatos, reprodução de bugs |
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Benchmark, medições antes/depois, limites |
 | [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Problemas e limitações conhecidos |
+| [docs/AI_ACTIONS.md](docs/AI_ACTIONS.md) | Ações da IA (contrato v2): blocos de valor, lançamentos financeiros, validação, prévia e confirmação |
 | [docs/AI_TILES.md](docs/AI_TILES.md) | AI Tiles: decisões, modos visual/funcional, procedência e condições de uso das logos |
 | [docs/VISUAL_FINANCE.md](docs/VISUAL_FINANCE.md) | Finanças visuais: valores, meses, regras de cálculo, precisão, uso e desempenho |
 | [docs/FORMULA_ENGINE.md](docs/FORMULA_ENGINE.md) | Motor de fórmulas: gramática, funções, tipos, variáveis |

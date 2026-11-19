@@ -48,6 +48,8 @@ export interface WidgetHostApi {
   connections(): LinearElement[];
   updateElement(id: string, patch: Partial<AuroraElement>): void;
   updateWidgetData(id: string, updater: (data: unknown) => unknown): void;
+  /** Adiciona elementos e altera dados de widgets numa única entrada de histórico. */
+  applyBatch(elements: AuroraElement[], updates: { id: string; update: (data: unknown) => unknown }[], select?: boolean): void;
   putAsset(file: File | Blob, name?: string): Promise<string>;
   getAssetURL(id: string): Promise<string | null>;
 }

@@ -4,7 +4,7 @@ import type { WidgetElement } from '../core/schema';
 import type { InputValue } from '../core/dataflow';
 import { connectionsOf } from '../core/bindings';
 import { getState, useEditor } from '../store/editor';
-import { addElements, getAsset, putAsset, setSelection, updateElement, updateWidgetData } from '../store/actions';
+import { addElements, applyBatch, getAsset, putAsset, setSelection, updateElement, updateWidgetData } from '../store/actions';
 import { confirmDialog, toast } from '../store/ui';
 import { getWidget, type WidgetHostApi } from './registry';
 import { getDataflow } from './dataflow';
@@ -41,6 +41,7 @@ export function makeHostApi(id: string): WidgetHostApi {
     connections: () => connectionsOf(getState().elements, id),
     updateElement: (eid, patch) => updateElement(eid, patch),
     updateWidgetData: (eid, updater) => updateWidgetData(eid, updater),
+    applyBatch: (els, updates, select) => applyBatch(els, updates, select),
     putAsset: (file, name) => putAsset(file, name ?? (file as File).name),
     getAssetURL: async (aid) => (await getAsset(aid))?.dataURL ?? null,
   };

@@ -46,7 +46,7 @@ Limitação conhecida: um proxy HTTP do sistema (variáveis `HTTP_PROXY`) não �
 - **Assinatura do ChatGPT (Plus/Pro) não dá acesso à API.** É preciso uma chave da OpenAI Platform (cobrada à parte); o mesmo vale para Claude (Anthropic Console) e Gemini (Google AI Studio).
 - O usuário escolhe o provedor; sem chave, o bloco mostra “Não configurado” e não simula respostas.
 - Só é enviado o conteúdo de blocos ligados por conexões **contexto/dados** e marcados como autorizados; o painel “Ver o que será enviado” mostra o payload exato (`aiContext.test.ts`).
-- Propostas estruturadas da IA são validadas com zod; ids de conexões precisam existir no contexto; criar/alterar blocos exige confirmação.
+- Propostas estruturadas da IA (contrato v2, [`AI_ACTIONS.md`](AI_ACTIONS.md)) são validadas com zod ação por ação; ids de conexões e destinos financeiros precisam estar no contexto autorizado (ou, para Finanças, ligados por execução); dinheiro só em centavos inteiros convertidos sem ponto flutuante; tudo é revalidado no estado atual ao confirmar; criar/alterar blocos ou lançamentos exige prévia + confirmação e vira uma única entrada de desfazer.
 
 ### Widgets HTML e plugins (`sandbox.tsx`, `public/sandbox.html`, `thirdParty.tsx`)
 
