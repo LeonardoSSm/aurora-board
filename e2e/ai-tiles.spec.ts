@@ -29,7 +29,7 @@ test('AI Tiles: biblioteca, logos, edição, conexões, persistência e exporta�
   const section = page.getByTestId(`library-section-${TILE}`);
   await expect(section).toBeVisible();
   await expect(section.getByText('Inteligências Artificiais')).toBeVisible();
-  for (const name of ['ChatGPT', 'Codex', 'Claude', 'Claude Code', 'Gemini', 'Grok']) await expect(section.getByRole('button', { name, exact: true })).toBeVisible();
+  for (const name of ['ChatGPT', 'Codex', 'Claude', 'Claude Code', 'Gemini', 'Grok']) await expect(section.getByRole('button', { name: `Inserir ${name}`, exact: true })).toBeVisible();
   await expect(section.locator('img')).toHaveCount(6);
   const search = page.getByPlaceholder('Buscar componentes');
   await search.fill('anthropic');

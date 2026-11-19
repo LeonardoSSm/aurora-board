@@ -128,6 +128,7 @@ function PresetItem({ plugin, preset, onAdd }: { plugin: WidgetPlugin; preset: W
         e.dataTransfer.effectAllowed = 'copy';
       }}
       onClick={onAdd}
+      aria-label={`Inserir ${preset.name}`}
       title={[preset.name, preset.description, 'Clique para inserir no centro ou arraste para o quadro.'].filter(Boolean).join('\n')}
       className="flex flex-col items-center gap-1 py-2 rounded-lg border border-transparent hover:border-line hover:bg-panel-3 transition-colors"
     >
