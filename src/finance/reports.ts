@@ -16,6 +16,7 @@ import type { Currency } from '../core/finance';
 import type { BankTransaction, FinancialAccount, MovementKind } from './model';
 import { UNCATEGORIZED, isCardAccount } from './model';
 import { monthOf } from './parsing';
+import { affectsResult } from './classify';
 
 export interface LedgerFilter {
   accountIds?: string[];
@@ -265,7 +266,8 @@ export function cardSummary(account: FinancialAccount, txs: BankTransaction[], f
 export function recurring(txs: BankTransaction[], filter: LedgerFilter = {}): { description: string; amountCents: number; months: number; accountId: string }[] {
   const map = new Map<string, { description: string; amountCents: number; months: Set<string>; accountId: string }>();
   for (const t of txs) {
-    if (!matchesFilter(t, filter) || t.amountCents >= 0) continue;
+    // Só saídas que são consumo (transferências, faturas e aplicações não são “pagamentos recorrentes”).
+    if (!matchesFilter(t, filter) || t.amountCents >= 0 || !affectsResult(t.local.kind)) continue;
     const key = `${t.accountId}|${t.amountCents}|${t.description.toLowerCase().replace(/\d+/g, '').trim()}`;
     const r = map.get(key) ?? { description: t.description, amountCents: t.amountCents, months: new Set<string>(), accountId: t.accountId };
     r.months.add(monthOf(t.postedDate));

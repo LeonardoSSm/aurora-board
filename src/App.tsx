@@ -9,6 +9,7 @@ import { BoardsPanel } from './ui/BoardsPanel';
 import { CheckpointDialog, LocationsPanel } from './ui/LocationsPanel';
 import { ContextMenu, DialogHost, ShortcutsDialog, Toasts, ZoomControls } from './ui/Overlays';
 import { BetaNotice } from './ui/BetaNotice';
+import { FinanceHub } from './ui/finance/FinanceHub';
 import { setLastPointerWorld, useKeyboard } from './ui/useKeyboard';
 import { screenToWorld } from './store/actions';
 
@@ -90,6 +91,7 @@ export function App() {
       <BoardsPanel />
       <LocationsPanel />
       <CheckpointDialog />
+      <FinanceHub />
       <DialogHost />
       <ShortcutsDialog />
       <Toasts />

@@ -19,6 +19,12 @@ import { isCameraAnimating } from './store/cameraMotion';
 import * as checkpointActions from './store/checkpointActions';
 import { getDataflow } from './widgets/dataflow';
 import { EXPOSE_TEST_HOOKS } from './config/runtime';
+import { setFinanceRepositoryFactory } from './finance/store';
+import * as financeStore from './finance/store';
+import { IndexedDBFinanceRepository } from './finance/repository';
+
+// Ciclo F1: razão financeiro num banco IndexedDB próprio (aurora-finance), carregado sob demanda.
+setFinanceRepositoryFactory(() => new IndexedDBFinanceRepository());
 
 const coreApi = { updateBoundArrows, getDataflow, computeDataflow, dataflowSpec, isCameraAnimating };
 
@@ -42,7 +48,7 @@ void Promise.race([fontsReady, timeout]).then(() => initEditor(new IndexedDBAdap
 // VITE_AURORA_TEST_HOOKS=1 (constante de build; não existe flag de runtime que o ative).
 declare global {
   interface Window {
-    __aurora?: { getState: typeof getState; store: typeof useEditor; actions: typeof actions; elements: typeof elementsApi; core: typeof coreApi; checkpoints: typeof checkpointActions };
+    __aurora?: { getState: typeof getState; store: typeof useEditor; actions: typeof actions; elements: typeof elementsApi; core: typeof coreApi; checkpoints: typeof checkpointActions; finance?: typeof financeStore };
   }
 }
-if (EXPOSE_TEST_HOOKS) window.__aurora = { getState, store: useEditor, actions, elements: elementsApi, core: coreApi, checkpoints: checkpointActions };
+if (EXPOSE_TEST_HOOKS) window.__aurora = { getState, store: useEditor, actions, elements: elementsApi, core: coreApi, checkpoints: checkpointActions, finance: financeStore };

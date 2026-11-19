@@ -28,7 +28,8 @@ export async function exportCurrentBoardJSON() {
   toast('Quadro exportado (JSON).', 'success');
 }
 
-export async function exportWorkspaceJSON() {
+/** Backup visual do workspace atual (texto JSON `aurora-board`). Não contém dados financeiros do razão. */
+export async function buildWorkspaceExportText(): Promise<{ text: string; boards: number; name: string }> {
   await flushSave();
   const s = getState();
   const boards: Board[] = [];
@@ -37,8 +38,13 @@ export async function exportWorkspaceJSON() {
     if (b) boards.push(b);
   }
   const ws = s.workspaces.find((w) => w.id === s.workspaceId);
-  downloadText(`${safeFileName(ws?.name ?? 'workspace')}-backup-${new Date().toISOString().slice(0, 10)}.aurora.json`, buildExport(boards, await collectAssets(boards), ws));
-  toast(`Backup com ${boards.length} quadro(s) exportado.`, 'success');
+  return { text: buildExport(boards, await collectAssets(boards), ws), boards: boards.length, name: ws?.name ?? 'workspace' };
+}
+
+export async function exportWorkspaceJSON() {
+  const { text, boards, name } = await buildWorkspaceExportText();
+  downloadText(`${safeFileName(name)}-backup-${new Date().toISOString().slice(0, 10)}.aurora.json`, text);
+  toast(`Backup com ${boards} quadro(s) exportado.`, 'success');
 }
 
 export async function exportImage(kind: 'png' | 'svg', onlySelection: boolean, background = true) {
