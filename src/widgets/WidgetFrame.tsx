@@ -116,9 +116,13 @@ export function WidgetFrame({ element, selected }: { element: WidgetElement; sel
         className="flex-1 min-h-0 overflow-auto p-3 text-[13px] text-fg-2 select-text"
         style={{ pointerEvents: tool === 'select' ? 'auto' : 'none' }}
         onPointerDown={(e) => {
-          if ((e.target as HTMLElement).closest(INTERACTIVE)) {
+          const s = getState();
+          const isSelectedAlone = s.selectedIds.length === 1 && s.selectedIds[0] === element.id;
+          // Controles (campos, botões…) sempre interagem; com o bloco já selecionado, o corpo inteiro
+          // fica "nativo" (selecionar texto, rolar). Mover: cabeçalho, bordas ou arrastar antes de selecionar.
+          if ((e.target as HTMLElement).closest(INTERACTIVE) || (isSelectedAlone && e.button === 0 && !e.shiftKey)) {
             e.stopPropagation();
-            if (!getState().selectedIds.includes(element.id)) setSelection([element.id]);
+            if (!s.selectedIds.includes(element.id)) setSelection([element.id]);
           }
         }}
         onKeyDown={(e) => e.stopPropagation()}

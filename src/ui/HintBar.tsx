@@ -35,7 +35,7 @@ export function useHint(): string {
     const el = selected[0];
     if (el.locked) return 'Elemento bloqueado · Ctrl+Shift+L desbloqueia';
     if (isLinear(el)) return selectedPoint !== null ? 'Delete remove o ponto selecionado · arraste para mover · Shift: 15°' : 'Arraste os pontos · arraste ◦ entre pontos para criar um novo · clique num ponto e Delete remove · duplo clique: rótulo';
-    if (el.type === 'widget') return 'Arraste pelo cabeçalho ou bordas · duplo clique no título renomeia · Ferramenta Conectar (C) liga dados e contexto';
+    if (el.type === 'widget') return 'Selecionado: o conteúdo fica interativo (selecionar texto, rolar) · mova pelo cabeçalho · duplo clique no título renomeia';
     if (['rectangle', 'ellipse', 'diamond', 'sticky'].includes(el.type)) return 'Enter para escrever · Ctrl+setas cria um fluxo conectado · Alt+setas navega · Alt+arrastar duplica';
     return 'Alt+arrastar duplica · Shift ao redimensionar mantém proporção';
   }
