@@ -23,7 +23,7 @@ export function authorizedBankRefs(elements: AuroraElement[], validIds: Readonly
   for (const el of elements) {
     if (el.type !== 'widget' || el.widgetType !== WIDGET.bankQuery || !validIds.has(el.id)) continue;
     const q = sanitizeBankQuery(el.data, currentPeriod());
-    if (q.aiShare.mode !== 'detail' || !shareAuthorized(q)) continue;
+    if (q.aiShare.mode !== 'detail' || !shareAuthorized(q, el.id, fin)) continue;
     const r = runBankQuery(fin, q);
     const p = buildFinanceAIText(q, r, fin, el.title);
     const refs = new Set(p.refs);

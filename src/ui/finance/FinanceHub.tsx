@@ -29,6 +29,7 @@ export function FinanceHub() {
   const status = useFinance((s) => s.status);
   const error = useFinance((s) => s.error);
   const hasMock = useFinance((s) => s.accounts.some((a) => a.providerRef?.providerId === 'mock'));
+  const integrity = useFinance((s) => s.integrityIssues);
   const [importing, setImporting] = useState(false);
   useEffect(() => { if (ui.open) void ensureFinanceLoaded(); }, [ui.open]);
   useEffect(() => { if (ui.importAccountId) setImporting(true); }, [ui.importAccountId]);
@@ -59,6 +60,7 @@ export function FinanceHub() {
           </nav>
           <main className="flex-1 min-w-0 overflow-auto p-4 flex flex-col gap-3" data-scrollable>
             {hasMock && <TestBanner />}
+            {integrity > 0 && <div className="rounded-lg border border-warn/60 bg-warn/10 p-2 text-[12px] text-warn" role="alert" data-testid="finance-integrity">⚠ {integrity} registro(s) do armazenamento local estão corrompidos e foram deixados fora dos cálculos (continuam no disco, nada foi apagado). Faça um backup financeiro e, se necessário, restaure de um backup anterior.</div>}
             {status === 'loading' || status === 'idle' ? <div className="text-muted text-[13px]">Carregando dados financeiros locais…</div>
               : status === 'error' ? <div className="rounded-lg border border-danger/50 p-3 text-danger text-[13px]" role="alert">{error} Nenhum dado foi apagado.</div>
               : importing ? <ImportWizard initialAccountId={ui.importAccountId} onClose={() => { setImporting(false); useFinanceUI.setState({ importAccountId: null }); }} />

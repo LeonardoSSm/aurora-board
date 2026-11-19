@@ -13,9 +13,9 @@ import { WIDGET } from '../../core/widgetIds';
 import { formatMoney } from '../../core/finance';
 import { CURRENCIES, currentPeriod, periodLabel } from '../../core/scalar';
 import { CARD_FG, type CardModel } from '../../core/financeCard';
-import { ensureFinanceLoaded, getFinance, useFinance } from '../../finance/store';
+import { ensureFinanceLoaded, getFinance, grantAI, revokeAI, useFinance } from '../../finance/store';
 import { DEFAULT_AI_SHARE, METRIC_LABELS, queryOutputs, rangeLabel, runBankQuery, sanitizeBankQuery, type BankMetric, type BankQueryData, type BankQueryResult } from '../../finance/query';
-import { buildFinanceAIText, shareAuthorized, shareDigest } from '../../finance/aiShare';
+import { buildFinanceAIText, grantKey, shareAuthorized, shareDigest } from '../../finance/aiShare';
 import { ACCOUNT_TYPE_LABELS } from '../../finance/model';
 import { bumpExternalData } from '../dataflow';
 import { Button, Field, Label, Segmented, Select } from '../../ui/primitives';
@@ -82,7 +82,7 @@ function Inspector({ element, data }: { element: WidgetElement; data: BankQueryD
   const set = (p: Partial<BankQueryData>) => patchWidget(id, (r) => sanitizeBankQuery(r, currentPeriod()), () => ({ data: p }));
   const r = useMemo(() => runBankQuery(fin, data), [fin, data]);
   const payload = useMemo(() => buildFinanceAIText(data, r, fin, element.title), [data, r, fin, element.title]);
-  const authorized = shareAuthorized(data);
+  const authorized = shareAuthorized(data, id, fin);
   const changed = data.aiShare.mode !== 'none' && !!data.aiShare.confirmedDigest && !authorized;
   const share = (p: Partial<BankQueryData['aiShare']>) => set({ aiShare: { ...data.aiShare, ...p } });
   const [y, m] = data.period.split('-');
@@ -140,7 +140,7 @@ function Inspector({ element, data }: { element: WidgetElement; data: BankQueryD
 
       <Label>Análise por IA</Label>
       <div className="rounded-lg border border-line/60 p-2 bg-[#0f1826] flex flex-col gap-1.5" data-testid="bank-ai-share">
-        <Segmented label="Compartilhamento com IA" value={data.aiShare.mode} onChange={(mode) => share({ mode, confirmedDigest: '', confirmedAt: 0 })} options={[{ value: 'none', label: 'Nada' }, { value: 'aggregate', label: 'Resumo agregado' }, { value: 'detail', label: 'Movimentações' }]} />
+        <Segmented label="Compartilhamento com IA" value={data.aiShare.mode} onChange={(mode) => { share({ mode, confirmedDigest: '', confirmedAt: 0 }); void revokeAI(id); }} options={[{ value: 'none', label: 'Nada' }, { value: 'aggregate', label: 'Resumo agregado' }, { value: 'detail', label: 'Movimentações' }]} />
         {data.aiShare.mode !== 'none' && (
           <>
             <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] text-fg-2">
@@ -156,7 +156,7 @@ function Inspector({ element, data }: { element: WidgetElement; data: BankQueryD
             {authorized ? (
               <div className="flex items-center justify-between gap-2 text-[11px]">
                 <span className="text-ok" data-testid="bank-ai-status">✓ Autorizado em {new Date(data.aiShare.confirmedAt).toLocaleString('pt-BR')}</span>
-                <Button onClick={() => share({ mode: 'none', confirmedDigest: '', confirmedAt: 0 })}>Revogar</Button>
+                <Button onClick={() => { share({ mode: 'none', confirmedDigest: '', confirmedAt: 0 }); void revokeAI(id); }}>Revogar</Button>
               </div>
             ) : (
               <div className="flex flex-col gap-1">
@@ -166,7 +166,11 @@ function Inspector({ element, data }: { element: WidgetElement; data: BankQueryD
                   disabled={!payload.text}
                   onClick={async () => {
                     const ok = await confirmDialog('Autorizar envio de dados financeiros', `O conteúdo mostrado na prévia (${payload.text.length} caracteres${data.aiShare.mode === 'detail' ? `, ${payload.refs.length} movimentação(ões)` : ''}) poderá ser enviado ao provedor de IA configurado sempre que um Assistente IA conectado a este bloco for usado. Nada é enviado agora. Você pode revogar a qualquer momento.`, 'Autorizar');
-                    if (ok) share({ confirmedDigest: shareDigest(sanitizeBankQuery({ ...data }, currentPeriod())), confirmedAt: Date.now() });
+                    if (!ok) return;
+                    // A autorização vale só neste navegador (razão local); o quadro guarda apenas o resumo para a interface.
+                    const q = sanitizeBankQuery({ ...data, ledgerId: data.ledgerId || fin.ledgerId }, currentPeriod());
+                    await grantAI(grantKey(id, q));
+                    share({ confirmedDigest: shareDigest(q), confirmedAt: Date.now() });
                   }}
                 >Autorizar este conteúdo para IA</Button>
               </div>
@@ -220,7 +224,7 @@ export const bankQueryPlugin: WidgetPlugin<BankQueryData> = {
   summarize: (d, el) => `${el.title}: consulta bancária (${METRIC_LABELS[d.metric]}, ${rangeLabel(d)}). Valores ficam no razão local e não são incluídos neste resumo.`,
   aiContext: (d, el) => {
     if (d.aiShare.mode === 'none') return { allowed: false, text: '', reason: 'Dados bancários: compartilhamento com IA desativado neste bloco.' };
-    if (!shareAuthorized(d)) return { allowed: false, text: '', reason: 'Dados bancários: autorização para IA pendente ou desatualizada (confirme no painel do bloco).' };
+    if (!shareAuthorized(d, el.id, getFinance())) return { allowed: false, text: '', reason: 'Dados bancários: autorização para IA pendente ou desatualizada (confirme no painel do bloco).' };
     const r = runBankQuery(getFinance(), d);
     const p = buildFinanceAIText(d, r, getFinance(), el.title);
     return p.text ? { allowed: true, text: p.text } : { allowed: false, text: '', reason: 'Dados bancários indisponíveis neste navegador.' };

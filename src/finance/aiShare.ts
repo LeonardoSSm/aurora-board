@@ -25,8 +25,15 @@ export function shareDigest(q: BankQueryData): string {
   return `v1:${h.toString(16).padStart(8, '0')}`;
 }
 
-export function shareAuthorized(q: BankQueryData): boolean {
-  return q.aiShare.mode !== 'none' && q.aiShare.confirmedDigest === shareDigest(q);
+export const grantKey = (elementId: string, q: BankQueryData) => `${elementId}:${shareDigest(q)}`;
+
+/**
+ * Autorizado só se: modo escolhido, consulta vinculada ao razão DESTE navegador e concessão local para este
+ * bloco com exatamente esta configuração. O que vem no quadro (`confirmedDigest`) serve só para a interface
+ * avisar que a configuração mudou — nunca autoriza nada.
+ */
+export function shareAuthorized(q: BankQueryData, elementId: string, local: { ledgerId: string; aiGrants: readonly string[] }): boolean {
+  return q.aiShare.mode !== 'none' && !!q.ledgerId && q.ledgerId === local.ledgerId && local.aiGrants.includes(grantKey(elementId, q));
 }
 
 export const txRef = (t: Pick<BankTransaction, 'id'>) => `t_${t.id.replace(/[^\w]/g, '').slice(-10)}`;

@@ -18,6 +18,8 @@
 | `npm run test:static` | Build **público** + `vite preview` com os cabeçalhos da hospedagem + jornada `e2e/static` (CSP aplicada). `AURORA_CSP_MODE=report-only` para a fase de relatório; `AURORA_STATIC_BASE_URL=https://…` para rodar contra uma homologação |
 | `npm run hosting:generate` | Regenera `public/_headers` e `vercel.json` a partir de `hosting/headers.ts` (a CI falha se estiverem desatualizados) |
 | `npm run perf` | Benchmark contra build de produção com `VITE_AURORA_TEST_HOOKS=1` |
+| `npm run test:finance` | Finanças pessoais (ciclo F1): unitários `tests/unit/finance-*.test.ts` + jornadas A–H de `e2e/finance.spec.ts` no Chromium |
+| `npm run perf:finance` | Benchmark do razão financeiro (100 a 50.000 movimentações; `PERF_SIZES=…` para mudar) |
 
 Primeira vez: `npx playwright install chromium` (ou `firefox webkit` para os demais).
 

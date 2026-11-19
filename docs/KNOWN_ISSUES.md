@@ -28,6 +28,18 @@ Estado ao final do ciclo 2. Itens marcados com ⚠ afetam uso real; os demais s�
 - Com milhares de blocos financeiros, o recálculo percorre o grafo inteiro (≈4 ms com 1.000 valores); só os blocos afetados re-renderizam.
 - Renomear a variável pelo painel da **conexão** não reescreve a fórmula; pelo painel da **fórmula**, reescreve.
 
+## Finanças pessoais (ciclo F1)
+
+- ⚠ **Nenhuma conexão Open Finance real.** Só o provedor fictício (ambiente de testes). Um conector real exige intermediário contratado e backend seguro (docs/finance/OPEN_FINANCE.md).
+- ⚠ **Armazenamento financeiro local não cifrado** (IndexedDB `aurora-finance`): quem acessa o perfil do navegador lê os dados. Backups financeiros podem ser cifrados.
+- Conversas do Assistente IA (que podem citar valores autorizados) ficam salvas no quadro e vão no backup visual; limpe a conversa antes de compartilhar.
+- Classificação automática por palavras-chave pode errar (PIX/TED para terceiros × entre contas próprias); pares só com contrapartida própria e evidência; tudo editável.
+- Mês de fatura do cartão é estimado pelo dia de fechamento; faturas eletrônicas e parcelas futuras não são lidas.
+- Sem perfis de importação por banco (nenhum layout real avaliado); o mapeamento manual cobre layouts diferentes.
+- Sem conversão de moedas; contas em moedas diferentes ficam fora do consolidado da outra moeda.
+- O consentimento do provedor fictício vive só na memória da aba (aparece como expirado após recarregar).
+- Um par conciliado automaticamente pode ficar errado se uma terceira conta com o mesmo valor for importada depois (desfaça pelo link “par”).
+
 ## AI Tiles
 
 - Logos são marcas dos respectivos titulares; o uso no app é referencial. As diretrizes da OpenAI e da xAI não puderam ser lidas durante a pesquisa (bloqueio a leitura automatizada). Antes de distribuição comercial, confirmar condições com cada titular (docs/AI_TILES.md).

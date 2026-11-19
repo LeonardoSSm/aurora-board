@@ -8,7 +8,7 @@
 import { create } from 'zustand';
 import type { Currency } from '../core/finance';
 import type { AccountType, BankTransaction, Category, CategoryRule, ConsentRecord, FinanceSnapshot, FinancialAccount, FinancialInstitution, ImportOrigin, ImportSession, MovementKind, ReportedBalance } from './model';
-import { DEFAULT_CATEGORIES, UNCATEGORIZED, cleanText, isSafeCents, isValidDate, maskIdentifier, normalizeDesc } from './model';
+import { DEFAULT_CATEGORIES, MAX_AI_GRANTS, UNCATEGORIZED, cleanText, isSafeCents, isValidDate, maskIdentifier, normalizeDesc } from './model';
 import type { ParsedStatement } from './drafts';
 import { materializePlan, planImport, safeImportFileName, type ImportPlan } from './importPlan';
 import { applyPairs, findPairs, unlinkPair, type PairSuggestion } from './reconcile';
@@ -24,11 +24,13 @@ export interface FinanceState extends FinanceSnapshot {
   version: number;
   /** Ambiente de testes (provedor fictício) habilitado na interface. */
   testMode: boolean;
+  /** Registros do disco ignorados por estarem corrompidos (mantidos no disco, nunca apagados em silêncio). */
+  integrityIssues: number;
 }
 
-const emptySnapshot = (): FinanceSnapshot => ({ ledgerId: '', institutions: [], accounts: [], transactions: [], imports: [], consents: [], categories: [], rules: [] });
+const emptySnapshot = (): FinanceSnapshot => ({ ledgerId: '', institutions: [], accounts: [], transactions: [], imports: [], consents: [], categories: [], rules: [], aiGrants: [] });
 
-export const useFinance = create<FinanceState>(() => ({ ...emptySnapshot(), status: 'idle', error: null, version: 0, testMode: false }));
+export const useFinance = create<FinanceState>(() => ({ ...emptySnapshot(), status: 'idle', error: null, version: 0, testMode: false, integrityIssues: 0 }));
 export const getFinance = () => useFinance.getState();
 const set = (p: Partial<FinanceState>) => useFinance.setState((s) => ({ ...p, version: s.version + 1 }));
 
@@ -45,7 +47,7 @@ export function financeRepository(): FinanceRepository {
 export function resetFinanceForTests(r: FinanceRepository) {
   repo = r;
   loading = null;
-  useFinance.setState({ ...emptySnapshot(), status: 'idle', error: null, version: 0, testMode: false });
+  useFinance.setState({ ...emptySnapshot(), status: 'idle', error: null, version: 0, testMode: false, integrityIssues: 0 });
 }
 
 export function newFinanceId(prefix: string): string {
@@ -67,7 +69,7 @@ export function ensureFinanceLoaded(): Promise<void> {
         await r.putCategories(cats);
         snap.categories = cats;
       }
-      set({ ...snap, status: 'ready', error: null });
+      set({ ...checked(snap), status: 'ready', error: null });
     } catch (e) {
       // Mensagem genérica: nunca ecoa conteúdo financeiro.
       set({ status: 'error', error: (e as Error)?.name === 'FinanceStorageError' ? (e as Error).message : 'Não foi possível abrir o armazenamento financeiro local.' });
@@ -79,6 +81,18 @@ export function ensureFinanceLoaded(): Promise<void> {
 
 function requireReady() {
   if (getFinance().status !== 'ready') throw new Error('Razão financeiro ainda não carregado.');
+}
+
+/**
+ * Integridade ao carregar: um registro corrompido (edição manual do IndexedDB, extensão, falha de disco) não
+ * derruba a interface nem entra nos cálculos — fica fora da memória, contado em `integrityIssues`, e intacto no disco.
+ */
+function checked(snap: FinanceSnapshot): FinanceSnapshot & { integrityIssues: number } {
+  const accounts = snap.accounts.filter((a) => a && typeof a.id === 'string' && (a.currency === 'BRL' || a.currency === 'USD' || a.currency === 'EUR'));
+  const accIds = new Set(accounts.map((a) => a.id));
+  const transactions = snap.transactions.filter((t) => t && typeof t.id === 'string' && accIds.has(t.accountId) && isSafeCents(t.amountCents) && isValidDate(t.postedDate) && typeof t.description === 'string' && typeof t.dedupeKey === 'string' && !!t.local && typeof t.local.kind === 'string' && typeof t.local.category === 'string');
+  const integrityIssues = snap.accounts.length - accounts.length + snap.transactions.length - transactions.length;
+  return { ...snap, accounts, transactions, integrityIssues };
 }
 
 export const categoryNames = () => getFinance().categories.map((c) => c.name);
@@ -216,7 +230,7 @@ export async function revertImport(importId: string): Promise<{ removed: number;
     const m = new Map(fixed.map((t) => [t.id, t]));
     snap.transactions = snap.transactions.map((t) => m.get(t.id) ?? t);
   }
-  set({ ...snap });
+  set({ ...checked(snap) });
   return r;
 }
 
@@ -364,7 +378,7 @@ export async function removeConsentRecord(id: string): Promise<void> {
 export async function wipeFinanceData(): Promise<void> {
   await financeRepository().wipe();
   const snap = await financeRepository().load();
-  set({ ...snap, status: 'ready' });
+  set({ ...checked(snap), status: 'ready' });
   loading = null;
   // Categorias padrão voltam na próxima abertura.
   const cats: Category[] = DEFAULT_CATEGORIES.map((c, i) => ({ id: `cat_default_${i}`, name: c.name, scope: c.scope, builtin: true }));
@@ -373,6 +387,23 @@ export async function wipeFinanceData(): Promise<void> {
 }
 
 export function setTestMode(on: boolean) { set({ testMode: on }); }
+
+/* ------------------------------ Autorizações de IA (locais) ------------------------------ */
+
+export async function grantAI(key: string): Promise<void> {
+  requireReady();
+  const list = [...getFinance().aiGrants.filter((g) => g !== key && !g.startsWith(`${key.split(':')[0]}:`)), key].slice(-MAX_AI_GRANTS);
+  await financeRepository().putAIGrants(list);
+  set({ aiGrants: list });
+}
+
+/** Revoga todas as autorizações de um bloco (qualquer configuração). */
+export async function revokeAI(elementId: string): Promise<void> {
+  requireReady();
+  const list = getFinance().aiGrants.filter((g) => !g.startsWith(`${elementId}:`));
+  await financeRepository().putAIGrants(list);
+  set({ aiGrants: list });
+}
 
 /** Restaura um backup financeiro já validado: só acrescenta, numa transação. */
 export async function restoreFinanceBackup(b: FinanceBackup): Promise<{ added: number; skipped: number }> {
@@ -386,5 +417,5 @@ export async function restoreFinanceBackup(b: FinanceBackup): Promise<{ added: n
 /** Substitui o estado a partir do disco (após restaurar backup, por exemplo). */
 export async function reloadFinance(): Promise<void> {
   const snap = await financeRepository().load();
-  set({ ...snap, status: 'ready', error: null });
+  set({ ...checked(snap), status: 'ready', error: null });
 }

@@ -22,6 +22,7 @@ Um texto com número (ex.: `Aluguel 1.500`) continua sendo texto; para virar val
 | Mês financeiro | `aurora.finance-period` | `summary` (`finance.period`), `balance`, `income`, `expenses` (`money`), `commitment` (`percent`) | `occurrences` (`finance.occurrences`), `entries` (`money`; aceita `scalar`) |
 | Fórmula | `aurora.formula` | `result` (`scalar`) | `in` (`scalar`; aceita `money`, `number`, `percent`) |
 | Finanças (existente) | `aurora.finance` | antigas: `summary`, `ledger`, `balance` (número); novas: `balanceMoney` (`money`), `occurrences` | `in` (`finance.summary`) |
+| Consulta bancária (F1) | `aurora.bank-query` | `value`, `income`, `expenses` (`money`, com `members` para deduplicação), `occurrences` (`finance.occurrences`, chaves `bank:tx:<id>`), `monthly` (`finance.periods`) | — |
 | Gráfico (existente) | `aurora.chart` | — | antigas: `ledger`, `value`; nova: `series` (`finance.period`; aceita `money`, `number`, `percent`, `scalar`) |
 
 Todos usam a moldura compacta (`frame: 'bare'`) e três modos: compacto (só o valor), normal e detalhado.
@@ -35,6 +36,7 @@ Todos usam a moldura compacta (`frame: 'bare'`) e três modos: compacto (só o v
 - **Moeda** diferente da do mês: ignorado, com aviso na conexão. Não há conversão implícita.
 - **Competência**: valor sem competência entra no mês conectado; com competência diferente é ignorado, com aviso (o valor não é alterado).
 - **Duplicidade**: cada lançamento tem chave estável (`id do bloco`, ou `id do Finanças:lançamento:parcela`). A mesma chave por duas conexões conta uma vez, com aviso.
+- **Consulta bancária → mês** (F1): cada movimentação tem chave global `bank:tx:<id>`; um total bancário carrega `members` e é recusado se algum membro já entrou por outra conexão. Estornos chegam com valor negativo e reduzem a despesa. Um total de vários meses ligado a um Mês é recusado (competência `de..até`).
 - **Finanças → mês**: usa as ocorrências de `expandEntry` (parcelas distribuídas, centavos restantes nas primeiras, dia ajustado ao fim do mês) e filtra pela competência do mês. O saldo total do Finanças **não** é tratado como receita.
 
 ## Precisão monetária
@@ -66,7 +68,7 @@ Todos usam a moldura compacta (`frame: 'bare'`) e três modos: compacto (só o v
 ## Limitações
 
 - Períodos são mensais; trimestres/anos ainda não.
-- Sem conversão de moedas (por desenho). Sem integração bancária ou importação de extratos.
+- Sem conversão de moedas (por desenho). Extratos bancários entram por **Minhas contas** (ciclo F1) e chegam ao quadro pelo bloco Consulta bancária — ver [finance/PERSONAL_FINANCE.md](finance/PERSONAL_FINANCE.md).
 - Conexões antigas, sem portas, continuam na resolução automática até serem religadas; o nome de variável delas é derivado do título da origem (renomear a origem muda o nome até a conexão ser religada).
 - O Gráfico na tela é HTML; na exportação PNG/SVG é redesenhado em SVG com os mesmos números (aparência semelhante, não idêntica).
 - Rótulos nas setas aparecem só para conexões selecionadas ou ligadas à seleção, e só quando informam algo.

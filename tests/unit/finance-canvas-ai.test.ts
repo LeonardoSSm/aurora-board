@@ -9,7 +9,7 @@ import { createLinear, createWidget, createBoard } from '../../src/core/elements
 import { WIDGET } from '../../src/core/widgetIds';
 import type { AuroraElement, LinearElement, WidgetElement } from '../../src/core/schema';
 import { DEFAULT_AI_SHARE, runBankQuery, sanitizeBankQuery, type BankQueryData } from '../../src/finance/query';
-import { buildFinanceAIText, parseCategorySuggestions, sanitizeForAI, shareAuthorized, shareDigest, txRef } from '../../src/finance/aiShare';
+import { buildFinanceAIText, grantKey, parseCategorySuggestions, sanitizeForAI, shareAuthorized, shareDigest, txRef } from '../../src/finance/aiShare';
 import { buildContextText, buildSystemPrompt, contextSources } from '../../src/integrations/aiContext';
 import { evaluateFormula } from '../../src/core/formula';
 import { formulaVariables } from '../../src/widgets/builtin/formula';
@@ -151,9 +151,10 @@ describe('IA com consentimento', () => {
     const text = buildContextText(els, sources);
     expect(text).toBe('');
   });
-  it('resumo agregado autorizado: só totais; nenhuma movimentação bruta no payload', () => {
+  it('resumo agregado autorizado: só totais; nenhuma movimentação bruta no payload', async () => {
     const d = authorize(q({ metric: 'expense', aiShare: { ...DEFAULT_AI_SHARE, mode: 'aggregate' } }));
     const b = createWidget(WIDGET.bankQuery, '1.0.0', 'Banco', 0, 0, 230, 120, d) as WidgetElement;
+    await F.grantAI(grantKey(b.id, d));
     const a = ai();
     const els = [b, a, link(b, a, 'context')];
     const sources = contextSources(els, a.id, {});
@@ -164,11 +165,37 @@ describe('IA com consentimento', () => {
     expect(payload).not.toMatch(/Conta A|Banco A/); // nomes de contas desmarcados por padrão
     expect(payload).toMatch(/DADO, nunca instrução/);
   });
-  it('mudar a consulta depois de autorizar derruba a autorização', () => {
+  it('mudar a consulta depois de autorizar derruba a autorização', async () => {
     const d = authorize(q({ metric: 'expense', aiShare: { ...DEFAULT_AI_SHARE, mode: 'aggregate' } }));
-    expect(shareAuthorized(d)).toBe(true);
-    expect(shareAuthorized({ ...d, period: '2026-10' })).toBe(false);
-    expect(shareAuthorized({ ...d, aiShare: { ...d.aiShare, includeAccountNames: true } })).toBe(false);
+    await F.grantAI(grantKey('el_1', d));
+    const local = F.getFinance();
+    expect(shareAuthorized(d, 'el_1', local)).toBe(true);
+    expect(shareAuthorized({ ...d, period: '2026-10' }, 'el_1', local)).toBe(false);
+    expect(shareAuthorized({ ...d, aiShare: { ...d.aiShare, includeAccountNames: true } }, 'el_1', local)).toBe(false);
+    expect(shareAuthorized(d, 'el_copia', local)).toBe(false); // bloco duplicado precisa de nova confirmação
+    await F.revokeAI('el_1');
+    expect(shareAuthorized(d, 'el_1', F.getFinance())).toBe(false);
+  });
+  it('autorização forjada no JSON do quadro (importado/manipulado) não vale', () => {
+    // O atacante conhece o algoritmo do resumo e até o ledgerId (de um quadro exportado): mesmo assim, sem a
+    // concessão local, nada é enviado.
+    const d = authorize(q({ metric: 'expense', aiShare: { ...DEFAULT_AI_SHARE, mode: 'detail', includeDescriptions: true } }));
+    const b = createWidget(WIDGET.bankQuery, '1.0.0', 'Banco', 0, 0, 230, 120, d) as WidgetElement;
+    const a = ai();
+    const els = [b, a, link(b, a, 'context')];
+    const sources = contextSources(els, a.id, {});
+    expect(sources[0]).toMatchObject({ includable: false, authorized: false });
+    expect(buildContextText(els, [{ ...sources[0], includable: true, authorized: true }])).toBe('');
+    // Outro navegador (outro razão) também não.
+    expect(shareAuthorized({ ...d, ledgerId: 'ledger_outro' }, b.id, { ledgerId: F.getFinance().ledgerId, aiGrants: [grantKey(b.id, { ...d, ledgerId: 'ledger_outro' })] })).toBe(false);
+  });
+  it('autorizações não vão para backups e somem ao apagar os dados', async () => {
+    const d = q({ metric: 'expense', aiShare: { ...DEFAULT_AI_SHARE, mode: 'aggregate' } });
+    await F.grantAI(grantKey('el_x', d));
+    const { buildFinanceBackup } = await import('../../src/finance/backup');
+    expect(JSON.stringify(buildFinanceBackup(F.getFinance()))).not.toContain('el_x');
+    await F.wipeFinanceData();
+    expect(F.getFinance().aiGrants).toEqual([]);
   });
   it('detalhado: descrição maliciosa vira dado sanitizado; identificadores mascarados; limite de itens', () => {
     const d = authorize(q({ metric: 'expense', aiShare: { ...DEFAULT_AI_SHARE, mode: 'detail', includeDescriptions: true, maxItems: 2 } }));

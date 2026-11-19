@@ -286,6 +286,20 @@ describe('persistência IndexedDB (atômica e isolada)', () => {
     expect(after.transactions.length + after.accounts.length + after.imports.length).toBe(0);
     expect(after.categories.length).toBeGreaterThan(0);
   });
+  it('registros corrompidos no disco ficam fora dos cálculos, com aviso, sem serem apagados', async () => {
+    const repo = await fresh(new MemoryFinanceRepository());
+    const acc = await F.createAccount({ institutionName: 'A', name: 'A', type: 'checking' });
+    await importDrafts(acc.id, [d(1, '2026-11-01', -100, 'Boa')]);
+    const t = [...repo.transactions.values()][0];
+    repo.transactions.set('tx_ruim1', { ...t, id: 'tx_ruim1', dedupeKey: 'x1', amountCents: 1.5 });
+    repo.transactions.set('tx_ruim2', { ...t, id: 'tx_ruim2', dedupeKey: 'x2', postedDate: '2026-02-31' });
+    repo.transactions.set('tx_ruim3', { ...t, id: 'tx_ruim3', dedupeKey: 'x3', accountId: 'acc_fantasma' });
+    F.resetFinanceForTests(repo);
+    await F.ensureFinanceLoaded();
+    expect(F.getFinance().transactions.map((x) => x.description)).toEqual(['Boa']);
+    expect(F.getFinance().integrityIssues).toBe(3);
+    expect(repo.transactions.size).toBe(4);
+  });
   it('o banco financeiro é separado do banco dos quadros', async () => {
     const { DB_NAME } = await import('../../src/persistence/indexeddb');
     const { FINANCE_DB_NAME } = await import('../../src/finance/repository');

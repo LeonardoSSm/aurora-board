@@ -49,6 +49,7 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 
 - **Local-first:** os quadros ficam no IndexedDB **deste navegador**. Não há conta nem sincronização com servidores. Limpar os dados do site apaga os quadros — **exporte backups** (Exportar → Backup do workspace) regularmente.
 - **Importar arquivos de terceiros:** backups passam por validação de formato e por um orçamento de complexidade; o tipo de anexos é decidido pelo conteúdo real; HTML/JavaScript personalizado entra **desativado** até você ativá-lo. Mesmo assim, importe apenas arquivos de origem confiável.
+- **Finanças pessoais (ciclo F1):** contas e extratos ficam num banco local **separado** dos quadros (`aurora-finance`), não vão nos backups dos quadros e não são enviados à IA sem autorização confirmada em cada bloco. O armazenamento local não é cifrado (só os backups financeiros podem ser). Ver [`docs/finance/FINANCIAL_PRIVACY.md`](docs/finance/FINANCIAL_PRIVACY.md).
 - **Servidor local de IA:** só para uso no próprio computador (`127.0.0.1`, sem autenticação, usa as **suas** chaves). Não o exponha (túnel, proxy reverso, `vite --host`).
 - **Beta público:** apenas o frontend estático, em HTTPS, com CSP e cabeçalhos de segurança; sem servidor de IA (as integrações de IA não estão disponíveis nessa versão) e sem ferramentas de depuração.
 - **Limites:** nenhuma medida torna o sistema totalmente seguro; riscos conhecidos estão em [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) e [`docs/security/S1-FINAL-SECURITY-REPORT.md`](docs/security/S1-FINAL-SECURITY-REPORT.md).
@@ -66,6 +67,7 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Problemas e limitações conhecidos |
 | [docs/AI_ACTIONS.md](docs/AI_ACTIONS.md) | Ações da IA (contrato v2): blocos de valor, lançamentos financeiros, validação, prévia e confirmação |
 | [docs/AI_TILES.md](docs/AI_TILES.md) | AI Tiles: decisões, modos visual/funcional, procedência e condições de uso das logos |
+| [docs/finance/PERSONAL_FINANCE.md](docs/finance/PERSONAL_FINANCE.md) | Minhas contas (ciclo F1): contas, cartões, extratos, conciliação, canvas, IA, backups — índice dos documentos em `docs/finance/` |
 | [docs/VISUAL_FINANCE.md](docs/VISUAL_FINANCE.md) | Finanças visuais: valores, meses, regras de cálculo, precisão, uso e desempenho |
 | [docs/FORMULA_ENGINE.md](docs/FORMULA_ENGINE.md) | Motor de fórmulas: gramática, funções, tipos, variáveis |
 | [docs/DATAFLOW_PORTS.md](docs/DATAFLOW_PORTS.md) | Fluxo de dados: portas explícitas, tipos, estados das conexões, compatibilidade |
@@ -110,6 +112,7 @@ Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuraç
 | AI Tiles | ✅ | ChatGPT, Codex, Claude, Claude Code, Gemini e Grok com logos locais; modos compacto, normal e detalhado; arrastar da biblioteca, conectar, agrupar, exportar PNG/SVG com a logo. Não exige API; vínculo opcional com um bloco Assistente IA. Ver [docs/AI_TILES.md](docs/AI_TILES.md) |
 | Valor | ✅ | Dinheiro (receita/despesa/neutro, em centavos), número ou porcentagem; digita-se no próprio bloco; “Converter em valor” transforma um texto com número |
 | Mês financeiro | ✅ | Soma os valores conectados: receitas, despesas, saldo, comprometimento, categorias; sem dupla contagem; avisa moeda/competência diferentes |
+| Consulta bancária | ✅ | Receitas, despesas, resultado ou saldo das contas de **Minhas contas**, por período e categoria; alimenta Mês, Fórmula e Gráfico; o quadro guarda só a consulta. Ver [docs/finance/PERSONAL_FINANCE.md](docs/finance/PERSONAL_FINANCE.md) |
 | Fórmula | ✅ | `=SOMA(saldo_janeiro, saldo_fevereiro)`, `=salario * 20%`… parser próprio (sem eval), dinheiro exato, moedas nunca misturadas. Ver [docs/VISUAL_FINANCE.md](docs/VISUAL_FINANCE.md) |
 | Google Calendar, Google Drive, GitHub, API externa, Indicadores, Dashboard, Ferramentas de dev | 🔜 | Listados na biblioteca como “Futuro”, com o requisito de ativação |
 
@@ -119,6 +122,7 @@ Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuraç
 - ✅ Salvamento automático no IndexedDB com **controle de revisões** (uma gravação antiga nunca confirma uma alteração mais nova) + **diário de recuperação por quadro** no `localStorage`; novas tentativas automáticas em caso de falha; dados inconsistentes são reparados ao abrir, com cópia do original. Ver [docs/PERSISTENCE.md](docs/PERSISTENCE.md).
 - ✅ Exportar JSON (quadro ou workspace inteiro, com imagens/arquivos), PNG e SVG (quadro, seleção, com/sem fundo, fontes embutidas).
 - ✅ Importar JSON: sempre **como novos quadros**, com relatório e avisos antes de confirmar; nunca sobrescreve.
+- ✅ **Minhas contas (ciclo F1):** contas e cartões, importação de extratos **CSV/OFX** com prévia e confirmação, deduplicação idempotente, conciliação de transferências e faturas, categorias e regras locais, histórico com reversão, backups financeiros separados (cifra opcional) e provedor Open Finance **fictício** para testes. **Nenhuma conexão bancária real** — ver [docs/finance/OPEN_FINANCE.md](docs/finance/OPEN_FINANCE.md).
 - ✅ Esquema versionado (`SCHEMA_VERSION = 3`) com pipeline de migrações e validação por elemento (um elemento inválido não derruba o quadro).
 
 ---
@@ -231,6 +235,7 @@ Lista completa em [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md). Principais:
 - Milhares de elementos visíveis ao mesmo tempo: a pintura do DOM/SVG limita pan/zoom (80–150 ms por quadro); próximo passo é um nível de detalhe com `<canvas>` em zoom distante.
 - Diário de recuperação limitado pelo `localStorage` (~5 MB): quadros acima de ~10.000 elementos.
 - Integrações Google (Calendar/Drive), GitHub e demais “Futuro” não implementadas (exigem OAuth/infra).
+- Open Finance real não conectado (exige intermediário contratado e backend seguro); armazenamento financeiro local sem cifra própria.
 - Sincronização com backend e colaboração em tempo real: arquitetura preparada (`PersistenceAdapter`), não implementada.
 - Recorte visual de frames e desvio de obstáculos em setas de cotovelo ainda não existem; importação de `.excalidraw` não suportada.
 - Bundle de ~730 KB (230 KB gzip): candidatos a carregamento sob demanda são highlight.js e o bloco de IA.

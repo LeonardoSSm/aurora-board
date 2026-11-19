@@ -20,7 +20,13 @@ import * as checkpointActions from './store/checkpointActions';
 import { getDataflow } from './widgets/dataflow';
 import { EXPOSE_TEST_HOOKS } from './config/runtime';
 import { setFinanceRepositoryFactory } from './finance/store';
-import * as financeStore from './finance/store';
+import * as financeStoreBase from './finance/store';
+import { parseCsvStatement } from './finance/csv';
+import { runBankQuery, sanitizeBankQuery } from './finance/query';
+import { summarizeFlows } from './finance/reports';
+
+// Só nos ganchos de teste/benchmark (nunca no build público): store + funções puras para medir desempenho.
+const financeStore = { ...financeStoreBase, lib: { parseCsvStatement, runBankQuery, sanitizeBankQuery, summarizeFlows } };
 import { IndexedDBFinanceRepository } from './finance/repository';
 
 // Ciclo F1: razão financeiro num banco IndexedDB próprio (aurora-finance), carregado sob demanda.

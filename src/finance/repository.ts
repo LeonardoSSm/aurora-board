@@ -47,6 +47,8 @@ export interface FinanceRepository {
   deleteTransactions(ids: string[]): Promise<void>;
   /** Apaga todos os dados financeiros locais (mantém só o identificador do razão). */
   wipe(): Promise<void>;
+  /** Autorizações de IA locais (lista completa substituída). */
+  putAIGrants(list: string[]): Promise<void>;
   /** Restauração de backup: só ACRESCENTA registros (ids já existentes são ignorados pelo chamador). Atômica. */
   commitRestore(batch: RestoreBatch): Promise<void>;
 }
@@ -135,7 +137,8 @@ export class IndexedDBFinanceRepository implements FinanceRepository {
       tx.objectStore('rules').getAll(),
     ]);
     await tx.done;
-    return { ledgerId, institutions, accounts, transactions, imports, consents, categories, rules };
+    const grants = (await db.get('meta', 'aiGrants'))?.value;
+    return { ledgerId, institutions, accounts, transactions, imports, consents, categories, rules, aiGrants: Array.isArray(grants) ? grants.filter((g): g is string => typeof g === 'string') : [] };
   }
 
   async putInstitution(i: FinancialInstitution) { await (await this.dbp).put('institutions', i); }
@@ -149,6 +152,7 @@ export class IndexedDBFinanceRepository implements FinanceRepository {
   async putRule(r: CategoryRule) { await (await this.dbp).put('rules', r); }
   async deleteRule(id: string) { await (await this.dbp).delete('rules', id); }
   async putConsent(c: ConsentRecord) { await (await this.dbp).put('consents', c); }
+  async putAIGrants(list: string[]) { await (await this.dbp).put('meta', { key: 'aiGrants', value: [...list] }); }
   async deleteConsent(id: string) { await (await this.dbp).delete('consents', id); }
 
   /** Executa `fn` numa transação readwrite; qualquer erro aborta tudo e é relançado. */
@@ -234,8 +238,9 @@ export class IndexedDBFinanceRepository implements FinanceRepository {
   }
 
   async wipe() {
-    await this.atomic(['institutions', 'accounts', 'transactions', 'imports', 'consents', 'categories', 'rules'], async (tx) => {
+    await this.atomic(['institutions', 'accounts', 'transactions', 'imports', 'consents', 'categories', 'rules', 'meta'], async (tx) => {
       for (const s of ['institutions', 'accounts', 'transactions', 'imports', 'consents', 'categories', 'rules'] as const) await tx.objectStore(s).clear();
+      await tx.objectStore('meta').delete('aiGrants');
     });
   }
   async commitRestore(b: RestoreBatch) {
@@ -269,6 +274,7 @@ export class MemoryFinanceRepository implements FinanceRepository {
   consents = new Map<string, ConsentRecord>();
   categories = new Map<string, Category>();
   rules = new Map<string, CategoryRule>();
+  aiGrants: string[] = [];
   /** Para testes: a próxima gravação composta falha no meio. */
   failNextWrite = false;
 
@@ -278,7 +284,7 @@ export class MemoryFinanceRepository implements FinanceRepository {
 
   async load(): Promise<FinanceSnapshot> {
     const c = <T,>(m: Map<string, T>) => [...m.values()].map((v) => structuredClone(v));
-    return { ledgerId: this.ledgerIdValue, institutions: c(this.institutions), accounts: c(this.accounts), transactions: c(this.transactions), imports: c(this.imports), consents: c(this.consents), categories: c(this.categories), rules: c(this.rules) };
+    return { ledgerId: this.ledgerIdValue, institutions: c(this.institutions), accounts: c(this.accounts), transactions: c(this.transactions), imports: c(this.imports), consents: c(this.consents), categories: c(this.categories), rules: c(this.rules), aiGrants: [...this.aiGrants] };
   }
   async putInstitution(i: FinancialInstitution) { this.institutions.set(i.id, structuredClone(i)); }
   async putAccount(a: FinancialAccount) { this.accounts.set(a.id, structuredClone(a)); }
@@ -288,6 +294,7 @@ export class MemoryFinanceRepository implements FinanceRepository {
   async deleteRule(id: string) { this.rules.delete(id); }
   async putConsent(c: ConsentRecord) { this.consents.set(c.id, structuredClone(c)); }
   async deleteConsent(id: string) { this.consents.delete(id); }
+  async putAIGrants(list: string[]) { this.aiGrants = [...list]; }
 
   async commitImport(c: ImportCommit) {
     checkCommit({ transactions: this.transactions.size, imports: this.imports.size, accounts: this.accounts.size }, c);
@@ -339,6 +346,7 @@ export class MemoryFinanceRepository implements FinanceRepository {
   async wipe() {
     this.maybeFail();
     for (const m of [this.institutions, this.accounts, this.transactions, this.imports, this.consents, this.categories, this.rules]) (m as Map<string, unknown>).clear();
+    this.aiGrants = [];
   }
   async commitRestore(b: RestoreBatch) {
     if (this.transactions.size + b.transactions.length > STORAGE_LIMITS.maxTransactions) throw new FinanceStorageError('Limite local atingido. Nada foi restaurado.');

@@ -78,6 +78,14 @@ Limites honestos: depois de ativado, um widget pode exibir conteúdo enganoso (p
 - Gravação **atômica** (uma transação IndexedDB para assets, quadros e workspace): ou tudo entra, ou nada.
 - Configurações e cores validadas campo a campo; versão de esquema limitada; colagem externa passa pela mesma validação.
 
+### Finanças pessoais (ciclo F1 — `src/finance/`, `src/ui/finance/`)
+
+- Banco IndexedDB próprio (`aurora-finance`), separado dos quadros; nada vai a servidores. **Sem criptografia própria em repouso** (proteção = perfil do navegador/SO/disco). Backups financeiros com cifra opcional AES-GCM 256 + PBKDF2-SHA-256 (600 mil iterações).
+- Extratos: CSV (RFC 4180) e OFX (tokenizador próprio; `DOCTYPE/ENTITY` recusados; sem rede); limites de tamanho/linhas/colunas/profundidade; valores e datas estritos; exportação CSV protegida contra injeção de fórmulas.
+- Quadros guardam só a consulta (`aurora.bank-query`); em outro navegador o bloco fica “indisponível”.
+- IA: nada é enviado sem modo escolhido e **autorização local** (por bloco + configuração + razão deste navegador; não vem do quadro); dados derivados de consultas não autorizadas também são bloqueados; descrições tratadas como dados não confiáveis.
+- Open Finance: só contrato de leitura e provedor fictício; nenhum segredo no frontend. Detalhes e riscos residuais: [`finance/F1-SECURITY-REVIEW.md`](finance/F1-SECURITY-REVIEW.md), [`finance/FINANCIAL_PRIVACY.md`](finance/FINANCIAL_PRIVACY.md).
+
 ### Conteúdo renderizado
 
 - Markdown das notas: `marked` + `DOMPurify` (sem `style`, `iframe`, `form`; links com `noopener noreferrer`).

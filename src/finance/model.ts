@@ -241,7 +241,15 @@ export interface FinanceSnapshot {
   consents: ConsentRecord[];
   categories: Category[];
   rules: CategoryRule[];
+  /**
+   * Autorizações de envio à IA concedidas NESTE navegador: `<id do bloco>:<resumo da configuração>`.
+   * Ficam só no razão local (nunca no quadro nem em backups): um quadro importado ou manipulado não traz
+   * autorização válida.
+   */
+  aiGrants: string[];
 }
+
+export const MAX_AI_GRANTS = 500;
 
 export const DEFAULT_CATEGORIES: { name: string; scope: Category['scope'] }[] = [
   { name: 'Salário', scope: 'income' },

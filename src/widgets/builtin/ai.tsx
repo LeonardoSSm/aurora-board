@@ -174,6 +174,9 @@ export const aiPlugin: WidgetPlugin<AIData> = {
               {s.note && <span className="sr-only">{s.note}</span>}
             </label>
           ))}
+          {sources.some((s) => s.type === 'aurora.bank-query' && s.authorized) && (
+            <div className="text-[10px] text-warn" data-testid="ai-finance-history-note">Dados financeiros autorizados: perguntas e respostas ficam salvas neste quadro. Limpe a conversa antes de compartilhar o quadro.</div>
+          )}
           {sources.filter((s) => s.note).map((s) => (
             <div key={`note-${s.id}`} className="text-[10px] text-warn" data-testid="ai-source-note">🔒 {s.title}: {s.note}</div>
           ))}
