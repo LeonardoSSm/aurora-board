@@ -11,6 +11,7 @@ import { z } from 'zod';
 import type { AuroraElement, LinkKind } from '../core/schema';
 import { isLinear } from '../core/schema';
 import { summarizeElement } from '../widgets/registry';
+import { ACTIONS_PROMPT } from './aiActions';
 
 export interface ContextSource {
   id: string;
@@ -81,11 +82,7 @@ export function buildSystemPrompt(instruction: string, contextText: string, mode
   if (instruction.trim()) lines.push(`Instrução permanente do usuário: ${instruction.trim()}`);
   lines.push(contextText ? `CONTEXTO AUTORIZADO:\n\n${contextText}` : 'CONTEXTO AUTORIZADO: (nenhum bloco conectado/autorizado)');
   if (mode === 'structure') {
-    lines.push(
-      'Quando o usuário pedir para gerar blocos, organizar tarefas ou propor conexões, além da explicação inclua AO FINAL um único bloco ```json com o formato:',
-      '{"notes":[{"title":"...","content":"markdown"}],"tasks":[{"text":"...","priority":"low|medium|high"}],"connections":[{"from":"<id existente>","to":"<id existente>","label":"..."}]}',
-      'Use apenas ids que aparecem no contexto para "connections". Listas podem ficar vazias. Nada será criado sem confirmação do usuário.',
-    );
+    lines.push(ACTIONS_PROMPT);
   }
   return lines.join('\n\n');
 }
@@ -97,7 +94,10 @@ const ProposalSchema = z.object({
 });
 export type AIProposal = z.infer<typeof ProposalSchema>;
 
-/** Extrai a proposta estruturada (último bloco ```json) de uma resposta. */
+/**
+ * Formato v1 (legado): { notes, tasks, connections }. A interface usa `parseAIProposal` (aiActions.ts),
+ * que aceita v1 e v2; esta função fica para compatibilidade de quem já a importa.
+ */
 export function parseProposal(text: string, validIds: Set<string>): AIProposal | null {
   const blocks = [...text.matchAll(/```json\s*([\s\S]*?)```/g)];
   const raw = blocks.length ? blocks[blocks.length - 1][1] : null;

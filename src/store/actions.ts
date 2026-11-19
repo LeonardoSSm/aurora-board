@@ -486,6 +486,29 @@ export function addElements(newEls: AuroraElement[], select = true) {
   );
 }
 
+/**
+ * Adiciona elementos e altera dados de widgets em UMA alteração (uma entrada de histórico):
+ * desfazer/refazer tratam o conjunto como uma operação só. Ids inexistentes em `updates` são ignorados.
+ */
+export function applyBatch(newEls: AuroraElement[], updates: { id: string; update: (data: unknown) => unknown }[], select = true) {
+  if (!newEls.length && !updates.length) return;
+  const byId = new Map(updates.map((u) => [u.id, u.update]));
+  const frames = newEls.filter((e) => e.type === 'frame');
+  const others = newEls.filter((e) => e.type !== 'frame');
+  commit(
+    (els) => {
+      const now = Date.now();
+      const changed = els.map((e) => {
+        if (e.type !== 'widget') return e;
+        const fn = byId.get(e.id);
+        return fn ? ({ ...e, data: fn(e.data), version: e.version + 1, updatedAt: now } as AuroraElement) : e;
+      });
+      return newEls.length ? assignFrames([...frames, ...changed, ...others], new Set(others.map((e) => e.id))) : changed;
+    },
+    select && newEls.length ? { selection: newEls.map((e) => e.id) } : {},
+  );
+}
+
 export function deleteSelected() {
   const s = getState();
   const ids = new Set(s.selectedIds.filter((id) => !s.elements.find((e) => e.id === id)?.locked));

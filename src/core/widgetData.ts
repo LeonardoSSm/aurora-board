@@ -57,11 +57,15 @@ export interface AIData {
   messages: AIMessage[];
   /** Autorização por fonte conectada (id do elemento → enviado ou não). */
   authorized: Record<string, boolean>;
+  /** Propostas já aplicadas (chave da mensagem → quando). Gravado junto com a aplicação: desfazer reabre a proposta. */
+  applied: Record<string, number>;
 }
 export const sanitizeAI = (raw: unknown): AIData => {
   const d = obj(raw);
   const authorized: Record<string, boolean> = {};
   for (const [k, v] of Object.entries(obj(d.authorized))) authorized[k] = v === true;
+  const applied: Record<string, number> = {};
+  for (const [k, v] of Object.entries(obj(d.applied)).slice(-200)) if (k.length <= 200 && typeof v === 'number' && Number.isFinite(v)) applied[k] = v;
   return {
     provider: str(d.provider),
     model: str(d.model),
@@ -73,6 +77,7 @@ export const sanitizeAI = (raw: unknown): AIData => {
       })
       .slice(-200),
     authorized,
+    applied,
   };
 };
 
