@@ -12,6 +12,14 @@ Estado ao final do ciclo 2. Itens marcados com ⚠ afetam uso real; os demais s�
 - Redimensionar manualmente uma forma muito estreita pode quebrar uma palavra no meio (largura escolhida pelo usuário é respeitada); digitar ou trocar a fonte alarga a forma para não quebrar.
 - Importação de arquivos `.excalidraw` não suportada.
 
+## Finanças visuais
+
+- Períodos só mensais; sem conversão de moedas (por desenho); sem integração bancária.
+- Conexões de dados antigas (sem portas) seguem a resolução automática; o nome lógico delas vem do título atual da origem até serem religadas.
+- Gráfico exportado em PNG/SVG é redesenhado em SVG com os mesmos números (aparência semelhante à tela, não idêntica).
+- Com milhares de blocos financeiros, o recálculo percorre o grafo inteiro (≈4 ms com 1.000 valores); só os blocos afetados re-renderizam.
+- Renomear a variável pelo painel da **conexão** não reescreve a fórmula; pelo painel da **fórmula**, reescreve.
+
 ## AI Tiles
 
 - Logos são marcas dos respectivos titulares; o uso no app é referencial. As diretrizes da OpenAI e da xAI não puderam ser lidas durante a pesquisa (bloqueio a leitura automatizada). Antes de distribuição comercial, confirmar condições com cada titular (docs/AI_TILES.md).

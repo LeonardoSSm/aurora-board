@@ -56,6 +56,9 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Benchmark, medições antes/depois, limites |
 | [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Problemas e limitações conhecidos |
 | [docs/AI_TILES.md](docs/AI_TILES.md) | AI Tiles: decisões, modos visual/funcional, procedência e condições de uso das logos |
+| [docs/VISUAL_FINANCE.md](docs/VISUAL_FINANCE.md) | Finanças visuais: valores, meses, regras de cálculo, precisão, uso e desempenho |
+| [docs/FORMULA_ENGINE.md](docs/FORMULA_ENGINE.md) | Motor de fórmulas: gramática, funções, tipos, variáveis |
+| [docs/DATAFLOW_PORTS.md](docs/DATAFLOW_PORTS.md) | Fluxo de dados: portas explícitas, tipos, estados das conexões, compatibilidade |
 | [docs/AUDIT-CYCLE2.md](docs/AUDIT-CYCLE2.md) | Auditoria inicial do ciclo 2 (baseline) |
 
 ---
@@ -92,6 +95,9 @@ Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuraç
 | Gráfico | ✅ | Barras/rosca a partir de blocos financeiros conectados |
 | HTML isolado | ✅ experimental | Base de plugins de terceiros (iframe sandbox + CSP) |
 | AI Tiles | ✅ | ChatGPT, Codex, Claude, Claude Code, Gemini e Grok com logos locais; modos compacto, normal e detalhado; arrastar da biblioteca, conectar, agrupar, exportar PNG/SVG com a logo. Não exige API; vínculo opcional com um bloco Assistente IA. Ver [docs/AI_TILES.md](docs/AI_TILES.md) |
+| Valor | ✅ | Dinheiro (receita/despesa/neutro, em centavos), número ou porcentagem; digita-se no próprio bloco; “Converter em valor” transforma um texto com número |
+| Mês financeiro | ✅ | Soma os valores conectados: receitas, despesas, saldo, comprometimento, categorias; sem dupla contagem; avisa moeda/competência diferentes |
+| Fórmula | ✅ | `=SOMA(saldo_janeiro, saldo_fevereiro)`, `=salario * 20%`… parser próprio (sem eval), dinheiro exato, moedas nunca misturadas. Ver [docs/VISUAL_FINANCE.md](docs/VISUAL_FINANCE.md) |
 | Google Calendar, Google Drive, GitHub, API externa, Indicadores, Dashboard, Ferramentas de dev | 🔜 | Listados na biblioteca como “Futuro”, com o requisito de ativação |
 
 ### Dados
