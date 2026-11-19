@@ -244,10 +244,23 @@ test.describe('S1-SEC-003: HTML importado e isolamento do sandbox', () => {
     test(`[reprodução] navegação do próprio frame é bloqueada/detectada (${target.slice(0, 12)})`, async ({ page }) => {
       const html = `<script>aurora.setState({ antes: 1 }); setTimeout(function(){ location.href = ${JSON.stringify(target)}; }, 50)</script>`;
       await page.evaluate((h) => (window as any).__aurora.actions.addWidget('aurora.sandbox-html', { x: 200, y: 200 }, { html: h }), html);
-      await expect(page.getByTestId('sandbox-navigated')).toBeVisible({ timeout: 5000 });
-      if (blocked) expect(page.frames().some((f) => f.url().includes('s1nav') || f.url().startsWith('data:'))).toBe(false);
-      await page.getByRole('button', { name: 'Recarregar widget' }).click();
-      await expect(page.locator('iframe[sandbox]')).toHaveCount(1);
+      if (blocked) {
+        // Propriedade de segurança: o frame NUNCA chega ao destino. Chromium/WebKit ainda disparam um 2º load
+        // (página de erro) e o widget é desmontado; o Firefox simplesmente não navega (sem 2º load).
+        const reached = () => page.frames().some((f) => f.url().includes('s1nav') || f.url().startsWith('data:'));
+        for (let i = 0; i < 10; i++) { expect(reached()).toBe(false); await page.waitForTimeout(250); }
+        const st = (await state(page)).elements.find((e) => e.widgetType === 'aurora.sandbox-html')!;
+        expect(st.data.state).toEqual({ antes: 1 }); // nada aceito de outro documento
+        if (await page.getByTestId('sandbox-navigated').count()) {
+          await page.getByRole('button', { name: 'Recarregar widget' }).click();
+          await expect(page.locator('iframe[sandbox]')).toHaveCount(1);
+        }
+      } else {
+        // Mesma origem é permitida pela CSP: a detecção do host é obrigatória em todos os navegadores.
+        await expect(page.getByTestId('sandbox-navigated')).toBeVisible({ timeout: 5000 });
+        await page.getByRole('button', { name: 'Recarregar widget' }).click();
+        await expect(page.locator('iframe[sandbox]')).toHaveCount(1);
+      }
     });
   }
 
@@ -294,7 +307,8 @@ test.describe('S1-SEC-003: HTML importado e isolamento do sandbox', () => {
       dt.setData('text/plain', text);
       document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
     }, payload);
-    await expect(page.getByTestId('sandbox-inactive')).toBeVisible();
+    // A propriedade é o estado gravado (a visibilidade depende de onde o colado caiu em relação ao viewport).
+    await expect.poll(async () => (await state(page)).elements.find((e) => e.widgetType === 'aurora.sandbox-html')?.data.activation?.state).toBe('blocked');
     const els = (await state(page)).elements;
     const rectEl = els.find((e) => e.type === 'rectangle')!;
     expect(rectEl.x).toBe(rectEl.x); // número finito, não NaN
