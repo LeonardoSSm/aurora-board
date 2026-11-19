@@ -137,7 +137,7 @@ export function DialogHost() {
       <div role="dialog" aria-modal="true" aria-labelledby="dlg-title" className={`w-full ${dialog.wide ? 'max-w-xl' : 'max-w-md'} rounded-2xl border border-[#405a78] bg-[#1a293c] shadow-[0_30px_80px_#000b] p-5`}
         onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape') close(null); if (e.key === 'Enter' && !dialog.input?.multiline && (e.target as HTMLElement).tagName !== 'BUTTON') close(primary.value); }}>
         <h2 id="dlg-title" className="text-[16px] font-bold mb-2">{dialog.title}</h2>
-        {dialog.message && <p className="text-[12px] text-muted leading-relaxed">{dialog.message}</p>}
+        {dialog.message && <p className="text-[12px] text-muted leading-relaxed whitespace-pre-line">{dialog.message}</p>}
         {dialog.body}
         {dialog.input && (
           <input autoFocus value={value} placeholder={dialog.input.placeholder} onChange={(e) => setValue(e.target.value)} className="mt-3 w-full h-9 px-2.5 rounded-lg border border-line bg-[#0f1826] outline-none focus:border-accent" />
