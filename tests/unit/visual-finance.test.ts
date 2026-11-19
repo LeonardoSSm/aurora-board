@@ -6,18 +6,18 @@ import { createValueData, parseTextToValue, parseValueInput, sanitizeValue, valu
 import { computePeriod, sanitizePeriod, type OccurrenceSet } from '../../src/core/financePeriod';
 import { evaluateFormula, parseFormula, type FormulaVariable } from '../../src/core/formula';
 import { formatScalar, moneyValue, numberValue, percentValue, readScalar, slugVariable } from '../../src/core/scalar';
-import { computeDataflow, finalizeDataEdges, findPortPair, resolvePorts, suggestPorts } from '../../src/core/dataflow';
+import { computeDataflow, finalizeDataEdges, findPortPair, suggestPorts } from '../../src/core/dataflow';
 import { expandEntry, type FinanceEntry } from '../../src/core/finance';
 import { registerBuiltinWidgets } from '../../src/widgets/builtin';
 import { dataflowSpec, getWidget } from '../../src/widgets/registry';
 import { WIDGET } from '../../src/core/widgetIds';
-import { cloneElements, createBoard, createLinear, createWidget, createWorkspace, createShape } from '../../src/core/elements';
+import { cloneElements, createBoard, createLinear, createShape, createText, createWidget, createWorkspace } from '../../src/core/elements';
 import { getState, initialEditorState, setState } from '../../src/store/editor';
 import { addElements, convertTextToValue, deleteSelected, redo, setSelection, undo, updateElements } from '../../src/store/actions';
 import { applyImport, buildExport, parseImport } from '../../src/persistence/exportImport';
 import { MemoryAdapter } from '../../src/persistence/adapter';
 import { migrateBoard } from '../../src/persistence/migrations';
-import { formulaVariables, renameVariable } from '../../src/widgets/builtin/formula';
+import { renameVariable } from '../../src/widgets/builtin/formula';
 import { buildSeries } from '../../src/widgets/builtin/chart';
 import type { AuroraElement, LinearElement, WidgetElement } from '../../src/core/schema';
 
@@ -376,8 +376,7 @@ describe('12, 20. renomear, duplicar, excluir, importar e exportar (store)', () 
   });
 
   it('converter texto em valor mantém id e setas; texto sem número não converte', () => {
-    const t = createShape('text', 0, 0, 100, 20) as AuroraElement;
-    (t as { text: string }).text = 'Salário 3000';
+    const t = createText(0, 0, 'Salário 3000');
     const r = createShape('rectangle', 300, 0, 100, 100);
     const arrow = createLinear('arrow', 0, 0, [[0, 0], [1, 1]]);
     arrow.startBinding = { elementId: t.id, fixedPoint: null };
