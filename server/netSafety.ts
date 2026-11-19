@@ -223,6 +223,17 @@ export function isAllowedOrigin(origin: string | undefined): boolean {
   }
 }
 
+/**
+ * Endereço do par TCP é loopback? Defesa em profundidade (S1-SEC-013): o bind já é 127.0.0.1, mas se alguém
+ * alterar o bind, publicar a porta (Docker, túnel) ou expuser o proxy do Vite (`--host`), clientes de fora
+ * continuam recusados — o cabeçalho Host pode ser forjado, o endereço do socket não.
+ */
+export function isLoopbackAddress(addr: string | undefined): boolean {
+  if (!addr) return false;
+  const a = addr.replace(/^::ffff:/i, '');
+  return a === '::1' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(a);
+}
+
 /** Remove trechos parecidos com chaves de API de mensagens que vão para logs ou para o cliente. */
 export function redactSecrets(text: string): string {
   return text

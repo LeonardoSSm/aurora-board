@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      Documento hospedeiro dos widgets HTML (ciclo S1). É carregado SOMENTE como
+      <iframe sandbox="allow-scripts" src="/sandbox.html"> (origem opaca). Por ser um documento próprio,
+      não herda a CSP do app (um srcdoc herdaria e bloquearia os scripts dos widgets); a política abaixo
+      também é enviada como cabeçalho pela hospedagem (hosting/headers.ts › SANDBOX_DOCUMENT_CSP).
+      Sem rede, sem frames, sem formulários, sem base, sem objetos.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'" />
+    <meta name="referrer" content="no-referrer" />
+    <style>body{margin:0;font:13px system-ui,sans-serif;color:#e6ecf6;background:transparent}</style>
+    <script>
+      (function () {
+        // Recusa-se a funcionar fora de um iframe sandboxed (sem allow-same-origin): aberto como página, ou
+        // num iframe comum, este documento teria a origem do app — então não executa nada.
+        if (self.origin !== 'null' || window.parent === window) {
+          document.documentElement.setAttribute('data-sandbox-refused', '1');
+          return;
+        }
+        var loaded = false;
+        window.aurora = {
+          state: null,
+          setState: function (s) { parent.postMessage({ type: 'aurora:setState', state: s }, '*'); },
+        };
+        window.addEventListener('message', function (e) {
+          if (e.source !== window.parent || !e.data || typeof e.data !== 'object') return;
+          if (e.data.type === 'aurora:load' && !loaded && typeof e.data.html === 'string') {
+            loaded = true;
+            window.aurora.state = e.data.state === undefined ? null : e.data.state;
+            var tpl = document.createElement('template');
+            tpl.innerHTML = e.data.html;
+            document.body.appendChild(tpl.content);
+            // Scripts vindos de innerHTML não executam: recria cada um, em ordem (só inline — a CSP bloqueia src).
+            var scripts = document.body.querySelectorAll('script');
+            for (var i = 0; i < scripts.length; i++) {
+              var old = scripts[i];
+              var s = document.createElement('script');
+              if (old.type) s.type = old.type;
+              s.textContent = old.textContent;
+              old.replaceWith(s);
+            }
+            document.dispatchEvent(new Event('DOMContentLoaded'));
+            window.dispatchEvent(new CustomEvent('aurora:init', { detail: window.aurora.state }));
+          } else if (e.data.type === 'aurora:init') {
+            window.aurora.state = e.data.state;
+            window.dispatchEvent(new CustomEvent('aurora:init', { detail: e.data.state }));
+          }
+        });
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

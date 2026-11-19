@@ -1,6 +1,6 @@
 /** Versionamento e migração do esquema de quadros. */
 import type { AuroraElement, Board } from '../core/schema';
-import { ElementSchema, SCHEMA_VERSION } from '../core/schema';
+import { BoardSettingsSchema, ElementSchema, SCHEMA_VERSION } from '../core/schema';
 import { DEFAULT_BOARD_SETTINGS, DEFAULT_STYLE, randomSeed, uid } from '../core/elements';
 import { sanitizeCheckpoints } from '../core/checkpoints';
 
@@ -15,6 +15,20 @@ const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite
 export const MIGRATIONS: Record<number, (board: Raw) => Raw> = {
   // 3: (b) => ({ ...b, novoCampo: ... }),
 };
+
+/**
+ * Cores aceitas em estilos (S1-SEC-007): hex, `transparent`, nomes CSS simples e rgb/hsl numéricos.
+ * Qualquer outra coisa (aspas, `<`, `url(`, ponto e vírgula...) volta ao padrão.
+ */
+const COLOR_RE = /^(#[0-9a-f]{3,8}|transparent|currentcolor|[a-z]{3,24}|rgba?\(\s*[\d.\s,%/]+\)|hsla?\(\s*[\d.\s,%/]+(deg)?[\d.\s,%/]*\))$/i;
+export function isSafeColor(v: unknown): v is string {
+  return typeof v === 'string' && v.length <= 64 && (v === '' || COLOR_RE.test(v.trim()));
+}
+const COLOR_FIELDS = ['strokeColor', 'backgroundColor', 'textColor'] as const;
+function sanitizeStyleColors(style: Raw): Raw {
+  for (const f of COLOR_FIELDS) if (!isSafeColor(style[f])) style[f] = DEFAULT_STYLE[f];
+  return style;
+}
 
 /** Preenche campos ausentes com padrões e valida. Retorna null se irrecuperável. */
 export function normalizeElement(raw: unknown): { element: AuroraElement | null; warning?: string } {
@@ -35,7 +49,7 @@ export function normalizeElement(raw: unknown): { element: AuroraElement | null;
     y: num(r.y, 0),
     width: num(r.width, 100),
     height: num(r.height, 100),
-    style: { ...DEFAULT_STYLE, ...obj(r.style) },
+    style: sanitizeStyleColors({ ...DEFAULT_STYLE, ...obj(r.style) }),
   };
   if (type === 'text') base.autoSize ??= true;
   if (type === 'line' || type === 'arrow') {
@@ -49,7 +63,8 @@ export function normalizeElement(raw: unknown): { element: AuroraElement | null;
     base.connection = { kind: 'visual', relation: '', ...obj(r.connection) };
   }
   if (type === 'freedraw') {
-    base.points = Array.isArray(r.points) ? (r.points as unknown[][]).map((p) => [num(p[0], 0), num(p[1], 0), num(p[2], 0.5)]) : [];
+    // Pontos que não são arrays (null, objetos, números) são descartados em vez de derrubar a importação.
+    base.points = Array.isArray(r.points) ? (r.points as unknown[]).filter(Array.isArray).map((p) => [num(p[0], 0), num(p[1], 0), num(p[2], 0.5)]) : [];
     base.simulatePressure ??= true;
   }
   if (type === 'widget') {
@@ -90,10 +105,32 @@ export function repairReferences(elements: AuroraElement[]): string[] {
   return warnings;
 }
 
+/**
+ * Configurações do quadro campo a campo (S1-SEC-008): valor inválido volta ao padrão com aviso; campos
+ * desconhecidos são descartados (antes eram copiados como vieram, inclusive estruturas arbitrárias).
+ */
+export function sanitizeSettings(raw: unknown, warnings: string[] = []): Board['settings'] {
+  const r = obj(raw);
+  const out: Raw = { ...DEFAULT_BOARD_SETTINGS };
+  const shape = BoardSettingsSchema.shape as Record<string, { safeParse(v: unknown): { success: boolean; data?: unknown } }>;
+  const bad: string[] = [];
+  for (const key of Object.keys(shape)) {
+    if (!(key in r)) continue;
+    const p = shape[key].safeParse(r[key]);
+    if (p.success && p.data !== undefined) out[key] = p.data;
+    else bad.push(key);
+  }
+  if (bad.length) warnings.push(`Configurações inválidas restauradas ao padrão: ${bad.join(', ')}.`);
+  return BoardSettingsSchema.parse(out);
+}
+
 export function migrateBoard(raw: unknown, workspaceId: string): { board: Board; warnings: string[] } {
   let b = obj(raw);
   const warnings: string[] = [];
-  let version = num(b.schemaVersion, SCHEMA_VERSION);
+  // A versão vem do arquivo: inteiro entre 1 e o máximo plausível (S1-SEC-018). Antes, `schemaVersion: -1e15`
+  // fazia o laço de migração abaixo rodar 10^15 vezes e congelava a aba.
+  const rawVersion = num(b.schemaVersion, SCHEMA_VERSION);
+  let version = Number.isInteger(rawVersion) ? Math.min(Math.max(rawVersion, 1), 1_000_000) : SCHEMA_VERSION;
   if (version > SCHEMA_VERSION) {
     warnings.push(`O quadro "${String(b.name ?? '')}" foi criado por uma versão mais nova (esquema ${version}). Campos desconhecidos podem ser ignorados.`);
   }
@@ -105,7 +142,14 @@ export function migrateBoard(raw: unknown, workspaceId: string): { board: Board;
   const elements: AuroraElement[] = [];
   const seen = new Set<string>();
   for (const rawEl of Array.isArray(b.elements) ? b.elements : []) {
-    const { element, warning } = normalizeElement(rawEl);
+    let res: ReturnType<typeof normalizeElement>;
+    try {
+      res = normalizeElement(rawEl);
+    } catch {
+      // Rede de segurança: um elemento com forma inesperada nunca derruba a importação do quadro inteiro.
+      res = { element: null, warning: `Elemento com estrutura inesperada ignorado.` };
+    }
+    const { element, warning } = res;
     if (warning) warnings.push(warning);
     if (!element) continue;
     if (seen.has(element.id)) {
@@ -128,7 +172,7 @@ export function migrateBoard(raw: unknown, workspaceId: string): { board: Board;
     createdAt: num(b.createdAt, now),
     updatedAt: num(b.updatedAt, now),
     archived: b.archived === true,
-    settings: { ...DEFAULT_BOARD_SETTINGS, ...obj(b.settings) } as Board['settings'],
+    settings: sanitizeSettings(b.settings, warnings),
     camera: { x: num(cam.x, 0), y: num(cam.y, 0), zoom: Math.min(10, Math.max(0.05, num(cam.zoom, 1))) },
     checkpoints: cps.checkpoints,
     elements,

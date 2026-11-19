@@ -8,6 +8,7 @@ import { PropertiesPanel } from './ui/PropertiesPanel';
 import { BoardsPanel } from './ui/BoardsPanel';
 import { CheckpointDialog, LocationsPanel } from './ui/LocationsPanel';
 import { ContextMenu, DialogHost, ShortcutsDialog, Toasts, ZoomControls } from './ui/Overlays';
+import { BetaNotice } from './ui/BetaNotice';
 import { setLastPointerWorld, useKeyboard } from './ui/useKeyboard';
 import { screenToWorld } from './store/actions';
 
@@ -92,6 +93,7 @@ export function App() {
       <DialogHost />
       <ShortcutsDialog />
       <Toasts />
+      <BetaNotice />
     </div>
   );
 }

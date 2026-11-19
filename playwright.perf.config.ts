@@ -23,5 +23,8 @@ export default defineConfig({
     url: 'http://localhost:4173',
     reuseExistingServer: false,
     timeout: 180_000,
+    // Benchmarks leem o estado por window.__aurora: este build local (não publicado) liga os ganchos
+    // explicitamente. O build público padrão não os tem (S1-SEC-009).
+    env: { VITE_AURORA_TEST_HOOKS: '1', VITE_AURORA_LOCAL_API: '1' },
   },
 });

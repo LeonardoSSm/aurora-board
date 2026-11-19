@@ -75,6 +75,8 @@ button:disabled {
   line-height: 1.55;
   overflow-wrap: anywhere;
 }
+/* Imagem externa ainda não carregada (S1-SEC-011): marcador clicável com o texto alternativo. */
+.md img.ext-img { display: inline-block; min-height: 1.6em; padding: 2px 6px; border: 1px dashed #3d5574; border-radius: 6px; color: #8ea3bf; font-size: 0.85em; cursor: pointer; }
 .md h1 { font-size: 1.35em; font-weight: 700; margin: 0.4em 0 0.3em; }
 .md h2 { font-size: 1.18em; font-weight: 700; margin: 0.4em 0 0.3em; }
 .md h3 { font-size: 1.05em; font-weight: 700; margin: 0.4em 0 0.2em; }

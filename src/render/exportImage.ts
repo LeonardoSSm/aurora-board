@@ -48,7 +48,8 @@ function textLines(lines: string[], x: number, y: number, width: number, style: 
 
 function partsSVG(el: AuroraElement): string {
   return elementParts(el)
-    .map((p) => `<path d="${p.d}" fill="${p.fill ?? 'none'}" stroke="${p.stroke ?? 'none'}"${p.strokeWidth ? ` stroke-width="${p.strokeWidth}"` : ''}${p.dash ? ` stroke-dasharray="${p.dash}"` : ''} stroke-linecap="round" stroke-linejoin="round"/>`)
+    // Todos os atributos escapados (S1-SEC-007): cores vêm do quadro e podem ter sido manipuladas num backup.
+    .map((p) => `<path d="${esc(String(p.d))}" fill="${esc(p.fill ?? 'none')}" stroke="${esc(p.stroke ?? 'none')}"${p.strokeWidth ? ` stroke-width="${Number(p.strokeWidth) || 0}"` : ''}${p.dash ? ` stroke-dasharray="${esc(String(p.dash))}"` : ''} stroke-linecap="round" stroke-linejoin="round"/>`)
     .join('');
 }
 

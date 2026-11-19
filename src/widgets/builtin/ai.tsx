@@ -172,6 +172,10 @@ export const aiPlugin: WidgetPlugin<AIData> = {
         {/* Estado do provedor */}
         {!status ? (
           <div className="text-[11px] text-muted flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Verificando provedores…</div>
+        ) : status.state === 'unavailable' ? (
+          <div className="rounded-lg border border-line bg-panel-3/40 p-2 text-[11px] text-muted" data-testid="ai-status">
+            <b>Indisponível.</b> {status.message}
+          </div>
         ) : status.state === 'offline' ? (
           <div className="rounded-lg border border-warn/40 bg-warn/10 p-2 text-[11px] text-warn" data-testid="ai-status">
             <b>Não configurado.</b> {status.message}

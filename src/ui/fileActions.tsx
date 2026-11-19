@@ -4,7 +4,7 @@ import { getState, setState } from '../store/editor';
 import { getAsset, openBoard, refreshBoards, selectedElements } from '../store/actions';
 import { openDialog, toast } from '../store/ui';
 import { flushSave, getAdapter, snapshotCurrentBoard } from '../persistence/autosave';
-import { applyImport, assetIdsOf, buildExport, downloadBlob, downloadText, ImportError, parseImport, safeFileName } from '../persistence/exportImport';
+import { applyImport, assetIdsOf, buildExport, checkImportFileSize, downloadBlob, downloadText, ImportError, parseImport, safeFileName } from '../persistence/exportImport';
 import { LEGACY_STORAGE_KEY } from '../persistence/legacy';
 import { exportPNG, exportSVG } from '../render/exportImage';
 
@@ -65,7 +65,15 @@ export function pickImportFile() {
   input.accept = 'application/json,.json';
   input.onchange = () => {
     const f = input.files?.[0];
-    if (f) void importFromText(f.name, f.text());
+    if (!f) return;
+    // Tamanho checado ANTES de ler: um arquivo gigante nunca é carregado na memória (S1-SEC-004).
+    try {
+      checkImportFileSize(f.size);
+    } catch (e) {
+      void openDialog({ title: 'Importação recusada', message: `“${f.name}”: ${(e as Error).message} Nenhum dado foi alterado.`, buttons: [{ label: 'Ok', value: 'ok', variant: 'primary' }] });
+      return;
+    }
+    void importFromText(f.name, f.text());
   };
   input.click();
 }
@@ -99,6 +107,12 @@ export async function importFromText(name: string, textP: Promise<string>) {
           {r.boards.map((b) => <li key={b.id}>{b.name} <span className="text-soft">({b.elements.length} elementos)</span></li>)}
         </ul>
         <div className="rounded-md border border-accent/30 bg-accent/10 p-2">Os quadros serão <b>adicionados como novos</b> ao workspace atual. Nenhum quadro existente será substituído.</div>
+        {r.stats.activeContent > 0 && (
+          <div data-testid="import-active-content" className="rounded-md border border-warn/40 bg-warn/10 p-2">
+            Este arquivo contém <b>{r.stats.activeContent} widget(s) com HTML/JavaScript personalizado</b>. Eles serão importados <b>desativados</b>: nada é executado até você ativar cada um. Ative apenas se confiar na origem do arquivo.
+          </div>
+        )}
+        <div className="text-[11px] text-soft">Arquivos de terceiros podem conter conteúdo personalizado. O Aurora Board aplica validações, mas recomenda importar apenas arquivos confiáveis.</div>
         {r.warnings.length > 0 && (
           <details open={r.warnings.length < 6}>
             <summary className="cursor-pointer text-warn">{r.warnings.length} aviso(s) de compatibilidade</summary>
@@ -114,7 +128,15 @@ export async function importFromText(name: string, textP: Promise<string>) {
   });
   if (button !== 'ok') return;
   const ws = getState().workspaces.find((w) => w.id === getState().workspaceId)!;
-  const { boardIds: ids, workspace: updated } = await applyImport(getAdapter(), r, ws, () => uid('b_'));
+  let ids: string[], updated;
+  try {
+    ({ boardIds: ids, workspace: updated } = await applyImport(getAdapter(), r, ws, () => uid('b_')));
+  } catch (e) {
+    // A gravação é uma transação única: se falhou, nada foi gravado (S1-SEC-006).
+    const msg = e instanceof ImportError ? e.message : `Falha ao gravar: ${(e as Error).message}`;
+    await openDialog({ title: 'Importação interrompida', message: `“${name}”: ${msg} Nenhum quadro ou arquivo foi gravado; seus quadros existentes não foram alterados.`, buttons: [{ label: 'Ok', value: 'ok', variant: 'primary' }] });
+    return;
+  }
   setState({ workspaces: getState().workspaces.map((w) => (w.id === ws.id ? updated : w)) });
   await refreshBoards();
   await openBoard(ids[0]);

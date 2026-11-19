@@ -58,6 +58,24 @@ export class IndexedDBAdapter implements PersistenceAdapter {
   }
   async getAsset(id: string) { return (await (await this.dbp).get('assets', id)) ?? null; }
   async putAsset(asset: Asset) { await (await this.dbp).put('assets', asset); }
+  /** Importação atômica: uma única transação readwrite; qualquer erro aborta tudo (S1-SEC-006). */
+  async commitImport(batch: { assets: Asset[]; boards: Board[]; workspace: Workspace }) {
+    const db = await this.dbp;
+    const tx = db.transaction(['assets', 'boards', 'boardMeta', 'workspaces'], 'readwrite');
+    // Depois de um abort, todas as requisições pendentes rejeitam: silencia as excedentes (o erro real é relançado).
+    const quiet = <T,>(p: Promise<T>) => { p.catch(() => undefined); return p; };
+    quiet(tx.done);
+    try {
+      const ops: Promise<unknown>[] = [];
+      for (const a of batch.assets) ops.push(quiet(tx.objectStore('assets').put(a)));
+      for (const b of batch.boards) { ops.push(quiet(tx.objectStore('boards').put(b))); ops.push(quiet(tx.objectStore('boardMeta').put(metaOf(b)))); }
+      ops.push(quiet(tx.objectStore('workspaces').put(batch.workspace)));
+      await Promise.all([...ops, tx.done]);
+    } catch (e) {
+      try { tx.abort(); } catch { /* já abortada */ }
+      throw e;
+    }
+  }
   async getSetting<T>(key: string) { return (await (await this.dbp).get('kv', key))?.value as T | undefined; }
   async setSetting<T>(key: string, value: T) { await (await this.dbp).put('kv', { key, value }); }
 }

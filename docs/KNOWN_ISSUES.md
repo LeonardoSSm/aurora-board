@@ -47,13 +47,22 @@ Estado ao final do ciclo 2. Itens marcados com ⚠ afetam uso real; os demais s�
 
 - Servidor local sem autenticação: protegido contra sites visitados (Host/Origin/Content-Type), não contra outros processos da mesma máquina.
 - Permissões declaradas por plugins são informativas; o isolamento vem do sandbox/CSP.
-- O widget “HTML isolado” guarda HTML no quadro: importe quadros apenas de fontes confiáveis (o HTML roda isolado e sem rede).
+- O widget “HTML isolado” guarda HTML no quadro. Desde o ciclo S1, HTML **importado ou colado** entra desativado até o usuário ativá-lo; depois de ativo, roda isolado e sem rede, mas pode exibir conteúdo enganoso. Widgets importados antes do S1 não têm essa marcação (tratados como locais).
+- **Prévia de PDF desativada** (S1): PDFs só podem ser baixados. Voltará quando houver prévia isolada validada nos três navegadores.
+- Imagens com dimensões acima de 100 MP / 30 000 px não são exibidas (proteção contra bomba de descompressão); o arquivo continua salvo. JPEGs cujas dimensões não aparecem nos primeiros 4 MB são exibidos sem essa checagem.
+- Imagens remotas em notas e prévias de links só carregam por clique (privacidade).
+- Importação recusa arquivos acima do orçamento de complexidade (ver `docs/SECURITY.md`); um backup legítimo maior que os tetos precisa ser dividido (exportar quadros separadamente). Nada é truncado.
+- Navegação do frame de um widget HTML para outra origem: bloqueada em todos os navegadores; no Firefox o bloqueio não gera aviso visual (o frame simplesmente não navega).
+- Laço de CPU dentro de um widget HTML ativo não travou a aba em Chromium/WebKit (frames isolados); não medido no Firefox. Recuperação: `?safe` na URL.
+- CSP do build público validada só localmente (`vite preview`) e na CI; falta homologação numa hospedagem real (ver `docs/security/S1-RELEASE-CHECKLIST.md`).
+- As actions do GitHub fixadas na major v4 rodam em Node 20 forçado para 24 (aviso do GitHub); a atualização de major chega por Dependabot e deve ser revisada.
 
 ## Testes e ambiente
 
-- Firefox do Playwright não inicia no Windows de desenvolvimento usado (`browserType.launch: spawn UNKNOWN`) — infraestrutura; roda e passa no CI (Linux).
+- Firefox do Playwright não inicia no Windows de desenvolvimento usado (`browserType.launch: spawn UNKNOWN`) — infraestrutura; roda e passa no CI (Linux). Ciclo S1: persiste mesmo após `playwright install --force firefox` (o Windows bloqueia o executável não assinado).
 - WebKit: atalhos sintéticos de copiar/colar não disparam eventos de área de transferência (teste pulado nesse navegador; o recurso é coberto no Chromium/Firefox).
 - WebKit: o `dragTo` do Playwright não conclui arrastar-e-soltar HTML5 nativo; no teste dos AI Tiles, nesse navegador, a sequência `dragstart → dragover → drop` é disparada com um `DataTransfer` real (o arrasto nativo é coberto no Chromium/Firefox).
+- WebKit local (Windows): `editing.spec.ts` › histórico de desfazer por quadro falha de forma intermitente porque o painel de quadros às vezes continua aberto após o clique e captura o Ctrl+Z. Reproduzido também no commit do ciclo 5 (`709f0dc`) — preexistente, não relacionado ao S1; passa na CI.
 - Chromium headless não cria seleção de texto por arrasto sintético; o teste verifica a seleção nativa por duplo clique (o arrasto foi verificado manualmente no Chromium real).
 - IA com credenciais reais não verificada (sem chave no ambiente); o contrato com cada provedor é testado com `fetch` simulado.
 

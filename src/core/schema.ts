@@ -5,6 +5,7 @@
  * Os tipos TypeScript são derivados dos esquemas zod, então validação de
  * importação e tipagem estática nunca divergem.
  */
+import './zodSetup';
 import { z } from 'zod';
 import { CheckpointSchema } from './checkpoints';
 

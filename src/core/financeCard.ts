@@ -32,7 +32,8 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 function fit(text: string, size: number, maxWidth: number): string {
   const style = { fontFamily: 'sans' as const, fontSize: size };
   if (measureLine(text, style) <= maxWidth) return text;
-  let t = text;
+  // Começa de um prefixo que certamente cabe ≤ maxWidth (glifo mais estreito ≈ 0,15 em): o laço fica O(largura), não O(texto) (S1-SEC-018).
+  let t = text.slice(0, Math.ceil(maxWidth / Math.max(1, style.fontSize * 0.15)) + 1);
   while (t.length > 1 && measureLine(t + '…', style) > maxWidth) t = t.slice(0, -1);
   return t.length > 0 ? t.trimEnd() + '…' : '';
 }

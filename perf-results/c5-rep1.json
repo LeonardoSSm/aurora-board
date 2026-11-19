@@ -1,0 +1,159 @@
+{
+ "env": {
+  "label": "c5-rep1",
+  "date": "2026-11-19T16:48:18.496Z",
+  "cpu": "11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz",
+  "cores": 8,
+  "memGB": 16,
+  "os": "win32 10.0.26200",
+  "browser": "chromium 159.0.8154.6",
+  "viewport": "1440x900",
+  "arrows": "near",
+  "build": "vite build + preview (produção)"
+ },
+ "results": [
+  {
+   "n": 5000,
+   "count": 4600,
+   "view": "fit",
+   "visible": 33,
+   "openMs": 80.8,
+   "select": {
+    "frame": {
+     "median": 45,
+     "p95": 86,
+     "max": 86
+    },
+    "work": {
+     "median": 9.7,
+     "p95": 38.8,
+     "max": 38.8
+    }
+   },
+   "drag": {
+    "frame": {
+     "median": 30.7,
+     "p95": 44.8,
+     "max": 46.2
+    },
+    "work": {
+     "median": 6.4,
+     "p95": 12.1,
+     "max": 18
+    }
+   },
+   "resize": {
+    "frame": {
+     "median": 30.6,
+     "p95": 46.9,
+     "max": 47.8
+    },
+    "work": {
+     "median": 7,
+     "p95": 15.9,
+     "max": 20.8
+    }
+   },
+   "zoom": {
+    "frame": {
+     "median": 30.6,
+     "p95": 48.6,
+     "max": 48.6
+    },
+    "work": {
+     "median": 6,
+     "p95": 19.7,
+     "max": 19.7
+    }
+   },
+   "pan": {
+    "frame": {
+     "median": 30.6,
+     "p95": 35.4,
+     "max": 41.6
+    },
+    "work": {
+     "median": 5.1,
+     "p95": 6.5,
+     "max": 6.8
+    }
+   }
+  },
+  {
+   "n": 5000,
+   "count": 4600,
+   "view": "zoom1",
+   "visible": 26,
+   "openMs": 80.8,
+   "select": {
+    "frame": {
+     "median": 33.1,
+     "p95": 63.6,
+     "max": 63.6
+    },
+    "work": {
+     "median": 9.3,
+     "p95": 13.8,
+     "max": 13.8
+    }
+   },
+   "drag": {
+    "frame": {
+     "median": 30.4,
+     "p95": 42.9,
+     "max": 46.9
+    },
+    "work": {
+     "median": 7.3,
+     "p95": 9,
+     "max": 14.2
+    }
+   },
+   "resize": {
+    "frame": {
+     "median": 30.6,
+     "p95": 46.4,
+     "max": 46.7
+    },
+    "work": {
+     "median": 7,
+     "p95": 19.5,
+     "max": 20.3
+    }
+   },
+   "zoom": {
+    "frame": {
+     "median": 30.6,
+     "p95": 39.8,
+     "max": 39.8
+    },
+    "work": {
+     "median": 6,
+     "p95": 7.2,
+     "max": 7.2
+    }
+   },
+   "pan": {
+    "frame": {
+     "median": 30.6,
+     "p95": 32.3,
+     "max": 32.6
+    },
+    "work": {
+     "median": 5.1,
+     "p95": 6.2,
+     "max": 6.3
+    }
+   }
+  },
+  {
+   "n": 5000,
+   "view": "custos",
+   "arrowsAllMs": 2.56,
+   "journalStringifyMs": 6.1,
+   "journalBytes": 2429120,
+   "idbCloneMs": 29.1,
+   "heapMB": 14
+  }
+ ]
+}

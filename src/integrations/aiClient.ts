@@ -2,6 +2,8 @@
  * Cliente de IA (frontend). NUNCA contém chaves: fala apenas com o servidor local (/api/ai/*),
  * que guarda as credenciais em variáveis de ambiente e encaminha ao provedor.
  */
+import { LOCAL_API_ENABLED, STATIC_AI_MESSAGE } from '../config/runtime';
+
 export type ProviderId = 'openai' | 'anthropic' | 'gemini';
 
 export interface ProviderInfo {
@@ -13,11 +15,14 @@ export interface ProviderInfo {
 
 export type AIStatus =
   | { state: 'offline'; message: string }
+  /** Build público estático: não existe servidor de IA nesta distribuição (sem requisições a /api). */
+  | { state: 'unavailable'; message: string }
   | { state: 'ready'; providers: ProviderInfo[] };
 
 let statusPromise: Promise<AIStatus> | null = null;
 
 export function fetchAIStatus(force = false): Promise<AIStatus> {
+  if (!LOCAL_API_ENABLED) return Promise.resolve({ state: 'unavailable', message: STATIC_AI_MESSAGE });
   if (statusPromise && !force) return statusPromise;
   statusPromise = (async (): Promise<AIStatus> => {
     try {
@@ -37,6 +42,7 @@ export interface ChatMessage { role: 'user' | 'assistant'; content: string }
 export interface ChatResponse { text: string; provider: string; model: string; usage?: { input?: number; output?: number } }
 
 export async function sendChat(req: { provider: ProviderId; model?: string; system: string; messages: ChatMessage[] }, signal?: AbortSignal): Promise<ChatResponse> {
+  if (!LOCAL_API_ENABLED) throw new Error(STATIC_AI_MESSAGE);
   let res: Response;
   try {
     res = await fetch('/api/ai/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(req), signal });

@@ -1,0 +1,302 @@
+{
+ "env": {
+  "label": "s1-depois-realista",
+  "date": "2026-11-19T16:43:38.615Z",
+  "cpu": "11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz",
+  "cores": 8,
+  "memGB": 16,
+  "os": "win32 10.0.26200",
+  "browser": "chromium 159.0.8154.6",
+  "viewport": "1440x900",
+  "arrows": "near",
+  "build": "vite build + preview (produção)"
+ },
+ "results": [
+  {
+   "n": 1000,
+   "count": 920,
+   "view": "fit",
+   "visible": 30,
+   "openMs": 36.9,
+   "select": {
+    "frame": {
+     "median": 31.1,
+     "p95": 52.8,
+     "max": 52.8
+    },
+    "work": {
+     "median": 6.7,
+     "p95": 32.2,
+     "max": 32.2
+    }
+   },
+   "drag": {
+    "frame": {
+     "median": 30.5,
+     "p95": 43,
+     "max": 45.8
+    },
+    "work": {
+     "median": 5.2,
+     "p95": 8,
+     "max": 18.9
+    }
+   },
+   "resize": {
+    "frame": {
+     "median": 30.7,
+     "p95": 47.5,
+     "max": 53
+    },
+    "work": {
+     "median": 6,
+     "p95": 17.7,
+     "max": 18.4
+    }
+   },
+   "zoom": {
+    "frame": {
+     "median": 30.7,
+     "p95": 42.5,
+     "max": 42.5
+    },
+    "work": {
+     "median": 5,
+     "p95": 18.9,
+     "max": 18.9
+    }
+   },
+   "pan": {
+    "frame": {
+     "median": 30.7,
+     "p95": 33.7,
+     "max": 46.8
+    },
+    "work": {
+     "median": 3.8,
+     "p95": 5.9,
+     "max": 17.4
+    }
+   }
+  },
+  {
+   "n": 1000,
+   "count": 920,
+   "view": "zoom1",
+   "visible": 19,
+   "openMs": 36.9,
+   "select": {
+    "frame": {
+     "median": 35.1,
+     "p95": 50.2,
+     "max": 50.2
+    },
+    "work": {
+     "median": 7.5,
+     "p95": 9.2,
+     "max": 9.2
+    }
+   },
+   "drag": {
+    "frame": {
+     "median": 30.5,
+     "p95": 31.6,
+     "max": 32
+    },
+    "work": {
+     "median": 5.4,
+     "p95": 7.3,
+     "max": 8.3
+    }
+   },
+   "resize": {
+    "frame": {
+     "median": 30.9,
+     "p95": 43.9,
+     "max": 45.8
+    },
+    "work": {
+     "median": 5.8,
+     "p95": 12,
+     "max": 19.5
+    }
+   },
+   "zoom": {
+    "frame": {
+     "median": 30,
+     "p95": 32.4,
+     "max": 32.4
+    },
+    "work": {
+     "median": 4.8,
+     "p95": 6.4,
+     "max": 6.4
+    }
+   },
+   "pan": {
+    "frame": {
+     "median": 30.6,
+     "p95": 31.8,
+     "max": 32.2
+    },
+    "work": {
+     "median": 3.8,
+     "p95": 4.9,
+     "max": 5.2
+    }
+   }
+  },
+  {
+   "n": 1000,
+   "view": "custos",
+   "arrowsAllMs": 0.88,
+   "journalStringifyMs": 2.8,
+   "journalBytes": 485563,
+   "idbCloneMs": 3.4,
+   "heapMB": 9.5
+  },
+  {
+   "n": 5000,
+   "count": 4600,
+   "view": "fit",
+   "visible": 28,
+   "openMs": 117.1,
+   "select": {
+    "frame": {
+     "median": 45.6,
+     "p95": 70.7,
+     "max": 70.7
+    },
+    "work": {
+     "median": 9.7,
+     "p95": 22,
+     "max": 22
+    }
+   },
+   "drag": {
+    "frame": {
+     "median": 30.4,
+     "p95": 47.6,
+     "max": 47.6
+    },
+    "work": {
+     "median": 7.6,
+     "p95": 9.9,
+     "max": 18.8
+    }
+   },
+   "resize": {
+    "frame": {
+     "median": 30.2,
+     "p95": 32.7,
+     "max": 45.3
+    },
+    "work": {
+     "median": 7.4,
+     "p95": 8.5,
+     "max": 9.1
+    }
+   },
+   "zoom": {
+    "frame": {
+     "median": 30.3,
+     "p95": 46.8,
+     "max": 46.8
+    },
+    "work": {
+     "median": 7.2,
+     "p95": 10.3,
+     "max": 10.3
+    }
+   },
+   "pan": {
+    "frame": {
+     "median": 30.2,
+     "p95": 44.9,
+     "max": 58.6
+    },
+    "work": {
+     "median": 6.2,
+     "p95": 8.3,
+     "max": 19.2
+    }
+   }
+  },
+  {
+   "n": 5000,
+   "count": 4600,
+   "view": "zoom1",
+   "visible": 19,
+   "openMs": 117.1,
+   "select": {
+    "frame": {
+     "median": 46,
+     "p95": 71.4,
+     "max": 71.4
+    },
+    "work": {
+     "median": 10.7,
+     "p95": 45.8,
+     "max": 45.8
+    }
+   },
+   "drag": {
+    "frame": {
+     "median": 30.4,
+     "p95": 44.9,
+     "max": 46.6
+    },
+    "work": {
+     "median": 8,
+     "p95": 10,
+     "max": 10.4
+    }
+   },
+   "resize": {
+    "frame": {
+     "median": 30.3,
+     "p95": 31.6,
+     "max": 47.6
+    },
+    "work": {
+     "median": 7.7,
+     "p95": 9.3,
+     "max": 20.8
+    }
+   },
+   "zoom": {
+    "frame": {
+     "median": 30.4,
+     "p95": 42,
+     "max": 42
+    },
+    "work": {
+     "median": 5.5,
+     "p95": 7.9,
+     "max": 7.9
+    }
+   },
+   "pan": {
+    "frame": {
+     "median": 30.2,
+     "p95": 31.2,
+     "max": 31.5
+    },
+    "work": {
+     "median": 6,
+     "p95": 6.8,
+     "max": 7.3
+    }
+   }
+  },
+  {
+   "n": 5000,
+   "view": "custos",
+   "arrowsAllMs": 2.86,
+   "journalStringifyMs": 6.2,
+   "journalBytes": 2429047,
+   "idbCloneMs": 20.9,
+   "heapMB": 15.1
+  }
+ ]
+}

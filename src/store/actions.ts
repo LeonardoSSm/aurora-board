@@ -25,7 +25,10 @@ import { getState, setState, selectedSet } from './editor';
 import type { Tool } from './types';
 import { confirmDialog, openDialog, toast } from './ui';
 import { flushCurrentBoard, flushSave, forgetBoard, getAdapter, markLoaded, runExclusive, syncSaveState, withoutAutosave } from '../persistence/autosave';
-import { migrateBoard } from '../persistence/migrations';
+import { migrateBoard, normalizeElement } from '../persistence/migrations';
+import { blockActiveContent } from '../core/widgetData';
+import { checkImageBytes } from '../core/media';
+import { checkImportBudget } from '../persistence/importBudget';
 import { dataflowSpec, findWidgetPreset, getWidget } from '../widgets/registry';
 import { finalizeDataEdges } from '../core/dataflow';
 import { WIDGET } from '../core/widgetIds';
@@ -685,7 +688,25 @@ export async function pasteContent(text: string | null, files: File[], at: Vec |
   try {
     const parsed = JSON.parse(raw);
     if (parsed?.type === CLIPBOARD_TYPE && Array.isArray(parsed.elements)) {
-      const els = parsed.elements as AuroraElement[];
+      // Texto vindo da área de transferência do sistema pode ter sido preparado por qualquer site (S1-SEC-010):
+      // só o que este app copiou nesta sessão é confiável. O resto passa pela mesma validação da importação,
+      // e HTML personalizado entra desativado (S1-SEC-003).
+      const external = raw !== internalClipboard;
+      let els = parsed.elements as AuroraElement[];
+      if (external) {
+        if (els.length > 5_000) { toast('Conteúdo colado grande demais (máximo de 5 000 elementos).', 'warning'); return; }
+        els = els.map((e) => normalizeElement(e).element).filter((e): e is AuroraElement => !!e);
+        if (!els.length) return;
+        // S1-SEC-021: mesmo orçamento da importação (profundidade, nós, texto) — dados aninhados demais
+        // quebrariam o salvamento do quadro depois de colados.
+        try {
+          checkImportBudget({ boards: [{ name: 'conteúdo colado', elements: els }] });
+        } catch (e) {
+          toast(`Conteúdo colado recusado: ${(e as Error).message}`, 'warning');
+          return;
+        }
+        blockActiveContent(els, 'paste', WIDGET.sandbox);
+      }
       const box = getCommonBounds(els)!;
       pasteCount++;
       const offset = at
@@ -759,6 +780,12 @@ export async function insertImageFiles(files: File[], at: Vec) {
   let offset = 0;
   for (const f of files) {
     try {
+      // O tipo declarado pelo sistema (f.type) não basta: confere assinatura e dimensões pelos bytes (Etapa 8).
+      if (f.size > MAX_ASSET_BYTES) throw new Error(`Arquivo maior que ${MAX_ASSET_BYTES / 1024 / 1024} MB.`);
+      let verdict = checkImageBytes(new Uint8Array(await f.slice(0, 256 * 1024).arrayBuffer()));
+      // S1-SEC-022: dimensões do JPEG podem vir depois de metadados longos — lê mais antes de desistir.
+      if (verdict.ok && verdict.width === null && verdict.kind !== 'svg') verdict = checkImageBytes(new Uint8Array(await f.slice(0, 4 * 1024 * 1024).arrayBuffer()));
+      if (!verdict.ok) throw new Error(verdict.reason);
       const id = await putAsset(f, f.name);
       const asset = assetCache.get(id)!;
       const { width, height } = await imageSize(asset.dataURL);
