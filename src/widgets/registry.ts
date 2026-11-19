@@ -102,6 +102,8 @@ export interface WidgetPlugin<D = unknown> {
   presets?: WidgetPreset<D>[];
   /** Título da seção da biblioteca para os presets (padrão: nome do widget). */
   librarySection?: string;
+  /** Ao inserir (biblioteca), já entra na edição rápida do bloco. */
+  editOnInsert?: boolean;
   /** Oculta a entrada genérica do widget na biblioteca (quando os presets já cobrem os casos). */
   hideInLibrary?: boolean;
   /** Duplo clique no widget (fora de modo de edição de grupo). */
@@ -112,6 +114,8 @@ export interface WidgetPlugin<D = unknown> {
   exportSVG?(data: D, element: WidgetElement): string | Promise<string>;
   /** Ao copiar/duplicar: troca ids de outros elementos citados nos dados (mapa antigo → novo). */
   remapIds?(data: D, idMap: ReadonlyMap<string, string>): D;
+  /** Portas que dependem dos dados do elemento (ex.: tipo do valor). Sem isso, `inputs`/`outputs` fixos. */
+  ports?(data: D): { inputs: PortDef[]; outputs: PortDef[] };
 }
 
 export interface WidgetPreset<D = unknown> {
@@ -193,13 +197,15 @@ export function widgetData<D>(el: WidgetElement): D {
   return (p ? p.sanitize(el.data) : el.data) as D;
 }
 
-export function dataflowSpec(widgetType: string): DataflowNodeSpec | undefined {
+/** Especificação de fluxo de dados; com o elemento, usa as portas que dependem dos dados (`ports`). */
+export function dataflowSpec(widgetType: string, el?: WidgetElement): DataflowNodeSpec | undefined {
   const p = widgets.get(widgetType);
   if (!p) return undefined;
+  const ports = el && p.ports ? p.ports(p.sanitize(el.data)) : null;
   return {
-    inputs: p.inputs,
-    outputs: p.outputs,
-    compute: p.compute ? (el, inputs) => p.compute!(p.sanitize(el.data), inputs, el) : undefined,
+    inputs: ports?.inputs ?? p.inputs,
+    outputs: ports?.outputs ?? p.outputs,
+    compute: p.compute ? (e, inputs) => p.compute!(p.sanitize(e.data), inputs, e) : undefined,
   };
 }
 

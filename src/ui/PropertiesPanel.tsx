@@ -39,7 +39,11 @@ import { resolveLinear } from '../core/bindings';
 import { Button, Label, Segmented } from './primitives';
 import { IconArrowPath, IconEdges, IconFill, IconRoughness, IconStrokeStyle, IconStrokeWidth } from './icons';
 import { useDataflow } from '../widgets/dataflow';
-import { getWidget, PERMISSION_LABELS } from '../widgets/registry';
+import { dataflowSpec, getWidget, PERMISSION_LABELS } from '../widgets/registry';
+import { portAccepts } from '../core/dataflow';
+import { formatScalar, readScalar } from '../core/scalar';
+import { isPeriodSummary } from '../core/financePeriod';
+import { formatMoney } from '../core/finance';
 import { makeHostApi, STATUS_LABEL } from '../widgets/WidgetFrame';
 import { CONNECTION_KINDS } from './Toolbar';
 import { connectionStyle } from '../core/connectionStyle';
@@ -176,6 +180,56 @@ function StyleEditor({ els, style }: { els: AuroraElement[]; style: ElementStyle
   );
 }
 
+/** Portas de uma conexão de dados: o que sai da origem, onde entra no destino, nome lógico e valor transmitido. */
+function DataPorts({ edge }: { edge: LinearElement }) {
+  const elements = useEditor((s) => s.elements);
+  const flow = useDataflow();
+  const src = elements.find((e) => e.id === edge.startBinding?.elementId);
+  const dst = elements.find((e) => e.id === edge.endBinding?.elementId);
+  if (!src || !dst || src.type !== 'widget' || dst.type !== 'widget') return null;
+  const ss = dataflowSpec(src.widgetType, src), ds = dataflowSpec(dst.widgetType, dst);
+  if (!ss || !ds) return null;
+  const res = flow.edges.get(edge.id);
+  const fromId = edge.connection.sourcePort ?? res?.fromPort?.id ?? '';
+  const toId = edge.connection.targetPort ?? res?.toPort?.id ?? '';
+  const toPort = ds.inputs.find((p) => p.id === toId);
+  const setConn = (patch: Partial<LinearElement['connection']>) =>
+    updateElements(new Set([edge.id]), (x) => (isLinear(x) ? { ...x, connection: { ...x.connection, ...patch } } : x));
+  const transmitted = res?.status === 'ok' || res?.status === 'currency' || res?.status === 'duplicate' || res?.status === 'period' ? flow.outputs.get(src.id)?.[res.fromPort!.id] : undefined;
+  const sc = readScalar(transmitted);
+  const shown = sc ? formatScalar(sc) : isPeriodSummary(transmitted) ? `${transmitted.label}: saldo ${formatMoney(transmitted.balanceCents, transmitted.currency)}` : transmitted === undefined ? '—' : 'dados estruturados';
+  return (
+    <div className="mt-2 flex flex-col gap-1.5 text-[11px]" data-testid="data-ports">
+      <label className="flex items-center gap-2">
+        <span className="w-14 text-muted">Saída</span>
+        <select aria-label="Saída da origem" className="flex-1 h-7 px-1.5 rounded-md bg-[#0f1826] border border-line" value={fromId} onChange={(e) => setConn({ sourcePort: e.target.value, ...(edge.connection.targetPort ? {} : { targetPort: toId || undefined }) })}>
+          {ss.outputs.map((p) => (
+            <option key={p.id} value={p.id}>{p.label}{toPort && !portAccepts(toPort, p.type) ? ' (incompatível)' : ''}</option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-2">
+        <span className="w-14 text-muted">Entrada</span>
+        <select aria-label="Entrada do destino" className="flex-1 h-7 px-1.5 rounded-md bg-[#0f1826] border border-line" value={toId} onChange={(e) => setConn({ targetPort: e.target.value, ...(edge.connection.sourcePort ? {} : { sourcePort: fromId || undefined }) })}>
+          {ds.inputs.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+        </select>
+      </label>
+      <label className="flex items-center gap-2">
+        <span className="w-14 text-muted">Nome</span>
+        <input
+          aria-label="Nome lógico da conexão"
+          className="flex-1 h-7 px-1.5 rounded-md bg-[#0f1826] border border-line font-mono"
+          value={edge.connection.variable ?? ''}
+          placeholder="ex.: salario"
+          onChange={(e) => /^[\p{L}\p{N}_]*$/u.test(e.target.value) && setConn({ variable: e.target.value || undefined })}
+          onKeyDown={(e) => e.stopPropagation()}
+        />
+      </label>
+      <div className="text-soft">Transmitindo: <span className="text-fg-2" data-testid="data-ports-value">{shown}</span>{!edge.connection.sourcePort && !edge.connection.targetPort ? ' · portas automáticas (conexão antiga)' : ''}</div>
+    </div>
+  );
+}
+
 function ArrowEditor({ els }: { els: LinearElement[] }) {
   const flow = useDataflow();
   const ids = new Set(els.map((e) => e.id));
@@ -245,6 +299,7 @@ function ArrowEditor({ els }: { els: LinearElement[] }) {
                 : 'Execução: o destino pode receber ações do bloco de origem, sempre mediante confirmação.'}
           </div>
         )}
+        {single && single.connection.kind === 'data' && single.startBinding && single.endBinding && <DataPorts edge={single} />}
         {single && (
           <div className="text-[10px] text-soft mt-1.5">
             {single.startBinding ? 'Início ancorado' : 'Início solto'} · {single.endBinding ? 'fim ancorado' : 'fim solto'}

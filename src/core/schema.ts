@@ -90,6 +90,12 @@ export const ConnectionSchema = z.object({
   kind: LinkKindSchema,
   /** Relação semântica livre para conexões visuais (ex.: "dependência", "referência"). */
   relation: z.string(),
+  /** Conexões de dados: porta de saída escolhida na origem (ausente = resolução automática legada). */
+  sourcePort: z.string().max(64).optional(),
+  /** Conexões de dados: porta de entrada escolhida no destino (ausente = resolução automática legada). */
+  targetPort: z.string().max(64).optional(),
+  /** Conexões de dados: nome lógico estável do valor no destino (ex.: variável de fórmula). */
+  variable: z.string().max(40).optional(),
 });
 
 export const LinearElementSchema = z.object({

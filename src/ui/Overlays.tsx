@@ -13,6 +13,7 @@ import {
   resetZoom,
   selectAll,
   startTextEdit,
+  convertTextToValue,
   toggleLockSelection,
   ungroupSelection,
   zoomStep,
@@ -22,6 +23,7 @@ import {
 import { acceptsBoundText, isText } from '../core/schema';
 import { exportImage } from './fileActions';
 import { getWidget } from '../widgets/registry';
+import { parseTextToValue } from '../core/valueTile';
 import { TOOLS } from './tools';
 
 export function ZoomControls() {
@@ -71,6 +73,7 @@ export function ContextMenu() {
       {target ? (
         <>
           {(isText(target) || acceptsBoundText(target) || target.type === 'frame') && <Item label="Editar texto" hint="Enter" onClick={() => startTextEdit(target.id)} />}
+          {target.type === 'text' && parseTextToValue(target.text) && <Item label="Converter em valor" onClick={() => convertTextToValue(target.id)} />}
           {widgetItems.length > 0 && (
             <>
               {widgetItems.map((i) => <Item key={i.id} label={i.label} disabled={i.disabled} onClick={i.run} />)}

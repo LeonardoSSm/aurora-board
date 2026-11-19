@@ -13,6 +13,7 @@ import {
   uid,
 } from '../core/elements';
 import { safeExternalUrl } from '../core/aiTiles';
+import { createValueData, parseTextToValue, VALUE_SIZES } from '../core/valueTile';
 import { resolveLinear, updateBoundArrows, unbindDeleted } from '../core/bindings';
 import { assignFrames, expandToGroups, groupElements, reorder, ungroupElements, type ReorderOp } from '../core/groups';
 import { emptyHistory, pushEntry, redoStep, undoStep } from '../core/history';
@@ -23,7 +24,8 @@ import type { Tool } from './types';
 import { confirmDialog, openDialog, toast } from './ui';
 import { flushCurrentBoard, flushSave, forgetBoard, getAdapter, markLoaded, runExclusive, syncSaveState, withoutAutosave } from '../persistence/autosave';
 import { migrateBoard } from '../persistence/migrations';
-import { findWidgetPreset, getWidget } from '../widgets/registry';
+import { dataflowSpec, findWidgetPreset, getWidget } from '../widgets/registry';
+import { finalizeDataEdges } from '../core/dataflow';
 import { WIDGET } from '../core/widgetIds';
 
 /* ================================================================== */
@@ -37,11 +39,42 @@ function changedIds(before: AuroraElement[], after: AuroraElement[]): Set<string
   return out;
 }
 
-/** Propaga efeitos colaterais: setas ancoradas acompanham elementos alterados. */
+/**
+ * Conexões de dados criadas ou religadas entre `before` e `after`. Se a origem mudou, o nome lógico
+ * é refeito; se o destino mudou, as portas também (as antigas podem não existir no novo destino).
+ */
+function finalizeTouchedDataEdges(before: AuroraElement[], after: AuroraElement[]): AuroraElement[] {
+  const prev = new Map(before.map((e) => [e.id, e]));
+  const ids = new Set<string>();
+  let els = after;
+  for (let i = 0; i < after.length; i++) {
+    const e = after[i];
+    if (!isLinear(e) || e.connection.kind !== 'data' || !e.startBinding || !e.endBinding) continue;
+    const p = prev.get(e.id);
+    if (p === e) continue;
+    const pl = p && isLinear(p) ? p : null;
+    const wasData = pl?.connection.kind === 'data';
+    const srcChanged = !wasData || pl!.startBinding?.elementId !== e.startBinding.elementId;
+    const dstChanged = !wasData || pl!.endBinding?.elementId !== e.endBinding.elementId;
+    if (!srcChanged && !dstChanged) continue;
+    ids.add(e.id);
+    if (pl && wasData) {
+      const conn = { ...e.connection };
+      if (srcChanged) { delete conn.variable; delete conn.sourcePort; }
+      if (dstChanged) { delete conn.targetPort; delete conn.sourcePort; delete conn.variable; }
+      if (els === after) els = after.slice();
+      els[i] = { ...e, connection: conn };
+    }
+  }
+  return ids.size ? finalizeDataEdges(els, ids, dataflowSpec) : after;
+}
+
+/** Propaga efeitos colaterais: setas ancoradas acompanham elementos alterados; conexões de dados novas são finalizadas. */
 export function settle(before: AuroraElement[], after: AuroraElement[]): AuroraElement[] {
   if (after === before) return after;
   const ids = changedIds(before, after);
-  return ids.size ? updateBoundArrows(after, ids) : after;
+  const moved = ids.size ? updateBoundArrows(after, ids) : after;
+  return finalizeTouchedDataEdges(before, moved);
 }
 
 export interface CommitOptions {
@@ -98,11 +131,13 @@ export function endGesture(cancel = false) {
   }
   if (s.elements === g.elements) { setState({ interacting: false }); return; }
   const stack = s.history[s.boardId] ?? emptyHistory();
+  const after = finalizeTouchedDataEdges(g.elements, s.elements);
   setState({
     interacting: false,
+    elements: after,
     history: {
       ...s.history,
-      [s.boardId]: pushEntry(stack, { before: g.elements, after: s.elements, selectionBefore: g.selection, selectionAfter: s.selectedIds, at: Date.now() }),
+      [s.boardId]: pushEntry(stack, { before: g.elements, after, selectionBefore: g.selection, selectionAfter: s.selectedIds, at: Date.now() }),
     },
   });
 }
@@ -251,6 +286,28 @@ export function openWidgetInspector(id: string, section?: string) {
   const s = getState();
   setSelection([id], false);
   setState({ propertiesOpen: true, ...(s.compact ? { libraryOpen: false } : {}), inspectorFocus: { id, section, nonce: Date.now() } });
+}
+
+/**
+ * “Converter texto em valor” (ação explícita do usuário): o texto vira um Value Tile no mesmo lugar,
+ * mantendo id, grupos, frame e setas ancoradas. Retorna false se o texto não tiver exatamente um número.
+ */
+export function convertTextToValue(id: string): boolean {
+  const el = getState().elements.find((e) => e.id === id);
+  if (!el || el.type !== 'text') return false;
+  const parsed = parseTextToValue(el.text);
+  if (!parsed) { toast('Não encontrei um único número nesse texto.', 'warning'); return false; }
+  const size = VALUE_SIZES.normal;
+  const w = createWidget(WIDGET.value, '1.0.0', parsed.label || 'Valor', el.x, el.y, size.width, size.height, createValueData(parsed.data));
+  const replacement = { ...w, id: el.id, groupIds: el.groupIds, frameId: el.frameId, locked: el.locked } as AuroraElement;
+  commit((els) => els.map((e) => (e.id === id ? replacement : e)), { selection: [id] });
+  return true;
+}
+
+/** Entra/sai da edição rápida de um widget (o próprio componente mostra os campos). */
+export function setWidgetEditing(id: string | null) {
+  if (id) setSelection([id], false);
+  setState({ editingWidgetId: id });
 }
 
 /** Abre um link externo em nova aba, só se for https válido. */
@@ -747,7 +804,7 @@ export function addWidget(type: string, at?: Vec, dataPatch?: Record<string, unk
   const el = createWidget(plugin.id, plugin.version, opts.title ?? plugin.name, pos.x - width / 2, pos.y - height / 2, width, height, data);
   el.style.strokeColor = opts.accent ?? plugin.accent;
   addElements([el]);
-  setState({ tool: 'select' });
+  setState({ tool: 'select', ...(plugin.editOnInsert ? { editingWidgetId: el.id } : {}) });
   return el;
 }
 

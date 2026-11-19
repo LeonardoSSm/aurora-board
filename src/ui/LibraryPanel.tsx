@@ -30,14 +30,18 @@ export function LibraryPanel() {
   const needle = q.trim().toLowerCase();
   const all = listWidgets();
   const widgets = all.filter((w) => !w.hideInLibrary && (!needle || `${w.name} ${w.description}`.toLowerCase().includes(needle)));
-  const presetSections = all
-    .filter((w) => w.presets?.length)
-    .map((w) => ({
-      plugin: w,
-      title: w.librarySection ?? w.name,
-      presets: w.presets!.filter((p) => !needle || [p.name, p.description ?? '', ...(p.keywords ?? []), w.librarySection ?? ''].join(' ').toLowerCase().includes(needle)),
-    }))
-    .filter((s) => s.presets.length);
+  // Presets agrupados pelo título da seção (vários widgets podem compartilhar uma seção, ex.: Finanças visuais).
+  const sectionMap = new Map<string, { id: string; title: string; items: { plugin: WidgetPlugin; preset: WidgetPreset }[] }>();
+  for (const w of all) {
+    if (!w.presets?.length) continue;
+    const title = w.librarySection ?? w.name;
+    const sec = sectionMap.get(title) ?? { id: w.id, title, items: [] };
+    for (const p of w.presets) {
+      if (!needle || [p.name, p.description ?? '', ...(p.keywords ?? []), title].join(' ').toLowerCase().includes(needle)) sec.items.push({ plugin: w, preset: p });
+    }
+    sectionMap.set(title, sec);
+  }
+  const presetSections = [...sectionMap.values()].filter((s) => s.items.length);
   const categories = [...new Set(widgets.map((w) => w.category))];
   const planned = listPlanned().filter((p) => !q || `${p.name} ${p.description}`.toLowerCase().includes(q.toLowerCase()));
 
@@ -64,10 +68,10 @@ export function LibraryPanel() {
           />
         )}
         {presetSections.map((s) => (
-          <section key={s.plugin.id} className="mt-2" aria-label={s.title} data-testid={`library-section-${s.plugin.id}`}>
+          <section key={s.id} className="mt-2" aria-label={s.title} data-testid={`library-section-${s.id}`}>
             <div className="text-[10px] font-bold tracking-wider text-soft px-1.5 mb-1.5 uppercase">{s.title}</div>
             <div className="grid grid-cols-3 gap-1.5 px-0.5">
-              {s.presets.map((p) => <PresetItem key={p.id} plugin={s.plugin} preset={p} onAdd={() => add(() => addWidget(presetDragType(s.plugin.id, p.id)))} />)}
+              {s.items.map(({ plugin, preset }) => <PresetItem key={`${plugin.id}#${preset.id}`} plugin={plugin} preset={preset} onAdd={() => add(() => addWidget(presetDragType(plugin.id, preset.id)))} />)}
             </div>
           </section>
         ))}

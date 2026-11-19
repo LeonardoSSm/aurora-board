@@ -12,7 +12,7 @@ function tokensOf(elements: AuroraElement[]): unknown[] {
   const out: unknown[] = [];
   for (const e of elements) {
     if (e.type === 'widget') out.push(e.id, e.widgetType, e.data, e.title);
-    else if (isLinear(e) && e.connection.kind === 'data') out.push(e.id, e.startBinding?.elementId, e.endBinding?.elementId);
+    else if (isLinear(e) && e.connection.kind === 'data') out.push(e.id, e.startBinding?.elementId, e.endBinding?.elementId, e.connection.sourcePort, e.connection.targetPort, e.connection.variable);
   }
   return out;
 }
@@ -30,7 +30,7 @@ export function getDataflow(elements: AuroraElement[]): DataflowResult {
   const tokens = tokensOf(elements);
   if (tokens.length === lastTokens.length && tokens.every((t, i) => t === lastTokens[i])) return lastResult;
   lastTokens = tokens;
-  lastResult = computeDataflow(elements, dataflowSpec);
+  lastResult = computeDataflow(elements, dataflowSpec, lastResult);
   return lastResult;
 }
 
