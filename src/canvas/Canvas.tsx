@@ -3,6 +3,7 @@ import { useEditor, getState, setState } from '../store/editor';
 import { boxesIntersect, getElementBounds } from '../core/geometry';
 import { addWidget, insertImageFiles, panBy, pickImages, putAsset, screenToWorld, zoomAt } from '../store/actions';
 import { cameraTarget, cancelCameraAnimation, zoomTowardAnchor } from '../store/cameraMotion';
+import { CheckpointLayer } from './CheckpointLayer';
 import { isWheelNotch, normalizeWheel, wheelZoomFactor } from '../core/camera';
 import { toast } from '../store/ui';
 import { WIDGET } from '../core/widgetIds';
@@ -266,6 +267,7 @@ export function Canvas() {
         <TextEditor />
       </div>
       <Overlay />
+      <CheckpointLayer />
     </div>
   );
 }
