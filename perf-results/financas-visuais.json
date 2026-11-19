@@ -1,0 +1,48 @@
+{
+  "when": "2026-11-19T05:26:35.528Z",
+  "cpu": "11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz",
+  "results": [
+    {
+      "values": 100,
+      "months": 10,
+      "formulas": 10,
+      "edges": 129,
+      "elements": 250,
+      "coldRecomputeMs": 0.9,
+      "incrementalRecomputeMs": 0.6,
+      "commitWithRecomputeMs": 0.7,
+      "changeToPaintMs": 33.2,
+      "dragStepMs": 33.6,
+      "heapMB": 10.9,
+      "lastFormulaCents": -851641
+    },
+    {
+      "values": 500,
+      "months": 50,
+      "formulas": 50,
+      "edges": 649,
+      "elements": 1250,
+      "coldRecomputeMs": 2.6,
+      "incrementalRecomputeMs": 2,
+      "commitWithRecomputeMs": 1.9,
+      "changeToPaintMs": 32.9,
+      "dragStepMs": 33.4,
+      "heapMB": 26.5,
+      "lastFormulaCents": -4298241
+    },
+    {
+      "values": 1000,
+      "months": 100,
+      "formulas": 100,
+      "edges": 1299,
+      "elements": 2500,
+      "coldRecomputeMs": 4.3,
+      "incrementalRecomputeMs": 4.1,
+      "commitWithRecomputeMs": 3.6,
+      "changeToPaintMs": 50,
+      "dragStepMs": 33.3,
+      "heapMB": 33.9,
+      "lastFormulaCents": -8606491
+    }
+  ]
+}
