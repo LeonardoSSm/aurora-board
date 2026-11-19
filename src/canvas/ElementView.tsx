@@ -56,7 +56,9 @@ function ImageContent({ el }: { el: Extract<AuroraElement, { type: 'image' }> })
     if (!url) return null;
     const hit = imageVerdicts.get(el.assetId);
     if (hit) return hit;
-    const v = checkImageBytes(dataURLHead(url));
+    let v = checkImageBytes(dataURLHead(url));
+    // S1-SEC-022: no JPEG, metadados (EXIF) podem empurrar o marcador de dimensões para além do início lido.
+    if (v.ok && v.width === null && v.kind !== 'svg') v = checkImageBytes(dataURLHead(url, 4 * 1024 * 1024));
     if (imageVerdicts.size > 2000) imageVerdicts.clear();
     imageVerdicts.set(el.assetId, v);
     return v;

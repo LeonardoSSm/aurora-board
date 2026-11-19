@@ -75,6 +75,13 @@ export function parseImport(text: string, workspaceId: string): ImportResult {
   if (isLegacyFormat(data)) {
     const r = importLegacy(data, workspaceId);
     if (!r.boards.length) throw new ImportError('Arquivo v0.2/v0.3 sem quadros.');
+    // S1-SEC-020: o legado passa pelo orçamento genérico; depois da conversão, os mesmos tetos de elementos.
+    let total = 0;
+    for (const b of r.boards) {
+      if (b.elements.length > MAX_ELEMENTS) throw new ImportError(`Importação recusada por segurança: quadro "${b.name}" excede ${MAX_ELEMENTS} elementos.`);
+      total += b.elements.length;
+    }
+    if (total > IMPORT_LIMITS.maxTotalElements) throw new ImportError(`Importação recusada por segurança: mais de ${IMPORT_LIMITS.maxTotalElements} elementos no total.`);
     const activeContent = r.boards.reduce((n, b) => n + blockActiveContent(b.elements as never, 'import'), 0);
     return { source: 'legacy-v0.3', boards: r.boards, assets: r.assets, warnings: r.warnings, stats: { boards: r.stats.boards, elements: r.stats.elements + r.stats.connections + r.stats.strokes, activeContent } };
   }

@@ -43,8 +43,16 @@ function Preview({ doc, getURL }: { doc: DocumentItem; getURL: (id: string) => P
           const verdict = classifyDocument(bytes, doc.mimeType, doc.name);
           const next: PreviewState = { status: 'ready', verdict };
           if (verdict.preview === 'image') {
-            next.imageUrl = URL.createObjectURL(new Blob([bytes as BlobPart], { type: verdict.previewMime }));
-            urls.push(next.imageUrl);
+            if (verdict.previewMime === 'image/svg+xml') {
+              // S1-SEC-019: SVG via data: — "abrir imagem em nova aba" num blob: renderizaria o SVG como documento
+              // ativo na origem do app; navegação de topo para data: é bloqueada pelos navegadores (origem opaca).
+              let bin = '';
+              for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+              next.imageUrl = `data:image/svg+xml;base64,${btoa(bin)}`;
+            } else {
+              next.imageUrl = URL.createObjectURL(new Blob([bytes as BlobPart], { type: verdict.previewMime }));
+              urls.push(next.imageUrl);
+            }
           } else if (verdict.preview === 'text') {
             next.text = new TextDecoder('utf-8', { fatal: false }).decode(bytes.subarray(0, 80_000)).slice(0, 20_000);
           }

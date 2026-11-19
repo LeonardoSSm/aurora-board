@@ -96,6 +96,28 @@ test.describe('S1-SEC-001: documentos importados não executam na origem do app'
     await confirmImport(page);
     await page.waitForTimeout(1500);
     await expectNotPwned(page);
+    // S1-SEC-019: a prévia de SVG usa data: (não blob: da origem); "abrir imagem em nova aba" não roda o SVG no app.
+    const src = await page.locator('[data-testid="doc-preview"] img').getAttribute('src');
+    expect(src).toMatch(/^data:image\/svg\+xml;base64,/);
+    const tab = await page.context().newPage();
+    await tab.goto(src!).catch(() => undefined); // navegação de topo para data: é bloqueada pelos navegadores
+    await tab.waitForTimeout(500);
+    await tab.close();
+    await expectNotPwned(page);
+  });
+
+  test('S1-SEC-021: colagem externa com dados aninhados demais é recusada', async ({ page }) => {
+    let deep: unknown = 1;
+    for (let i = 0; i < 200; i++) deep = [deep];
+    const payload = JSON.stringify({ type: 'aurora-board/clipboard', version: 1, elements: [{ id: 'p', type: 'widget', widgetType: 'aurora.notes', x: 0, y: 0, width: 100, height: 100, data: { markdown: 'x', fundo: deep } }] });
+    const before = (await state(page)).elements.length;
+    await page.evaluate((text) => {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', text);
+      document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+    }, payload);
+    await expect(page.getByText(/Conteúdo colado recusado/)).toBeVisible();
+    expect((await state(page)).elements.length).toBe(before);
   });
 
   test('[reprodução] link de download nunca serve conteúdo ativo na origem do app', async ({ page }) => {

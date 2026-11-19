@@ -235,3 +235,11 @@ describe('fuzzing controlado da importação', () => {
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 });
+
+describe('segunda auditoria interna (S1-SEC-020)', () => {
+  it('formato legado convertido respeita o teto de elementos por quadro', () => {
+    const nodes = Array.from({ length: IMPORT_LIMITS.maxElementsPerBoard + 1 }, (_, i) => ({ id: `n${i}`, type: 'text', x: i, y: 0, w: 10, title: 't', desc: '', data: {} }));
+    const legacy = { version: 2, active: 'b', boards: [{ id: 'b', name: 'Legado grande', camera: { x: 0, y: 0, z: 1 }, nodes, edges: [], strokes: [] }] };
+    expect(() => parseImport(JSON.stringify(legacy), 'ws')).toThrow(/excede/);
+  }, 60_000);
+});
