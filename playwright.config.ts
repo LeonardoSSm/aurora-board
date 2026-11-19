@@ -4,7 +4,8 @@ const CI = !!process.env.CI;
 
 export default defineConfig({
   testDir: './e2e',
-  testIgnore: ['**/perf/**'],
+  // e2e/static roda contra o build público (playwright.static.config.ts), não contra o dev server.
+  testIgnore: ['**/perf/**', '**/static/**'],
   timeout: 60_000,
   fullyParallel: false,
   workers: 1,
@@ -23,9 +24,9 @@ export default defineConfig({
     reducedMotion: 'reduce',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } }, testIgnore: ['**/mobile.spec.ts', '**/perf/**'] },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 900 } }, testIgnore: ['**/mobile.spec.ts', '**/perf/**'] },
-    { name: 'webkit', use: { ...devices['Desktop Safari'], viewport: { width: 1440, height: 900 } }, testIgnore: ['**/mobile.spec.ts', '**/perf/**'] },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } }, testIgnore: ['**/mobile.spec.ts', '**/perf/**', '**/static/**'] },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 900 } }, testIgnore: ['**/mobile.spec.ts', '**/perf/**', '**/static/**'] },
+    { name: 'webkit', use: { ...devices['Desktop Safari'], viewport: { width: 1440, height: 900 } }, testIgnore: ['**/mobile.spec.ts', '**/perf/**', '**/static/**'] },
     { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: ['**/mobile.spec.ts'] },
   ],
   webServer: {
