@@ -65,7 +65,8 @@ export const sanitizeAI = (raw: unknown): AIData => {
   const authorized: Record<string, boolean> = {};
   for (const [k, v] of Object.entries(obj(d.authorized))) authorized[k] = v === true;
   const applied: Record<string, number> = {};
-  for (const [k, v] of Object.entries(obj(d.applied)).slice(-200)) if (k.length <= 200 && typeof v === 'number' && Number.isFinite(v)) applied[k] = v;
+  // Até 2 chaves por mensagem (proposta da IA + interpretação local), e as mensagens são limitadas a 200.
+  for (const [k, v] of Object.entries(obj(d.applied)).slice(-400)) if (k !== '__proto__' && k.length <= 200 && typeof v === 'number' && Number.isFinite(v)) applied[k] = v;
   return {
     provider: str(d.provider),
     model: str(d.model),

@@ -383,6 +383,14 @@ export interface ResolvedMoney {
   target?: FinanceTarget;
 }
 
+/**
+ * Chave da marca “aplicada” (AIData.applied). Limitada a 126 caracteres: ids de mensagem vêm de quadros importados
+ * e `sanitizeAI` descarta chaves longas — sem o limite, a marca se perderia e a proposta poderia ser reaplicada.
+ */
+export function proposalKey(messageId: string, origin: 'ai' | 'local'): string {
+  return `${messageId.slice(0, 120)}${origin === 'local' ? ':local' : ''}`;
+}
+
 /** Identificador determinístico do lançamento criado pela ação (impede aplicar duas vezes no mesmo bloco). */
 export function aiEntryId(messageId: string, index: number) {
   return `ai-${messageId.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40)}-${index}`;
