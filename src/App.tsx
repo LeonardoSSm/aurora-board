@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { getState, setState, useEditor } from './store/editor';
-import { Canvas } from './canvas/Canvas';
+import { Canvas, getCanvasRect } from './canvas/Canvas';
 import { TopBar } from './ui/TopBar';
 import { Toolbar } from './ui/Toolbar';
 import { LibraryPanel } from './ui/LibraryPanel';
@@ -31,9 +31,8 @@ export function App() {
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
-      const canvas = document.querySelector('[data-testid="canvas"]');
-      if (!canvas) return;
-      const r = canvas.getBoundingClientRect();
+      const r = getCanvasRect();
+      if (!r.right) return;
       const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
       setLastPointerWorld(inside ? screenToWorld({ x: e.clientX - r.left, y: e.clientY - r.top }) : null);
     };

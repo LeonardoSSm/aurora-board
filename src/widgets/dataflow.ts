@@ -17,7 +17,16 @@ function tokensOf(elements: AuroraElement[]): unknown[] {
   return out;
 }
 
+let lastElements: AuroraElement[] | null = null;
+
+/**
+ * Cada widget consulta o fluxo de dados (2 seletores por widget) a cada mudança de estado.
+ * O array de elementos é imutável: mesma referência = mesmo resultado, sem percorrer nada.
+ * (Antes: O(elementos × widgets) por quadro — ~1,3 milhão de operações com 5.000 elementos.)
+ */
 export function getDataflow(elements: AuroraElement[]): DataflowResult {
+  if (elements === lastElements) return lastResult;
+  lastElements = elements;
   const tokens = tokensOf(elements);
   if (tokens.length === lastTokens.length && tokens.every((t, i) => t === lastTokens[i])) return lastResult;
   lastTokens = tokens;
