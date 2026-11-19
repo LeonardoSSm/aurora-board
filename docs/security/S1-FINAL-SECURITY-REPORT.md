@@ -157,7 +157,17 @@ estava menos carregada. Importação: 100 000 elementos validados em ~0,4 s (ant
 - Commits por área: auditoria `d320489`, reprodução `7e24171`, documentos `1e1e23f`, importação `e917ee0`,
   sandbox `79600bc`, mídias `5aff2ae`, frontend `5b986ca`, servidor `15eedac`, CSP `fa96ab7`, CI `e4ae4c5`,
   beta `acc5d49`, segunda auditoria `394ffe7`, ajustes de CI `a672117`/`c9a2519`, documentação (este commit).
-- CI e merge: ver a mensagem final do ciclo (estado registrado no momento do merge).
+- CI: execução `44572154598` (commit `ed90b66`) **verde em todos os 12 jobs** — tipos, unitários, build público
+  (conteúdo verificado), auditoria de dependências, gitleaks, E2E Chromium/Firefox/WebKit/mobile e build público + CSP
+  (Report-Only e aplicada) em Chromium/Firefox/WebKit — e CodeQL verde. Durante o ciclo a CI revelou 3 problemas de
+  teste (coleta de `e2e/static` pela config principal; navegação bloqueada sem 2º `load` no Firefox; colagem
+  sintética ignorada pelo Firefox), todos corrigidos sem afrouxar asserções de segurança.
+- Local (Windows): 466/466 unitários; E2E 118 aprovados, 1 pulado e 1 falha **preexistente** do WebKit local
+  (`editing.spec.ts` › desfazer por quadro; reproduzida também em `709f0dc`, passa na CI).
+- Integrações de deploy: nenhuma (0 deployments e 0 environments no GitHub; `vercel.json` com
+  `git.deploymentEnabled: false`; nenhum workflow publica). O merge na `main` não publica nada.
+- Merge: critérios da Etapa 17 cumpridos; integração na `main` com `--no-ff`, sem force push.
+  **Merge na `main` não é autorização de lançamento público.**
 
 ## P. Decisão de prontidão
 
