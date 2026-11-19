@@ -731,13 +731,14 @@ export function doubleClick(world: Vec) {
   }
   if (hit.type === 'widget' || hit.type === 'image' || hit.type === 'freedraw') {
     const g = selectableGroupId(hit, s.editingGroupId);
-    if (g) { setState({ editingGroupId: g, selectedIds: [hit.id] }); }
+    if (g) { setState({ editingGroupId: g }); setSelection([hit.id]); }
     return;
   }
   const g = selectableGroupId(hit, s.editingGroupId);
   if (g) {
-    // Entra no grupo e seleciona o elemento individual; novo duplo clique edita o texto.
-    setState({ editingGroupId: g, selectedIds: [hit.id] });
+    // Entra um nível: seleciona o subgrupo (ou o elemento) dentro do grupo em edição.
+    setState({ editingGroupId: g });
+    setSelection([hit.id]);
     return;
   }
   if (hit.locked) { toast('Elemento bloqueado.', 'info'); return; }

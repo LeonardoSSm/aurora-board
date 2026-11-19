@@ -221,7 +221,7 @@ export function zoomToBox(box: Box, maxZoom = 1, padding = 80) {
   const { viewport } = getState();
   const w = Math.max(box.maxX - box.minX, 1), h = Math.max(box.maxY - box.minY, 1);
   const zoom = Math.min(maxZoom, Math.max(MIN_ZOOM, Math.min((viewport.width - padding * 2) / w, (viewport.height - padding * 2) / h)));
-  setState({ camera: { zoom, x: viewport.width / 2 - ((box.minX + box.maxX) / 2) * zoom, y: viewport.height / 2 - ((box.minY + box.maxY) / 2) * zoom } });
+  setState({ camera: { zoom, x: Math.round(viewport.width / 2 - ((box.minX + box.maxX) / 2) * zoom), y: Math.round(viewport.height / 2 - ((box.minY + box.maxY) / 2) * zoom) } });
 }
 
 export function zoomToFit() {
@@ -242,7 +242,8 @@ export function resetZoom() {
 
 export function resetCamera() {
   const { viewport } = getState();
-  setState({ camera: { x: viewport.width / 2, y: viewport.height / 2, zoom: 1 } });
+  // Pixel inteiro: linhas de 1px nítidas e coordenadas exatas do mouse.
+  setState({ camera: { x: Math.round(viewport.width / 2), y: Math.round(viewport.height / 2), zoom: 1 } });
 }
 
 export function viewportCenterWorld(): Vec {
@@ -794,7 +795,7 @@ export async function openBoard(id: string) {
 export async function createBoard(name: string, description = '', open = true): Promise<Board> {
   const s = getState();
   const b = makeBoard(s.workspaceId, name || 'Novo quadro', description);
-  b.camera = { x: s.viewport.width / 2, y: s.viewport.height / 2, zoom: 1 };
+  b.camera = { x: Math.round(s.viewport.width / 2), y: Math.round(s.viewport.height / 2), zoom: 1 };
   await getAdapter().saveBoard(b);
   const ws = currentWorkspace();
   await persistWorkspace({ ...ws, boardOrder: [...ws.boardOrder, b.id], updatedAt: Date.now() });

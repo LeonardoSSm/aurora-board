@@ -19,7 +19,9 @@ export async function initEditor(adapter: PersistenceAdapter, opts: { demo?: boo
     if (!workspaces.length) {
       const ws = createWorkspace('Meu workspace');
       const first = createBoard(ws.id, 'Meu primeiro quadro', 'Quadro livre.');
-      first.camera = { x: getState().viewport.width / 2, y: getState().viewport.height / 2, zoom: 1 };
+      // O canvas ainda não foi medido: estima o tamanho pela janela (painéis abertos só em telas largas).
+      const est = estimateCanvasSize();
+      first.camera = { x: Math.round(est.width / 2), y: Math.round(est.height / 2), zoom: 1 };
       const boards = [first];
       if (opts.demo !== false) boards.push(buildDemoBoard(ws.id));
       // Dados do protótipo v0.2/v0.3 no mesmo navegador: importados sem apagar o original.
@@ -84,4 +86,11 @@ export async function initEditor(adapter: PersistenceAdapter, opts: { demo?: boo
     console.error(e);
     setState({ status: 'error', loadError: (e as Error).message || String(e) });
   }
+}
+
+/** Tamanho provável do canvas antes da primeira medição (topo 56px; painéis 256+288px em telas ≥ 900px). */
+export function estimateCanvasSize(): { width: number; height: number } {
+  if (typeof window === 'undefined' || !window.innerWidth) return getState().viewport;
+  const w = window.innerWidth, h = window.innerHeight;
+  return { width: w >= 900 ? Math.max(320, w - 256 - 288) : w, height: Math.max(200, h - 56) };
 }

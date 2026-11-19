@@ -38,3 +38,15 @@ export async function drawShape(page: Page, key: string, x1: number, y1: number,
 export async function waitSaved(page: Page) {
   await page.waitForFunction(() => (window as any).__aurora.getState().saveState === 'saved', undefined, { timeout: 5000 });
 }
+
+/** Compara campos numéricos com tolerância (WebKit arredonda coordenadas do mouse). */
+export function expectNear(obj: object, expected: Record<string, number>, tol = 1) {
+  const o = obj as Record<string, unknown>;
+  for (const [k, v] of Object.entries(expected)) expect(Math.abs(Number(o[k]) - v), `${k}: ${o[k]} ≈ ${v}`).toBeLessThanOrEqual(tol);
+}
+
+/** Ponto de fundo dentro do canvas visível (região inferior direita, longe da barra e do zoom). */
+export async function emptyCanvasPoint(page: Page) {
+  const box = (await page.getByTestId('canvas').boundingBox())!;
+  return { x: box.x + box.width * 0.82, y: box.y + box.height * 0.82 };
+}

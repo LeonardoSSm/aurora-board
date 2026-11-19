@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useEditor } from './store/editor';
+import { getState, setState, useEditor } from './store/editor';
 import { Canvas } from './canvas/Canvas';
 import { TopBar } from './ui/TopBar';
 import { Toolbar } from './ui/Toolbar';
@@ -13,7 +13,21 @@ import { screenToWorld } from './store/actions';
 export function App() {
   const status = useEditor((s) => s.status);
   const loadError = useEditor((s) => s.loadError);
+  const compact = useEditor((s) => s.compact);
+  const overlayOpen = useEditor((s) => s.compact && (s.libraryOpen || s.propertiesOpen));
   useKeyboard();
+
+  // Layout responsivo: em telas estreitas os painéis começam fechados e abrem sobre o canvas.
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 899px)');
+    const apply = () => {
+      const c = mq.matches;
+      if (c !== getState().compact) setState(c ? { compact: true, libraryOpen: false, propertiesOpen: false } : { compact: false, libraryOpen: true, propertiesOpen: true });
+    };
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
@@ -67,6 +81,9 @@ export function App() {
           )}
         </main>
         <PropertiesPanel />
+        {compact && overlayOpen && (
+          <div data-testid="panel-backdrop" className="absolute inset-0 z-30 bg-black/40" onPointerDown={() => setState({ libraryOpen: false, propertiesOpen: false })} />
+        )}
       </div>
       <ContextMenu />
       <BoardsPanel />
