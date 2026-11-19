@@ -3,6 +3,7 @@ import { CircleDollarSign, Trash2 } from 'lucide-react';
 import type { WidgetPlugin } from '../registry';
 import {
   computeFinance,
+  expandEntry,
   emptyFinance,
   formatMoney,
   parseMoney,
@@ -17,6 +18,8 @@ import { WIDGET } from '../../core/widgetIds';
 import { uid } from '../../core/elements';
 import { Empty } from '../../ui/primitives';
 import type { InputValue } from '../../core/dataflow';
+import type { OccurrenceSet } from '../../core/financePeriod';
+import { moneyValue } from '../../core/scalar';
 
 export interface LedgerValue {
   source: string;
@@ -63,14 +66,25 @@ export const financePlugin: WidgetPlugin<FinanceData> = {
   outputs: [
     { id: 'summary', label: 'Resumo (saldo)', type: 'finance.summary' },
     { id: 'ledger', label: 'Lançamentos', type: 'finance.ledger' },
+    // Novas saídas (ciclo 4) depois das antigas: a resolução automática de conexões antigas não muda.
     { id: 'balance', label: 'Saldo (número)', type: 'number' },
+    { id: 'balanceMoney', label: 'Saldo (dinheiro)', type: 'money' },
+    { id: 'occurrences', label: 'Lançamentos por vencimento', type: 'finance.occurrences' },
   ],
   createData: () => emptyFinance('BRL'),
   sanitize: sanitizeFinance,
   compute: (d, inputs, el) => {
     const r = computeFinance(d, summariesFrom(inputs.in), el.title);
     const ledger: LedgerValue = { source: el.title, currency: d.currency, summary: r.summary, byCategory: r.byCategory };
-    return { summary: r.summary, ledger, balance: r.summary.balanceCents / 100 };
+    // Ocorrências de TODAS as competências (parcelas distribuídas por expandEntry); o mês filtra a sua.
+    const occurrences: OccurrenceSet = { t: 'occurrences', sourceId: el.id, source: el.title, currency: d.currency, items: d.entries.flatMap(expandEntry) };
+    return {
+      summary: r.summary,
+      ledger,
+      balance: r.summary.balanceCents / 100,
+      balanceMoney: moneyValue(r.summary.balanceCents, d.currency, { role: 'neutral', key: `${el.id}:balance`, label: `Saldo · ${el.title}` }),
+      occurrences,
+    };
   },
   summarize: (d, el) => {
     const r = computeFinance(d, [], el.title);

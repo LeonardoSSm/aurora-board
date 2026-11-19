@@ -132,12 +132,12 @@ export const sanitizeDocuments = (raw: unknown): DocumentsData => {
 };
 
 /* Gráfico ----------------------------------------------------------- */
-export interface ChartData { mode: 'categories' | 'income-expense' | 'sources'; chartType: 'bar' | 'donut' }
+export interface ChartData { mode: 'categories' | 'income-expense' | 'sources'; chartType: 'bar' | 'donut' | 'line' | 'kpi' }
 export const sanitizeChart = (raw: unknown): ChartData => {
   const d = obj(raw);
   return {
     mode: d.mode === 'income-expense' || d.mode === 'sources' ? d.mode : 'categories',
-    chartType: d.chartType === 'donut' ? 'donut' : 'bar',
+    chartType: d.chartType === 'donut' || d.chartType === 'line' || d.chartType === 'kpi' ? d.chartType : 'bar',
   };
 };
 

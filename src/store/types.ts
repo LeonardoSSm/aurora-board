@@ -100,6 +100,8 @@ export interface EditorState {
   contextMenu: ContextMenuState | null;
   /** Pedido para o painel de propriedades mostrar/focar as configurações de um widget. */
   inspectorFocus: { id: string; section?: string; nonce: number } | null;
+  /** Widget em edição rápida no próprio bloco (duplo clique), ex.: valor ou fórmula. */
+  editingWidgetId: string | null;
   toasts: Toast[];
   /** Último snapshot de dados de fluxo calculado (cache para widgets). */
   dataflowVersion: number;

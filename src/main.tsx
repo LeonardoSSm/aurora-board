@@ -13,9 +13,11 @@ import { getState, useEditor } from './store/editor';
 import * as actions from './store/actions';
 import * as elementsApi from './core/elements';
 import { updateBoundArrows } from './core/bindings';
+import { computeDataflow } from './core/dataflow';
+import { dataflowSpec } from './widgets/registry';
 import { getDataflow } from './widgets/dataflow';
 
-const coreApi = { updateBoundArrows, getDataflow };
+const coreApi = { updateBoundArrows, getDataflow, computeDataflow, dataflowSpec };
 
 registerBuiltinWidgets();
 

@@ -11,4 +11,7 @@ export const WIDGET = {
   chart: 'aurora.chart',
   sandbox: 'aurora.sandbox-html',
   aiTile: 'aurora.ai-tile',
+  value: 'aurora.value',
+  financePeriod: 'aurora.finance-period',
+  formula: 'aurora.formula',
 } as const;

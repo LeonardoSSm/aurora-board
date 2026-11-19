@@ -15,7 +15,7 @@ import {
   DISPLAY_MODE_LABEL,
   DISPLAY_SIZES,
   INTEGRATION_LABEL,
-  TILE_FONT,
+
   aiTileLayout,
   createAITileData,
   getPreset,
@@ -27,7 +27,7 @@ import {
   type AITileData,
   type AITileDisplayMode,
   type IntegrationState,
-  type TileNode,
+
 } from '../../core/aiTiles';
 import { createLinear, createWidget } from '../../core/elements';
 import { resolveLinear } from '../../core/bindings';
@@ -36,6 +36,7 @@ import { addElements, focusElement, openExternalUrl, openWidgetInspector, update
 import { toast } from '../../store/ui';
 import { fetchAIStatus, type AIStatus } from '../../integrations/aiClient';
 import { Button, Field, Label, Segmented, Select, TextArea } from '../../ui/primitives';
+import { NodeView, tileNodesToSVG } from './tileRender';
 import { logoDataURL } from './aiTileLogos';
 
 /* ------------------------------------------------------------------ */
@@ -78,43 +79,7 @@ function useIntegration(data: AITileData): IntegrationState {
 /* Render compartilhado                                                */
 /* ------------------------------------------------------------------ */
 
-function NodeView({ n }: { n: TileNode }) {
-  switch (n.kind) {
-    case 'rect':
-      return <rect x={n.x} y={n.y} width={Math.max(0, n.w)} height={Math.max(0, n.h)} rx={n.rx} fill={n.fill} stroke={n.stroke ?? 'none'} strokeWidth={n.strokeWidth} />;
-    case 'logo': {
-      const href = logoDataURL(n.logo, n.tone);
-      return href ? <image data-testid="ai-tile-logo" data-logo={n.logo} href={href} x={n.x} y={n.y} width={n.w} height={n.h} preserveAspectRatio="xMidYMid meet" /> : null;
-    }
-    case 'text':
-      return <text x={n.x} y={n.y} fontSize={n.size} fontWeight={n.weight} fill={n.color} textAnchor={n.anchor} fontFamily={TILE_FONT}>{n.text}</text>;
-    case 'dot':
-      return <circle cx={n.x} cy={n.y} r={n.r} fill={n.fill} />;
-  }
-}
-
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
-const n2 = (v: number) => Math.round(v * 100) / 100;
-
-/** Serializa o mesmo layout da tela em SVG (exportação). */
-export function tileNodesToSVG(nodes: TileNode[]): string {
-  return nodes
-    .map((n) => {
-      switch (n.kind) {
-        case 'rect':
-          return `<rect x="${n2(n.x)}" y="${n2(n.y)}" width="${n2(Math.max(0, n.w))}" height="${n2(Math.max(0, n.h))}" rx="${n2(n.rx)}" fill="${esc(n.fill)}" stroke="${esc(n.stroke ?? 'none')}"${n.strokeWidth ? ` stroke-width="${n.strokeWidth}"` : ''}/>`;
-        case 'logo': {
-          const href = logoDataURL(n.logo, n.tone);
-          return href ? `<image href="${esc(href)}" x="${n2(n.x)}" y="${n2(n.y)}" width="${n2(n.w)}" height="${n2(n.h)}" preserveAspectRatio="xMidYMid meet"/>` : '';
-        }
-        case 'text':
-          return `<text x="${n2(n.x)}" y="${n2(n.y)}" font-size="${n2(n.size)}" font-weight="${n.weight}" fill="${esc(n.color)}" text-anchor="${n.anchor === 'middle' ? 'middle' : 'start'}" font-family='${esc(TILE_FONT)}' xml:space="preserve">${esc(n.text)}</text>`;
-        case 'dot':
-          return `<circle cx="${n2(n.x)}" cy="${n2(n.y)}" r="${n2(n.r)}" fill="${esc(n.fill)}"/>`;
-      }
-    })
-    .join('');
-}
+export { tileNodesToSVG };
 
 function AITileView({ element, data, selected }: { element: WidgetElement; data: AITileData; selected: boolean }) {
   const integration = useIntegration(data);

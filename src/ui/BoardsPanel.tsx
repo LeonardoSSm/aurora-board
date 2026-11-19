@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Archive, ArchiveRestore, ArrowDown, ArrowUp, Copy, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useEditor, setState } from '../store/editor';
+import { createFinanceDemoBoard } from '../store/financeDemo';
 import { createBoard, deleteBoard, deleteWorkspace, duplicateBoard, moveBoard, openBoard, renameWorkspace, setBoardArchived, updateBoardMeta } from '../store/actions';
 import { promptDialog } from '../store/ui';
 
@@ -48,6 +49,13 @@ export function BoardsPanel() {
               }}
             >
               <Plus size={14} /> Novo
+            </button>
+            <button
+              className="inline-flex items-center gap-1 h-9 px-3 rounded-lg border border-line text-[12px] text-fg-2 hover:bg-panel-3"
+              title="Cria um quadro novo com valores, meses, fórmulas e gráficos de exemplo (dados fictícios)"
+              onClick={async () => { await createFinanceDemoBoard(); close(); }}
+            >
+              Exemplo: finanças
             </button>
           </div>
           <div className="flex gap-3 mt-2 text-[11px]">

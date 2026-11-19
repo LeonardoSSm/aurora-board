@@ -3,6 +3,7 @@ import type { AuroraElement } from '../core/schema';
 import { isBindable, isLinear } from '../core/schema';
 import { CONNECTION_POINTS, fixedPointToWorld, getCommonBounds, getElementBounds } from '../core/geometry';
 import { HANDLE_SIZE, linearHandles, selectionFrame, toScreen, transformHandles } from './handles';
+import { getDataflow } from '../widgets/dataflow';
 
 const ACCENT = '#8f9bff';
 
@@ -12,6 +13,44 @@ function Outline({ el, dashed, color = ACCENT }: { el: AuroraElement; dashed?: b
   if (!f) return null;
   if (isLinear(el)) return null;
   return <polygon points={f.corners.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke={color} strokeWidth={1} strokeDasharray={dashed ? '4 3' : undefined} />;
+}
+
+const STATUS_TEXT: Record<string, string> = { incompatible: 'tipo incompatível', 'missing-port': 'porta inexistente', unbound: 'origem ausente', 'not-widget': 'não é componente', cycle: 'ciclo', currency: 'moeda incompatível', duplicate: 'duplicado', period: 'outra competência' };
+
+/**
+ * Rótulo do que cada conexão de dados transmite — só para conexões selecionadas ou ligadas ao que está
+ * selecionado (sem poluir o desenho). Ex.: “Saldo · saldo_janeiro”, ou o problema da conexão.
+ */
+function DataEdgeLabels({ elements, selSet }: { elements: AuroraElement[]; selSet: Set<string> }) {
+  const cam = useEditor((s) => s.camera);
+  if (!selSet.size) return null;
+  const flow = getDataflow(elements);
+  const byId = new Map(elements.map((e) => [e.id, e]));
+  const out = [];
+  for (const el of elements) {
+    if (!isLinear(el) || el.connection.kind !== 'data' || el.text) continue;
+    if (!selSet.has(el.id) && !selSet.has(el.startBinding?.elementId ?? '') && !selSet.has(el.endBinding?.elementId ?? '')) continue;
+    const r = flow.edges.get(el.id);
+    if (!r) continue;
+    const ok = r.status === 'ok';
+    const target = byId.get(el.endBinding?.elementId ?? '');
+    const toFormula = target?.type === 'widget' && target.widgetType === 'aurora.formula';
+    const portInfo = r.fromPort && !['value', 'summary', 'ledger', 'result'].includes(r.fromPort.id) ? r.fromPort.label : '';
+    const parts = [portInfo, toFormula ? el.connection.variable ?? '' : ''].filter(Boolean);
+    if (ok && !parts.length) continue; // valor principal sem ambiguidade: nada a mostrar
+    const label = ok ? parts.join(' · ') : `⚠ ${STATUS_TEXT[r.status] ?? r.status}`;
+    const pts = el.points;
+    const mid = pts.length === 2 ? { x: (pts[0][0] + pts[1][0]) / 2, y: (pts[0][1] + pts[1][1]) / 2 } : { x: pts[Math.floor(pts.length / 2)][0], y: pts[Math.floor(pts.length / 2)][1] };
+    const p = toScreen({ x: el.x + mid.x, y: el.y + mid.y }, cam);
+    const w = label.length * 6.2 + 12;
+    out.push(
+      <g key={el.id} data-testid="data-edge-label" data-status={r.status}>
+        <rect x={p.x - w / 2} y={p.y - 9} width={w} height={18} rx={9} fill="#0c1420" stroke={ok ? '#5addaa' : '#f3c577'} strokeOpacity={0.7} />
+        <text x={p.x} y={p.y + 4} textAnchor="middle" fontSize={11} fill={ok ? '#bdeed8' : '#f3c577'} fontFamily='"Inter Variable", "Inter", system-ui, sans-serif'>{label}</text>
+      </g>,
+    );
+  }
+  return <>{out}</>;
 }
 
 export function Overlay() {
@@ -28,10 +67,11 @@ export function Overlay() {
   const snapGuides = useEditor((s) => s.snapGuides);
   const selectedPoint = useEditor((s) => s.selectedPointIndex);
   const drafting = useEditor((s) => s.linearDraftId);
+  const editingWidgetId = useEditor((s) => s.editingWidgetId);
 
   const selSet = new Set(selectedIds);
   const selected = elements.filter((e) => selSet.has(e.id));
-  const showHandles = !editingTextId && !(interacting && selected.length === 0);
+  const showHandles = !editingTextId && !editingWidgetId && !(interacting && selected.length === 0);
   const frame = selected.length ? selectionFrame(selected, cam) : null;
   const handles = showHandles ? transformHandles(selected, cam) : [];
   const single = selected.length === 1 ? selected[0] : null;
@@ -114,6 +154,7 @@ export function Overlay() {
           })}
         </g>
       )}
+      {!interacting && <DataEdgeLabels elements={elements} selSet={selSet} />}
       {snapGuides.map((g, i) => {
         const a = toScreen({ x: g.x1, y: g.y1 }, cam), b = toScreen({ x: g.x2, y: g.y2 }, cam);
         return <line key={i} data-testid="snap-guide" x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#ff6b8b" strokeWidth={1} strokeDasharray="4 3" />;
