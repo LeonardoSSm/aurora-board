@@ -67,6 +67,13 @@ test('build público: cabeçalhos, sem depuração, sem /api, sem rede externa, 
   expect(h['cross-origin-opener-policy']).toBe('same-origin');
   await expect(page.getByTestId('canvas')).toBeVisible();
 
+  // Aviso do beta: armazenamento local e backup.
+  const notice = page.getByTestId('beta-notice');
+  await expect(notice).toContainText('ficam armazenados neste navegador');
+  await expect(notice).toContainText('Exporte backups regularmente');
+  await notice.getByRole('button', { name: 'Entendi' }).click();
+  await expect(notice).toHaveCount(0);
+
   // Nada de API interna no window; arquivos sensíveis não são servidos.
   expect(await page.evaluate(() => typeof (window as unknown as { __aurora?: unknown }).__aurora)).toBe('undefined');
   for (const p of ['/.env', '/server/index.ts', '/package.json', '/src/main.tsx', '/assets/index.js.map']) {
@@ -108,6 +115,7 @@ test('build público: cabeçalhos, sem depuração, sem /api, sem rede externa, 
   // Persistência após recarregar.
   await page.reload();
   await expect(page.getByTestId('canvas')).toBeVisible();
+  await expect(page.getByTestId('beta-notice')).toHaveCount(0); // dispensa lembrada
   await page.getByRole('button', { name: 'Abrir lista de quadros' }).click();
   await expect(page.getByText('Quadro público S1').first()).toBeVisible();
 
