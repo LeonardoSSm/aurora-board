@@ -55,6 +55,7 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Testes, depuração de falhas, CI e artefatos, reprodução de bugs |
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Benchmark, medições antes/depois, limites |
 | [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Problemas e limitações conhecidos |
+| [docs/AI_TILES.md](docs/AI_TILES.md) | AI Tiles: decisões, modos visual/funcional, procedência e condições de uso das logos |
 | [docs/AUDIT-CYCLE2.md](docs/AUDIT-CYCLE2.md) | Auditoria inicial do ciclo 2 (baseline) |
 
 ---
@@ -90,6 +91,7 @@ Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuraç
 | Assistente IA | 🟡 | OpenAI, Claude e Gemini via servidor local; só envia contexto conectado e autorizado; respostas estruturadas viram blocos/tarefas/conexões **somente após confirmação** |
 | Gráfico | ✅ | Barras/rosca a partir de blocos financeiros conectados |
 | HTML isolado | ✅ experimental | Base de plugins de terceiros (iframe sandbox + CSP) |
+| AI Tiles | ✅ | ChatGPT, Codex, Claude, Claude Code, Gemini e Grok com logos locais; modos compacto, normal e detalhado; arrastar da biblioteca, conectar, agrupar, exportar PNG/SVG com a logo. Não exige API; vínculo opcional com um bloco Assistente IA. Ver [docs/AI_TILES.md](docs/AI_TILES.md) |
 | Google Calendar, Google Drive, GitHub, API externa, Indicadores, Dashboard, Ferramentas de dev | 🔜 | Listados na biblioteca como “Futuro”, com o requisito de ativação |
 
 ### Dados

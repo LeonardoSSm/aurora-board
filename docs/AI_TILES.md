@@ -16,6 +16,23 @@ Blocos pequenos com a identidade visual de assistentes de IA (ChatGPT, Codex, Cl
 | Logos como `<image href="data:image/svg+xml…">` | Isola ids de gradientes entre instâncias, funciona em PNG e SVG exportados e não depende de rede. |
 | Estado de integração calculado, nunca gravado | “Configurado” só aparece quando o tile está vinculado a um bloco de IA cujo provedor tem chave no servidor (`/api/ai/providers`). |
 
+## Uso
+
+- **Inserir:** biblioteca → “Inteligências Artificiais” → clique (centro da tela) ou arraste até o ponto desejado. A busca encontra por nome ou empresa (“anthropic”, “google”…).
+- **Editar:** duplo clique no tile (ou botão direito → “Editar tile”) abre as configurações no painel de propriedades: assistente, nome (campo do componente), descrição, modo, mostrar nome/descrição, fundo (escuro, transparente, marca), logo original ou monocromática, tamanho da logo, cor de destaque, borda colorida, arredondamento, opacidade, link e integração.
+- **Menu de contexto:** Editar tile, alternar modo, Abrir ferramenta, Vincular assistente / Abrir assistente / Remover vínculo, além das ações genéricas.
+- Trocar o modo aplica o tamanho de referência (64×64, 104×112, 200×150) mantendo o centro; depois disso o redimensionamento é livre.
+- Abrir links só acontece por ação explícita (botão ou menu), em nova aba com `noopener,noreferrer`, e só para `https://` sem credenciais.
+
+## Pontos de extensão criados (genéricos)
+
+Em `WidgetPlugin` (`src/widgets/registry.ts`): `frame: 'bare'`, `presets` + `librarySection` + `hideInLibrary`, `onDoubleClick`, `menuItems`, `exportSVG`, `remapIds`. O painel de propriedades passou a exibir `Inspector` de qualquer widget. Nenhum desses pontos menciona o AI Tile; outro widget compacto usa o mesmo caminho.
+
+## Testes
+
+- Unitários (`tests/unit/ai-tiles.test.ts`, 45): presets, ids, logos locais e seguras, padrões, sanitização, URLs perigosas, estado de integração, layout (logo sem distorção em qualquer tamanho), escape na exportação, operações do quadro (inserir, modo + desfazer, duplicar, agrupar, bloquear, redimensionar, setas), cópia com vínculo, JSON exportar/importar, migração e compatibilidade.
+- E2E (`e2e/ai-tiles.spec.ts`, Chromium/Firefox/WebKit; `e2e/mobile.spec.ts`, Pixel 7): jornada completa com as seis IAs (clique e arrastar da biblioteca), logos, arrastar, redimensionar com desfazer/refazer, agrupar, conectar, editar descrição, trocar modo, menu, recarregar, exportar SVG (seis logos embutidas, sem URL externa) e PNG (cores das marcas presentes nos pixels), exportar JSON e importar como novo quadro; link https e vínculo com estado honesto; Grok só visual.
+
 ## Visual e funcional
 
 - **Visual (padrão):** o tile representa a ferramenta; setas são relações visuais.

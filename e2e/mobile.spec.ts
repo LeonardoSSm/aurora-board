@@ -65,3 +65,25 @@ test('desenhar com o dedo, selecionar com toque e pinça para zoom', async ({ pa
   expect(s.elements.filter((e) => e.type === 'rectangle')).toHaveLength(1); // pinça não cria nem move elementos
   expect(s.elements[0].x).toBe(rect.x);
 });
+
+test('AI Tiles no celular: inserir pela biblioteca, logo visível, mover com o dedo, abrir configurações', async ({ page }) => {
+  await ready(page);
+  await page.getByRole('button', { name: 'Biblioteca de componentes' }).tap();
+  const section = page.getByTestId('library-section-aurora.ai-tile');
+  await expect(section).toBeVisible();
+  await section.locator('[data-library-item="aurora.ai-tile#claude"]').tap();
+  await expect(page.getByRole('complementary', { name: 'Biblioteca de componentes' })).toBeHidden();
+  const tile = page.locator('[data-testid="ai-tile"][data-provider="claude"]');
+  await expect(tile.getByTestId('ai-tile-logo')).toHaveAttribute('data-logo', 'claude-color');
+  const t0 = (await state(page)).elements.find((e) => e.widgetType === 'aurora.ai-tile')!;
+  const from = await toPage(page, t0.x + t0.width / 2, t0.y + t0.height / 2);
+  await touch(page, 'pointerdown', 1, from.x, from.y);
+  for (let i = 1; i <= 6; i++) await touch(page, 'pointermove', 1, from.x + i * 10, from.y + i * 12);
+  await touch(page, 'pointerup', 1, from.x + 60, from.y + 72);
+  const t1 = (await state(page)).elements.find((e) => e.id === t0.id)!;
+  expect(t1.x - t0.x).toBeGreaterThan(30);
+  // duplo toque abre as configurações (painel por cima)
+  const p = await toPage(page, t1.x + t1.width / 2, t1.y + t1.height / 2);
+  await page.mouse.dblclick(p.x, p.y);
+  await expect(page.getByTestId('ai-tile-inspector')).toBeVisible();
+});
