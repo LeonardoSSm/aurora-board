@@ -183,7 +183,7 @@ export function createLinkedAssistant(tileId: string) {
   const byId = new Map<string, AuroraElement>([...s.elements.map((e) => [e.id, e] as const), [ai.id, ai]]);
   addElements([ai, resolveLinear(arrow, byId)], false);
   patchTile(tileId, () => ({ linkedWidgetId: ai.id }));
-  toast(`Bloco de IA criado e vinculado. Ele usa a API ${api === 'openai' ? 'OpenAI' : api === 'anthropic' ? 'Anthropic' : 'Gemini'} configurada no servidor.`, 'success');
+  toast(`Bloco de IA criado e vinculado. Ele usa a API ${API_LABEL[api]} (chave no servidor local).`, 'success');
 }
 
 export function openLinkedAssistant(tileId: string) {
