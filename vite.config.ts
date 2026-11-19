@@ -3,8 +3,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { isLoopbackAddress } from './server/netSafety';
+import { csp, headersForPath } from './hosting/headers';
 
 const API_PORT = Number(process.env.AURORA_API_PORT ?? 8787);
+const CSP_MODE = process.env.AURORA_CSP_MODE === 'report-only' ? 'report-only' : 'enforce';
 
 /**
  * S1-SEC-013: o proxy /api do Vite só atende o próprio computador. Se o dev server for exposto na rede
@@ -21,15 +23,33 @@ function localOnlyApi(): Plugin {
     }
     next();
   };
+  // `vite preview` reproduz os cabeçalhos da hospedagem, por caminho (hosting/headers.ts).
+  // AURORA_CSP_MODE=report-only serve a CSP do app só como relatório (fase 1 da validação).
+  const hostingHeaders = (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+    const path = new URL(req.url ?? '/', 'http://x').pathname;
+    for (const [k, v] of Object.entries(headersForPath(path, CSP_MODE))) res.setHeader(k, v);
+    next();
+  };
   return {
     name: 'aurora-local-only-api',
     configureServer: (server) => { server.middlewares.use(guard); },
-    configurePreviewServer: (server) => { server.middlewares.use(guard); },
+    configurePreviewServer: (server) => { server.middlewares.use(guard); server.middlewares.use(hostingHeaders); },
+  };
+}
+
+/** Build: injeta a CSP completa como <meta> (vale mesmo em hospedagem sem cabeçalhos configurados). */
+function cspMeta(): Plugin {
+  return {
+    name: 'aurora-csp-meta',
+    // Na fase Report-Only da validação a <meta> (que sempre bloqueia) não é injetada.
+    apply: (_config, env) => env.command === 'build' && process.env.AURORA_CSP_MODE !== 'report-only',
+    transformIndexHtml: (html) => html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${csp({ meta: true })}" />`),
   };
 }
 
 export default defineConfig({
-  plugins: [localOnlyApi(), react(), tailwindcss()],
+  plugins: [localOnlyApi(), cspMeta(), react(), tailwindcss()],
+  build: { sourcemap: false },
   server: {
     port: 5173,
     strictPort: true,

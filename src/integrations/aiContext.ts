@@ -6,6 +6,7 @@
  * - Cada fonte pode ser desmarcada (data.authorized[id] = false) e então NÃO é enviada.
  * - Conexões "visual" e "execution" nunca enviam conteúdo.
  */
+import '../core/zodSetup';
 import { z } from 'zod';
 import type { AuroraElement, LinkKind } from '../core/schema';
 import { isLinear } from '../core/schema';

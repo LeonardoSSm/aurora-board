@@ -6,6 +6,7 @@
  * com sandbox (ver SandboxFrame e registerSandboxedPlugin), comunicando-se só por postMessage.
  */
 import type { ComponentType } from 'react';
+import '../core/zodSetup';
 import { z } from 'zod';
 import type { AuroraElement, LinearElement, WidgetElement } from '../core/schema';
 import type { DataflowNodeSpec, InputValue, PortDef } from '../core/dataflow';

@@ -8,13 +8,13 @@
  * - `VITE_AURORA_LOCAL_API=1`: build de produção que ainda conversa com o servidor local (uso pessoal).
  * - `VITE_AURORA_TEST_HOOKS=1`: build de produção com `window.__aurora` (somente benchmarks/testes locais).
  */
-const env = import.meta.env;
-
 /** O servidor local (`/api/ai/*`, `/api/link-preview`) faz parte desta distribuição? */
-export const LOCAL_API_ENABLED: boolean = env.DEV || env.VITE_AURORA_LOCAL_API === '1';
+// Acessos DIRETOS a import.meta.env: o Vite os troca por constantes e o minificador elimina o código morto
+// (o build público não contém nem a string das rotas /api nem window.__aurora).
+export const LOCAL_API_ENABLED: boolean = import.meta.env.DEV || import.meta.env.VITE_AURORA_LOCAL_API === '1';
 
 /** Expor `window.__aurora` (API interna completa) — nunca no build público padrão. */
-export const EXPOSE_TEST_HOOKS: boolean = env.DEV || env.VITE_AURORA_TEST_HOOKS === '1';
+export const EXPOSE_TEST_HOOKS: boolean = import.meta.env.DEV || import.meta.env.VITE_AURORA_TEST_HOOKS === '1';
 
 /** Mensagem única para recursos que dependem do servidor local quando ele não existe nesta versão. */
 export const STATIC_AI_MESSAGE = 'As integrações de IA não estão disponíveis nesta versão pública.';

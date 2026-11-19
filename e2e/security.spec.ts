@@ -216,17 +216,27 @@ test.describe('S1-SEC-003: HTML importado e isolamento do sandbox', () => {
     expect(page.url()).not.toContain('s1-top-nav');
   });
 
-  for (const target of ['data:text/html,<p>pagina externa</p>', 'http://localhost:5173/favicon.svg?s1nav']) {
-    test(`[reprodução] navegação do próprio frame é bloqueada e detectada (${target.slice(0, 5)})`, async ({ page }) => {
+  // Outra origem (127.0.0.1 ≠ localhost) e data: são bloqueadas pela CSP do app (frame-src 'self');
+  // a mesma origem é permitida pela CSP, mas o host detecta o 2º load e desmonta o widget.
+  for (const [target, blocked] of [['data:text/html,<p>pagina externa</p>', true], ['http://127.0.0.1:5173/favicon.svg?s1nav', true], ['/favicon.svg?s1same', false]] as const) {
+    test(`[reprodução] navegação do próprio frame é bloqueada/detectada (${target.slice(0, 12)})`, async ({ page }) => {
       const html = `<script>aurora.setState({ antes: 1 }); setTimeout(function(){ location.href = ${JSON.stringify(target)}; }, 50)</script>`;
       await page.evaluate((h) => (window as any).__aurora.actions.addWidget('aurora.sandbox-html', { x: 200, y: 200 }, { html: h }), html);
       await expect(page.getByTestId('sandbox-navigated')).toBeVisible({ timeout: 5000 });
-      // Nenhum frame do app chegou ao destino (frame-src 'none' da página bloqueia a navegação).
-      expect(page.frames().some((f) => f.url().includes('s1nav') || f.url().startsWith('data:'))).toBe(false);
+      if (blocked) expect(page.frames().some((f) => f.url().includes('s1nav') || f.url().startsWith('data:'))).toBe(false);
       await page.getByRole('button', { name: 'Recarregar widget' }).click();
       await expect(page.locator('iframe[sandbox]')).toHaveCount(1);
     });
   }
+
+  test('hospedeiro do sandbox se recusa a rodar fora de um iframe sandboxed', async ({ page }) => {
+    await page.goto('/sandbox.html');
+    await expect(page.locator('html')).toHaveAttribute('data-sandbox-refused', '1');
+    // Mesmo recebendo uma mensagem "de si mesmo", não injeta HTML (aberto como página teria a origem do app).
+    await page.evaluate((h) => window.postMessage({ type: 'aurora:load', html: h, state: null }, '*'), SENTINEL_SCRIPT);
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => document.body.innerHTML.trim())).toBe('');
+  });
 
   test('HTML importado: ativação consciente executa; a decisão persiste após recarregar', async ({ page }) => {
     const html = '<p id="x">inicial</p><script>document.getElementById("x").textContent="executou"; aurora.setState({ rodou: true })</script>';

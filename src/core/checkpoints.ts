@@ -3,6 +3,7 @@
  * Ficam nos metadados do quadro (`board.checkpoints`), nunca em `elements`: não entram em seleção,
  * Ctrl+A, Enquadrar tudo, fluxo de dados, fórmulas nem exportação de imagem.
  */
+import './zodSetup';
 import { z } from 'zod';
 import { MAX_ZOOM, MIN_ZOOM } from './camera';
 

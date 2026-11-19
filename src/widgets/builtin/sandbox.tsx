@@ -18,9 +18,15 @@ const MAX_STATE = 100_000;
 /** Limite de atualizações de estado por segundo vindas de um iframe (as excedentes viram uma só: a última). */
 export const MAX_UPDATES_PER_SECOND = 10;
 
-/** CSP do documento isolado: só scripts/estilos inline; sem rede, frames, formulários, base ou objetos. */
+/**
+ * CSP do documento isolado (public/sandbox.html, também enviada como cabeçalho pela hospedagem): só scripts e
+ * estilos inline; sem rede, frames, formulários, base ou objetos. Testada contra os dois arquivos.
+ */
 export const SANDBOX_CSP =
-  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'";
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'";
+
+/** Documento hospedeiro: um documento PRÓPRIO, que não herda a CSP do app (um srcdoc herdaria). */
+export const SANDBOX_DOCUMENT_URL = '/sandbox.html';
 
 /** Valida uma mensagem recebida do iframe. Retorna null se não for do protocolo. */
 export function parseSandboxMessage(data: unknown): { ok: true; state: unknown } | { ok: false; error: string } | null {
@@ -110,6 +116,8 @@ export function SandboxFrame({ html, state, onState, title }: { html: string; st
   onStateRef.current = onState;
   const stateRef = useRef(state);
   stateRef.current = state;
+  const htmlRef = useRef(html);
+  htmlRef.current = html;
   // useLayoutEffect: o listener existe antes de o iframe (inserido neste mesmo commit) conseguir postar a
   // primeira mensagem — com useEffect, o WebKit às vezes entregava o primeiro setState antes do registro.
   useLayoutEffect(() => {
@@ -126,8 +134,6 @@ export function SandboxFrame({ html, state, onState, title }: { html: string; st
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, []);
-  const bridge = `<script>window.aurora={setState:function(s){parent.postMessage({type:'aurora:setState',state:s},'*')},state:null};window.addEventListener('message',function(e){if(e.data&&e.data.type==='aurora:init'){window.aurora.state=e.data.state;window.dispatchEvent(new CustomEvent('aurora:init',{detail:e.data.state}))}});</script>`;
-  const doc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${SANDBOX_CSP}"><style>body{margin:0;font:13px system-ui;color:#e6ecf6;background:transparent}</style>${bridge}</head><body>${html}</body></html>`;
   if (navigated) {
     return (
       <div data-testid="sandbox-navigated" className="flex flex-col h-full gap-2 items-start justify-center p-3 rounded-md border border-warn/50 bg-warn/10 text-[11px] text-fg-2">
@@ -146,14 +152,15 @@ export function SandboxFrame({ html, state, onState, title }: { html: string; st
         sandbox="allow-scripts"
         referrerPolicy="no-referrer"
         allow=""
-        srcDoc={doc}
+        src={SANDBOX_DOCUMENT_URL}
         className="flex-1 w-full rounded-md border border-line/60 bg-[#0a111c]"
         onLoad={() => {
           loads.current++;
-          // O srcdoc dispara UM load. Um segundo load significa que o documento navegou (location, meta refresh,
-          // link): o novo documento não tem a CSP do srcdoc, então o widget é desmontado e nada mais é aceito dele.
+          // O documento hospedeiro dispara UM load. Um segundo load significa que o frame navegou (location, meta
+          // refresh, link): o novo documento está fora do nosso controle, então o widget é desmontado e nada mais
+          // é aceito dele. (A CSP do app, frame-src 'self', já impede navegar para outras origens.)
           if (loads.current > 1) { navigatedRef.current = true; setNavigated(true); return; }
-          ref.current?.contentWindow?.postMessage({ type: 'aurora:init', state: stateRef.current }, '*');
+          ref.current?.contentWindow?.postMessage({ type: 'aurora:load', html: htmlRef.current, state: stateRef.current }, '*');
         }}
       />
       {error && <div className="text-[11px] text-warn">{error}</div>}
