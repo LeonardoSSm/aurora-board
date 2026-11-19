@@ -36,6 +36,10 @@ Gravidade por modelo: **L** local · **E** frontend público estático · **B** 
 | S1-SEC-014 | Sem rate limit/concorrência no servidor | P3 | — | P1 | leitura de código |
 | S1-SEC-016 | Build público chama `/api` e instrui a rodar `npm run dev` | — | P2 | — | leitura de código |
 | S1-SEC-017 | Actions por tag, sem SAST/segredos/Dependabot | P2 | P2 | P2 | leitura do workflow |
+| S1-SEC-018 | Laços dependentes de dados: `schemaVersion` extremo (10^15 iterações) e truncamento O(n²) de títulos | P1 | P1 | P1 | ✅ fuzzing (achado durante a Etapa 6) |
+| S1-SEC-019 a 022 | Contornos no código do próprio ciclo | P1–P2 | P1–P2 | P1–P2 | segunda auditoria — ver [S1-REVALIDATION.md](S1-REVALIDATION.md) |
+
+> Status final de cada achado (corrigido, mitigado, refutado, não reproduzido): [S1-REVALIDATION.md › Matriz final](S1-REVALIDATION.md#matriz-final).
 
 (S1-SEC-015 foi reservado durante a auditoria para "link preview revela IP ao site-alvo" e descartado: é o
 comportamento esperado de uma pré-visualização feita pelo servidor do próprio usuário.)

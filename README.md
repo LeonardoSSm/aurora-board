@@ -45,6 +45,15 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | `npm run build` | Build de produção em `dist/` |
 | `npm run audit:prod` | Vulnerabilidades altas/críticas em dependências de produção |
 
+## Segurança e privacidade
+
+- **Local-first:** os quadros ficam no IndexedDB **deste navegador**. Não há conta nem sincronização com servidores. Limpar os dados do site apaga os quadros — **exporte backups** (Exportar → Backup do workspace) regularmente.
+- **Importar arquivos de terceiros:** backups passam por validação de formato e por um orçamento de complexidade; o tipo de anexos é decidido pelo conteúdo real; HTML/JavaScript personalizado entra **desativado** até você ativá-lo. Mesmo assim, importe apenas arquivos de origem confiável.
+- **Servidor local de IA:** só para uso no próprio computador (`127.0.0.1`, sem autenticação, usa as **suas** chaves). Não o exponha (túnel, proxy reverso, `vite --host`).
+- **Beta público:** apenas o frontend estático, em HTTPS, com CSP e cabeçalhos de segurança; sem servidor de IA (as integrações de IA não estão disponíveis nessa versão) e sem ferramentas de depuração.
+- **Limites:** nenhuma medida torna o sistema totalmente seguro; riscos conhecidos estão em [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) e [`docs/security/S1-FINAL-SECURITY-REPORT.md`](docs/security/S1-FINAL-SECURITY-REPORT.md).
+- **Reportar vulnerabilidades:** de forma privada (GitHub › Security › *Report a vulnerability*), sem dados pessoais nem chaves reais. Detalhes em [`docs/SECURITY.md`](docs/SECURITY.md).
+
 ## Documentação
 
 | Documento | Conteúdo |

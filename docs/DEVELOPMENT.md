@@ -13,6 +13,11 @@
 | `npm run test:e2e:mobile` | Só os cenários de celular |
 | `npm run test:e2e:report` | Abre o relatório HTML da última execução |
 | `npm run audit:prod` | Vulnerabilidades altas/críticas em dependências de produção |
+| `npm run audit:full` | Auditoria completa (todas as dependências), falha em altas/críticas |
+| `npm run test:security` | Testes de segurança do ciclo S1 (unitários + `e2e/security.spec.ts` no Chromium) |
+| `npm run test:static` | Build **público** + `vite preview` com os cabeçalhos da hospedagem + jornada `e2e/static` (CSP aplicada). `AURORA_CSP_MODE=report-only` para a fase de relatório; `AURORA_STATIC_BASE_URL=https://…` para rodar contra uma homologação |
+| `npm run hosting:generate` | Regenera `public/_headers` e `vercel.json` a partir de `hosting/headers.ts` (a CI falha se estiverem desatualizados) |
+| `npm run perf` | Benchmark contra build de produção com `VITE_AURORA_TEST_HOOKS=1` |
 
 Primeira vez: `npx playwright install chromium` (ou `firefox webkit` para os demais).
 
@@ -72,3 +77,11 @@ O job de build publica `dist/` (7 dias).
 - Branch de trabalho por ciclo (`improvement/...`); `main` só recebe merge após revisão.
 - Commits descritivos por etapa; sem `.env`, `node_modules`, `dist`, `test-results`.
 - Código de interface em português do Brasil; identificadores em inglês.
+
+## Builds e ganchos de teste (ciclo S1)
+
+- `npm run build` gera o **build público**: sem `window.__aurora`, sem chamadas a `/api` (IA e prévia de links aparecem como indisponíveis). É o que vai para a hospedagem.
+- Builds locais podem ligar, **no build** (nunca por URL ou storage): `VITE_AURORA_LOCAL_API=1` (usar o servidor local) e `VITE_AURORA_TEST_HOOKS=1` (expor `window.__aurora`, usado pelo benchmark).
+- Os E2E comuns rodam contra `npm run dev`, onde `window.__aurora` existe. Os E2E de `e2e/static/` usam só a interface (o build público não tem os ganchos).
+- Widgets HTML rodam em `public/sandbox.html` (documento próprio). Se mudar sua CSP, atualize `SANDBOX_CSP` (`sandbox.tsx`) e `SANDBOX_CSP_BASE` (`hosting/headers.ts`) — `tests/unit/hosting.test.ts` garante que os três batem.
+- Testes de segurança usam só dados fictícios e nenhum servidor externo; segredos de exemplo nos testes são marcados como fictícios e liberados no `.gitleaks.toml` apenas para `tests/unit/*.test.ts`.
