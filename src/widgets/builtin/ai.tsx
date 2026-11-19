@@ -7,8 +7,8 @@ import { uid } from '../../core/elements';
 import type { AuroraElement } from '../../core/schema';
 import { useEditor } from '../../store/editor';
 import { fetchAIStatus, sendChat, type AIStatus, type ProviderId } from '../../integrations/aiClient';
-import { buildContextText, buildSystemPrompt, contextSources, stripProposal, type QuickMode } from '../../integrations/aiContext';
-import { interpretFinancialRequest, localMoneyAction, parseAIProposal, proposalKey, type FinancialRequest, type ParsedProposal } from '../../integrations/aiActions';
+import { buildContextText, buildSystemPrompt, contextSources, type QuickMode } from '../../integrations/aiContext';
+import { interpretFinancialRequest, localMoneyAction, parseAIProposal, proposalDisplayText, proposalKey, type FinancialRequest, type ParsedProposal } from '../../integrations/aiActions';
 import { renderMarkdown } from './notes';
 import { ProposalCard } from './aiProposal';
 
@@ -34,9 +34,9 @@ function MessageView({ m, request, props, validIds, elements }: { m: AIMessage; 
   const local = useMemo<ParsedProposal | null>(() => {
     if (m.role !== 'assistant' || proposal?.actions.some((a) => a.type === 'money')) return null;
     const a = localMoneyAction(request);
-    return a ? { version: 2, actions: [a], rejected: [], notices: [] } : null;
+    return a ? { version: 2, actions: [a], rejected: [], notices: [], raw: '' } : null;
   }, [m.role, proposal, request]);
-  const html = useMemo(() => (m.role === 'assistant' ? renderMarkdown(proposal ? stripProposal(m.content) : m.content) : ''), [m, proposal]);
+  const html = useMemo(() => (m.role === 'assistant' ? renderMarkdown(proposalDisplayText(m.content, proposal)) : ''), [m, proposal]);
   return (
     <div className={`rounded-lg px-2.5 py-1.5 text-[12px] ${m.role === 'user' ? 'bg-panel-3 self-end max-w-[90%] whitespace-pre-wrap' : 'bg-[#0f1826] border border-line/60'}`}>
       {m.role === 'assistant' ? <div className="md" dangerouslySetInnerHTML={{ __html: html }} /> : m.content}

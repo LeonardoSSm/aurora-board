@@ -133,6 +133,37 @@ test('[reprodução] IA responde com Nota "Receita": a interpretação local ofe
   expect(await widgets(page, 'aurora.notes')).toHaveLength(0);
 });
 
+test('[reprodução com modelo real] "Confirma a criação?" + JSON sem cerca: um só bloco, aviso de duplicidade', async ({ page }) => {
+  // Respostas reais do gpt-4.1-mini antes da correção do prompt (19/11/2026).
+  await mockAI(page, [
+    'Posso criar o bloco de receita de R$ 2.000,00 para você.\n\nConfirma a criação?',
+    '{"version":2,"actions":[{"type":"create_value","role":"income","currency":"BRL","amount":"2000.00"}]}',
+  ]);
+  await board(page);
+  await ask(page, PEDIDO);
+  await expect(page.locator('[data-testid="ai-proposal"][data-origin="local"]')).toHaveCount(1);
+  await ask(page, 'Sim');
+  const fromAI = page.locator('[data-testid="ai-proposal"][data-origin="ai"]');
+  await expect(fromAI).toHaveCount(1);
+  await expect(fromAI.getByTestId('ai-money')).toContainText('200000 centavos');
+  // O JSON bruto não aparece como texto da conversa.
+  await expect(page.getByText('"actions"')).toHaveCount(0);
+
+  await fromAI.getByTestId('ai-proposal-apply').click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Aplicar no quadro' }).click();
+  await expect.poll(async () => (await widgets(page, 'aurora.value')).length).toBe(1);
+
+  // A proposta aplicada não recalcula efeito/erro; a outra avisa que já existe bloco igual.
+  await expect(fromAI.getByTestId('ai-applied-dest')).toContainText('Novo bloco de valor');
+  await expect(fromAI.getByTestId('ai-error')).toHaveCount(0);
+  const local = page.locator('[data-testid="ai-proposal"][data-origin="local"]');
+  await expect(local.getByTestId('ai-warning')).toContainText('Já existe bloco de valor igual');
+  await local.getByTestId('ai-proposal-apply').click();
+  await expect(page.getByRole('dialog')).toContainText('Já existe bloco de valor igual');
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancelar' }).click();
+  expect(await widgets(page, 'aurora.value')).toHaveLength(1);
+});
+
 test('pedido ambíguo: o usuário escolhe entre bloco independente e lançamento no widget de Finanças', async ({ page }) => {
   await mockAI(page, [fence({ version: 2, actions: [{ type: 'create_value', role: 'income', currency: 'BRL', amount: '2000.00', ambiguous: true }] })]);
   const { financeIds } = await board(page, ['Casa', 'Empresa']);

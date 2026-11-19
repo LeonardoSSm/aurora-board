@@ -63,7 +63,8 @@ export function ProposalCard({ proposal, origin, applyKey, request, props, eleme
   const resolved = proposal.actions.map((a, i) => {
     if (a.type !== 'money') return null;
     const dest = destinationFromKey(choice[i] ?? '');
-    return dest ? resolveMoney(a, dest, targets, aiEntryId(applyKey, i)) : null;
+    // Já aplicada: o bloco igual no quadro é o que ela mesma criou — não é aviso de duplicidade.
+    return dest ? resolveMoney(a, dest, targets, aiEntryId(applyKey, i), appliedAt ? undefined : elements) : null;
   });
   const blocked = proposal.actions.some((a, i) => include[i] && a.type === 'money' && (!resolved[i] || resolved[i]!.errors.length > 0));
   const nothing = !include.some(Boolean);
@@ -90,7 +91,7 @@ export function ProposalCard({ proposal, origin, applyKey, request, props, eleme
       if (!pre.ok) { api.toast(pre.errors[0], 'error'); return; }
       const ok = await api.confirm(
         pre.plan.financial ? 'Confirmar alterações financeiras' : 'Criar elementos sugeridos pela IA',
-        [...pre.plan.lines.map((l) => `• ${l}`), '', 'Nada foi alterado ainda. Depois de aplicar, Ctrl+Z desfaz tudo de uma vez.'].join('\n'),
+        [...pre.plan.lines.map((l) => `• ${l}`), ...(pre.plan.warnings.length ? ['', ...pre.plan.warnings.map((w) => `⚠ ${w}`)] : []), '', 'Nada foi alterado ainda. Depois de aplicar, Ctrl+Z desfaz tudo de uma vez.'].join('\n'),
         'Aplicar no quadro',
       );
       if (!ok) return;
@@ -217,6 +218,15 @@ function MoneyDetails(p: {
   disabled: boolean;
 }) {
   const options = destinationOptions(p.a, p.targets);
+  // Já aplicada: recalcular o efeito contra o quadro atual mostraria o lançamento somado duas vezes
+  // e “já foi aplicado” como erro. Mostra só o destino usado.
+  if (p.disabled) {
+    return (
+      <div className="mt-1 pl-5 text-[10px] text-soft" data-testid="ai-applied-dest">
+        Destino: {options.find((o) => o.key === p.choice)?.label ?? 'removido do quadro'}
+      </div>
+    );
+  }
   const warnings = [...crossCheck(p.a, p.request), ...[targetWarning(p.a, p.targets)].filter((w): w is string => !!w), ...(p.resolved?.warnings ?? [])];
   return (
     <div className="mt-1 flex flex-col gap-0.5 pl-5">

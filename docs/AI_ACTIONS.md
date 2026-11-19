@@ -32,6 +32,18 @@ A resposta da IA termina com **um** bloco ```` ```json ```` (se houver vários, 
 
 Limites: 80 ações por proposta. Campos desconhecidos são descartados.
 
+### Tolerância de formato (observada com modelo real)
+
+Teste manual com OpenAI `gpt-4.1-mini` (19/11/2026) mostrou dois desvios: o modelo pediu “Confirma a criação?” em
+texto, sem JSON, e na resposta seguinte mandou o JSON **sem a cerca** ```` ```json ````. Por isso:
+
+- o prompt diz explicitamente para não pedir confirmação em texto (a interface já confirma) e sempre usar a cerca —
+  após a mudança, o mesmo modelo respondeu no formato certo na primeira tentativa;
+- a proposta é procurada, nesta ordem: último bloco ```` ```json ````/```` ```JSON ```` (ou ```` ``` ```` sem linguagem
+  começando com `{`); a resposta inteira, se for um objeto JSON; um objeto no fim do texto que comece por uma chave
+  do contrato (`{"version"`, `{"actions"`, `{"notes"`…). Código em outra linguagem e texto comum não são lidos como
+  proposta. Tudo continua passando pela mesma validação; o trecho JSON é ocultado do texto exibido.
+
 ### Dinheiro
 
 - `amount` é **texto decimal** com ponto, até 2 casas, sem separador de milhar: R$ 2.000,00 → `"2000.00"`.
@@ -102,6 +114,9 @@ um único valor com moeda, intenção bloco/lançamento). Serve para:
 - A marca `applied[chave da mensagem]` impede aplicar a mesma proposta de novo (persistida nos dados do bloco).
 - Lançamentos recebem id determinístico `ai-<mensagem>-<índice>`: reaplicar no mesmo bloco não duplica, e a prévia
   avisa quando já existe lançamento igual (mesmo tipo, valor, data e descrição).
+- Duplicidade **entre mensagens** (ex.: interpretação local numa resposta e a mesma ação vinda da IA na seguinte):
+  a prévia e o diálogo de confirmação avisam quando já existe bloco de valor com o mesmo papel, valor e moeda.
+- Proposta já aplicada mostra só o destino usado (não recalcula o efeito contra o quadro que ela mesma alterou).
 - Clique duplo no botão é ignorado enquanto a confirmação está em andamento.
 
 ## Compatibilidade

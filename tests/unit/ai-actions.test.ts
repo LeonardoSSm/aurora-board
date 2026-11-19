@@ -13,6 +13,7 @@ import {
   localizedAmountToCents,
   localMoneyAction,
   parseAIProposal,
+  proposalDisplayText,
   proposalKey,
   resolveMoney,
   suggestedDestination,
@@ -142,6 +143,42 @@ describe(`pedido exato: "${PEDIDO}"`, () => {
     expect(s).toContain(PEDIDO);
     expect(s).toContain('"amount":"2000.00"');
     expect(buildSystemPrompt('', '', 'chat')).not.toContain('create_value');
+  });
+});
+
+describe('desvios de formato observados com modelo real (gpt-4.1-mini)', () => {
+  const JSON_RECEITA = '{"version":2,"actions":[{"type":"create_value","role":"income","currency":"BRL","amount":"2000.00"}]}';
+  it.each([
+    ['JSON puro, sem cerca (resposta real ao "Sim")', JSON_RECEITA],
+    ['JSON puro com espaços', `\n  ${JSON_RECEITA}  \n`],
+    ['cerca em maiúsculas', '```JSON\n' + JSON_RECEITA + '\n```'],
+    ['cerca sem linguagem', 'Segue:\n```\n' + JSON_RECEITA + '\n```'],
+    ['objeto no fim do texto', 'Pronto, criei a proposta: ' + JSON_RECEITA],
+  ])('%s', (_, text) => {
+    const p = parseAIProposal(text, new Set())!;
+    expect(p).not.toBeNull();
+    expect(moneyOf(p.actions)[0]).toMatchObject({ role: 'income', amountCents: 200000, currency: 'BRL' });
+    expect(proposalDisplayText(text, p)).not.toContain('"actions"');
+  });
+  it('não confunde código ou texto comum com proposta', () => {
+    expect(parseAIProposal('```ts\nconst x = {"actions": []}\n```', new Set())).toBeNull();
+    expect(parseAIProposal('Use o formato {chave: valor} quando quiser.', new Set())).toBeNull();
+    expect(parseAIProposal('{"nome": "não é proposta"}', new Set())).toBeNull();
+    expect(proposalDisplayText('só texto', null)).toBe('só texto');
+  });
+  it('a resposta real "Posso criar… Confirma a criação?" não tem proposta; o prompt proíbe pedir confirmação em texto', () => {
+    expect(parseAIProposal('Posso criar o bloco de receita de R$ 2.000,00 para você.\n\nConfirma a criação?', new Set())).toBeNull();
+    expect(buildSystemPrompt('', '', 'structure')).toContain('Não peça confirmação em texto');
+  });
+  it('bloco de valor igual já no quadro gera aviso (duplicidade entre mensagens)', () => {
+    const a = ai();
+    const existing = createWidget(WIDGET.value, '1.0.0', 'Receita', 0, 0, 176, 76, { valueType: 'money', financialRole: 'income', currency: 'BRL', amountCents: 200000 });
+    const r = resolveMoney(money(), { kind: 'value' }, [], 'x', [a, existing]);
+    expect(r.warnings.join(' ')).toContain('Já existe bloco de valor igual');
+    expect(resolveMoney(money({ amountCents: 199999 }), { kind: 'value' }, [], 'x', [a, existing]).warnings).toEqual([]);
+    expect(resolveMoney(money({ role: 'expense' }), { kind: 'value' }, [], 'x', [a, existing]).warnings).toEqual([]);
+    const plan = buildApplyPlan({ actions: [money()], include: [true], destinations: [{ kind: 'value' }], elements: [a, existing], ai: a, applyKey: 'm', validIds: new Set() });
+    expect(plan.ok && plan.plan.warnings[0]).toContain('Já existe bloco de valor igual');
   });
 });
 
