@@ -193,6 +193,8 @@ const SHORTCUTS: [string, string][] = [
   ['Q', 'Manter ferramenta ativa'],
   ['Segurar botão direito (vazio)', 'Aurora Wheel: soltar na fatia cria ali (clique curto = menu de sempre)'],
   ['W', 'Abrir a Aurora Wheel pelo teclado (setas, Enter, 1–8, Esc)'],
+  ['Ctrl + K (Cmd + K)', 'Command Center: buscar em todos os quadros, ir até o item, ações'],
+  ['Ctrl + Shift + Espaço', 'Captura rápida de nota ou tarefa (quadro atual ou Inbox)'],
   ['?', 'Esta ajuda'],
 ];
 

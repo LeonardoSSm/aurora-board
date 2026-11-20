@@ -120,6 +120,11 @@ button:disabled {
   .radial-slice.is-active { fill: Highlight; }
 }
 
+/* Issue #14: destaque do resultado da busca (some sozinho em 1,6 s). */
+.search-flash { animation: search-flash 1600ms ease-out forwards; }
+@keyframes search-flash { 0% { opacity: 0; } 15% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .search-flash { animation: none; } }
+
 /* Markdown dentro do bloco de notas */
 .md {
   line-height: 1.55;

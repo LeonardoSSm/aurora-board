@@ -18,7 +18,8 @@ import { openPairing } from './PairingDialog';
 import { LOCAL_API_ENABLED } from '../config/runtime';
 import { openFinanceHub } from './finance/uiState';
 import { useEditor, setState } from '../store/editor';
-import { MapPin } from 'lucide-react';
+import { Inbox, MapPin, Search } from 'lucide-react';
+import { openCapture, openCommandCenter } from './commandOpen';
 import { canRedo, canUndo, createBoard, createWorkspace, redo, switchWorkspace, undo, updateBoardMeta } from '../store/actions';
 import { promptDialog } from '../store/ui';
 import { exportCurrentBoardJSON, exportImage, exportWorkspaceJSON, importLegacyFromBrowser, pickImportFile } from './fileActions';
@@ -116,6 +117,8 @@ export function TopBar() {
       >
         <LayoutGrid size={15} />
       </button>
+      <IconButton label="Buscar (Ctrl+K)" onClick={openCommandCenter}><Search size={16} /></IconButton>
+      <IconButton label="Captura rápida (Ctrl+Shift+Espaço)" onClick={openCapture}><Inbox size={16} /></IconButton>
       <IconButton label="Locais (checkpoints) — G" active={locationsOpen} onClick={() => setState({ locationsOpen: !locationsOpen })}><MapPin size={16} /></IconButton>
       <div className="min-w-0 flex items-center gap-1">
         {editingName ? (

@@ -103,6 +103,11 @@ export interface EditorState {
    * caber; o item nasce em `world`, o ponto original). `hover` = fatia ativa (ponteiro ou teclado).
    */
   radial: { center: { x: number; y: number }; origin: { x: number; y: number }; world: { x: number; y: number }; sub: 'shape' | 'connector' | 'more' | null; hover: number | null; source: 'pointer' | 'keyboard'; openedAt: number } | null;
+  /** Issue #14 — Command Center (Ctrl+K) e Captura rápida (Ctrl+Shift+Espaço) abertos. */
+  commandOpen: boolean;
+  captureOpen: boolean;
+  /** Issue #14 — destaque breve do elemento encontrado pela busca. */
+  elementFlash: { id: string; at: number } | null;
   /** Issue #15 — fatias favoritas da roda (configuração LOCAL; nunca no quadro ou backup). */
   radialFavorites: import('../core/radial').RadialItemId[];
   /** Pedido para o painel de propriedades mostrar/focar as configurações de um widget. */
