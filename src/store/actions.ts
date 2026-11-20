@@ -376,6 +376,25 @@ export async function revokeHtmlAI(elementId: string) {
   await getAdapter().setSetting('htmlAiGrants', next);
 }
 
+/**
+ * Issue #24 (D2-C): autorizações locais de IA dos blocos “Dados importados” — chave própria `datasetAiGrants`
+ * (configurações locais, fora de quadros e backups). Não reaproveita as autorizações do HTML nem as bancárias.
+ */
+export function sanitizeDatasetAiGrants(raw: unknown): string[] {
+  return sanitizeHtmlAiGrants(raw);
+}
+export async function grantDatasetAI(key: string) {
+  const next = sanitizeDatasetAiGrants([...getState().datasetAiGrants.filter((k) => k.split(':')[0] !== key.split(':')[0]), key]);
+  setState({ datasetAiGrants: next });
+  await getAdapter().setSetting('datasetAiGrants', next);
+}
+export async function revokeDatasetAI(elementId: string) {
+  const next = getState().datasetAiGrants.filter((k) => k.split(':')[0] !== elementId);
+  if (next.length === getState().datasetAiGrants.length) return;
+  setState({ datasetAiGrants: next });
+  await getAdapter().setSetting('datasetAiGrants', next);
+}
+
 export function resetPanelWidth(side: PanelSide) {
   return setPanelWidth(side, PANEL_DEFAULTS[side]);
 }

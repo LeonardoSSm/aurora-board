@@ -119,7 +119,7 @@ Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuraç
 | Assistente IA | 🟡 | OpenAI, Claude e Gemini via servidor local; só envia contexto conectado e autorizado; respostas estruturadas viram blocos/tarefas/conexões **somente após confirmação** |
 | Gráfico | ✅ | Barras/rosca a partir de blocos financeiros conectados |
 | HTML isolado | ✅ experimental | Base de plugins de terceiros (iframe sandbox + CSP); ponte de dados com entradas/saídas tipadas e IA só com saídas autorizadas (docs/HTML_DATA_BRIDGE.md) |
-| Dados importados | ✅ | CSV/JSON com prévia e validação, guardados no dispositivo, exportação CSV/JSON segura, saídas paginadas para Fórmula/Gráfico/HTML; nunca enviados à IA (docs/DATA_HUB.md) |
+| Dados importados | ✅ | CSV/JSON com prévia e validação, guardados no dispositivo, exportação CSV/JSON segura, saídas paginadas e agrupamento nativo para Fórmula/Gráfico/HTML, dashboard HTML conectado em um clique; IA só com consentimento granular e autorização local (docs/DATA_HUB.md) |
 | AI Tiles | ✅ | ChatGPT, Codex, Claude, Claude Code, Gemini e Grok com logos locais; modos compacto, normal e detalhado; arrastar da biblioteca, conectar, agrupar, exportar PNG/SVG com a logo. Não exige API; vínculo opcional com um bloco Assistente IA. Ver [docs/AI_TILES.md](docs/AI_TILES.md) |
 | Valor | ✅ | Dinheiro (receita/despesa/neutro, em centavos), número ou porcentagem; digita-se no próprio bloco; “Converter em valor” transforma um texto com número |
 | Mês financeiro | ✅ | Soma os valores conectados: receitas, despesas, saldo, comprometimento, categorias; sem dupla contagem; avisa moeda/competência diferentes |
