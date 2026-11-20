@@ -13,7 +13,7 @@ import {
   uid,
 } from '../core/elements';
 import { safeExternalUrl } from '../core/aiTiles';
-import { MAX_ZOOM, MIN_ZOOM, nextZoomStep, sanitizeZoomPrefs, zoomAround } from '../core/camera';
+import { MAX_ZOOM, MIN_ZOOM, nextZoomStep, sanitizeNavigationPrefs, sanitizeZoomPrefs, zoomAround } from '../core/camera';
 import { imageAnimationOf, sanitizeAnimationPrefs, type AnimationPrefs, type ImageAnimation } from '../core/animation';
 import { PANEL_DEFAULTS, sanitizePanelWidths, type PanelSide } from '../core/panels';
 import { cameraTarget, cancelCameraAnimation, fitCameraToBounds, panCamera, zoomToLevel } from './cameraMotion';
@@ -324,6 +324,13 @@ export async function setZoomPrefs(p: Partial<import('../core/camera').ZoomPrefe
   const next = sanitizeZoomPrefs({ ...getState().zoomPrefs, ...p });
   setState({ zoomPrefs: next });
   await getAdapter().setSetting('zoomPreferences', next);
+}
+
+/** Issue #12: animação/velocidade da câmera ao navegar — preferência geral, local (não vai para quadros nem backups). */
+export async function setNavigationPrefs(p: Partial<import('../core/camera').NavigationPrefs>) {
+  const next = sanitizeNavigationPrefs({ ...getState().navigationPrefs, ...p });
+  setState({ navigationPrefs: next });
+  await getAdapter().setSetting('navigationPreferences', next);
 }
 
 /** Ciclo 6: preferência geral de animação de GIFs (vale para todos os quadros). */

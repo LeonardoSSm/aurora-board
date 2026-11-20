@@ -16,10 +16,30 @@ mundo = (tela − (x, y)) ÷ zoom
 | Movimento | Usado por | Como funciona |
 |---|---|---|
 | **Zoom contínuo** | roda do mouse, Ctrl + clique de roda | O alvo de zoom acumula os eventos; a câmera se aproxima dele por uma curva exponencial **dependente do tempo** (`approachZoom`, τ = 70 ms), não da taxa de quadros. A âncora (ponto do mundo sob o cursor) fica parada **em todos os quadros**: `x = âncora − mundo·zoom`. |
-| **Viagem** | botões +/−, Ctrl+= / Ctrl+− / Ctrl+0, Enquadrar tudo, Zoom na seleção, Abrir assistente, checkpoints | Interpola o **centro** do mundo e o zoom em escala logarítmica, com `easeInOutCubic` (sem ultrapassar o destino). Duração de 220 a 650 ms, crescendo com o logaritmo da distância; em distâncias longas (mais de 2 telas), afasta um pouco no meio do caminho (`arc`, até 45%). Em t = 1 a câmera é **exatamente** o destino. |
+| **Viagem** | Enquadrar tudo, Zoom na seleção, Abrir assistente, checkpoints, focar elemento | **Trajeto de voo** (`flightPath`, van Wijk & Nuij 2003): o centro anda em linha reta até o destino enquanto a câmera se afasta e volta, de modo que a velocidade na tela fica constante; `easeInOutCubic` por cima dá aceleração e desaceleração. Duração conforme a velocidade escolhida (tabela abaixo). Em t = 1 a câmera é **exatamente** o destino. |
+| **Zoom por botão** | botões +/−, Ctrl+= / Ctrl+− / Ctrl+0 | Interpolação direta (centro linear, zoom logarítmico) de 180 ms. |
 | **Imediato** | pinça do touchpad e de toque, pan (arrastar, Espaço, botão do meio, touchpad), `zoomAt` | Escrito direto; cancela qualquer animação. |
 
 Um único laço de `requestAnimationFrame` por vez. Pedidos novos **substituem** o destino (zoom: acumulam no alvo atual; viagem: partem da câmera atual). Não há fila de animações atrasadas: parar a roda para o zoom em ~200 ms, e inverter o sentido muda o alvo na hora, sem salto.
+
+## Viagem
+
+`travelPlan(de, para, viewport, velocidade)` devolve o trajeto e a duração = mínimo + ganho × comprimento do trajeto, limitada ao máximo. `FLIGHT_RHO = 0,7` (o d3 usa √2): afastamento discreto em viagens curtas, maior só nas longas.
+
+| Distância (larguras de tela) | Afastamento máximo | Rápida | **Suave (padrão)** | Cinematográfica |
+|---|---|---|---|---|
+| 0,25 | 0,2% | 196 ms | 310 ms | 472 ms |
+| 1 | 3% | 242 ms | 398 ms | 628 ms |
+| 3 | zoom × 0,81 | 355 ms | 611 ms | 1004 ms |
+| 12 | zoom × 0,32 | 643 ms | 1154 ms | 1962 ms |
+| 50+ | até o zoom mínimo (0,1) | 700 ms | 1200 ms | 2000 ms |
+| só zoom 2× | — | 269 ms | 448 ms | 717 ms |
+
+Antes (até a issue #12): 220–650 ms para qualquer distância, com afastamento de no máximo 45%. Limites por perfil (mínimo/máximo): Rápida 180/700 ms, Suave 280/1200 ms, Cinematográfica 420/2000 ms. A preferência é lida a cada viagem.
+
+**Ativação** (`motionEnabled`): sem `requestAnimationFrame` → imediato. Preferência `navigationPrefs.motion`: “Nunca” → imediato; “Sempre” → anima; “Sistema” → anima salvo `prefers-reduced-motion: reduce`. Vale para todo o motor (viagens e zoom suave da roda).
+
+**Medido no E2E** (`e2e/smooth-navigation.spec.ts`, 1440×900, ~12 telas): Chromium ~70 quadros em ~1,15 s, nenhum quadro com mais de 30% do trajeto, aproximação monotônica e câmera final exata. WebKit no Windows desenha menos quadros (ver limitações em SPATIAL_NAVIGATION.md), com o mesmo destino exato.
 
 ## Cancelamento
 
@@ -31,7 +51,7 @@ Um único laço de `requestAnimationFrame` por vez. Pedidos novos **substituem**
 
 ## Movimento reduzido
 
-Com `prefers-reduced-motion: reduce` (ou fora de um navegador), todo movimento é imediato: mesmo destino, sem animação. Os testes E2E antigos rodam assim por padrão (`reducedMotion: 'reduce'` no `playwright.config.ts`); os de câmera ativam o movimento com `test.use({ reducedMotion: 'no-preference' })`.
+Com `prefers-reduced-motion: reduce` e a preferência no padrão “Sistema” (ou fora de um navegador), todo movimento é imediato: mesmo destino, sem animação. “Sempre” anima mesmo assim; “Nunca” nunca anima. Os testes E2E antigos rodam assim por padrão (`reducedMotion: 'reduce'` no `playwright.config.ts`); os de câmera ativam o movimento com `test.use({ reducedMotion: 'no-preference' })`.
 
 ## Roda, touchpad e sensibilidade
 
@@ -53,4 +73,4 @@ Com `prefers-reduced-motion: reduce` (ou fora de um navegador), todo movimento �
 
 ## API
 
-`zoomTowardAnchor(fator, âncora)`, `panCamera(dx, dy)`, `animateCameraTo(câmera, { onDone })`, `panToWorldPoint(ponto, { zoom })`, `fitCameraToBounds(caixa)`, `zoomToLevel(zoom)`, `cameraTarget()`, `cancelCameraAnimation()`, `isCameraAnimating()`. As ações antigas (`zoomStep`, `resetZoom`, `zoomToFit`, `zoomToSelection`, `focusElement`, `panBy`) delegam a elas; `zoomAt` continua imediato.
+`flightPath(de, para, vp)`, `travelPlan(de, para, vp, velocidade)`, `sanitizeNavigationPrefs`, `zoomTowardAnchor(fator, âncora)`, `panCamera(dx, dy)`, `animateCameraTo(câmera, { onDone, duration })`, `panToWorldPoint(ponto, { zoom })`, `fitCameraToBounds(caixa)`, `zoomToLevel(zoom)`, `cameraTarget()`, `cancelCameraAnimation()`, `isCameraAnimating()`. As ações antigas (`zoomStep`, `resetZoom`, `zoomToFit`, `zoomToSelection`, `focusElement`, `panBy`) delegam a elas; `zoomAt` continua imediato.

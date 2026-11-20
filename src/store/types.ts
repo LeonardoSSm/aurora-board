@@ -112,6 +112,8 @@ export interface EditorState {
   checkpointFlash: { id: string; at: number } | null;
   /** Preferência GERAL do usuário (não do quadro): sensibilidade do zoom. */
   zoomPrefs: import('../core/camera').ZoomPreferences;
+  /** Preferência GERAL (issue #12): animação e velocidade da câmera ao navegar (configurações locais, fora dos quadros). */
+  navigationPrefs: import('../core/camera').NavigationPrefs;
   /** Preferência GERAL: animações de GIF (sistema/sempre/nunca). */
   animationPrefs: import('../core/animation').AnimationPrefs;
   /** Preferência GERAL (issue #10): larguras das laterais (configurações locais, fora dos quadros). */

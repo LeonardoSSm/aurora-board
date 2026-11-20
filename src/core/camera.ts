@@ -75,13 +75,92 @@ export function travelScreens(from: Camera, to: Camera, vp: Viewport): number {
   return Math.hypot(c1.x - c0.x, c1.y - c0.y) / Math.max(diag, 1e-6);
 }
 
-/** Duração e arco da viagem: cresce com o logaritmo da distância e fica entre 220 e 650 ms. */
-export function travelPlan(from: Camera, to: Camera, vp: Viewport): { duration: number; arc: number } {
-  const screens = travelScreens(from, to, vp);
-  const zoomChange = Math.abs(Math.log2(to.zoom / from.zoom));
-  const duration = Math.round(Math.min(650, 220 + 110 * Math.log2(1 + screens) + 60 * zoomChange));
-  const arc = screens > 2 ? Math.min(0.45, 0.12 * Math.log2(screens)) : 0;
-  return { duration, arc };
+/* ------------------------------------------------------------------ */
+/* Viagem (issue #12)                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Trajeto de “voo” entre duas câmeras (van Wijk & Nuij, “Smooth and efficient zooming and panning”, 2003):
+ * o centro anda em linha reta até o destino enquanto a largura visível `w` (= largura da tela ÷ zoom) cresce e
+ * volta a diminuir, de modo que a velocidade NA TELA fica constante ao longo do parâmetro `s`. Em viagens
+ * curtas o afastamento é quase imperceptível; em viagens longas a câmera se afasta o suficiente para que o
+ * conteúdo passe pela tela em vez de “saltar”. `RHO` controla o compromisso afastar × deslocar (o d3 usa √2;
+ * aqui 0,7 deixa o afastamento discreto: ~3% em 1 tela, ~20% em 3 telas, ~3× em 12 telas).
+ *
+ * `at(u)` com u em [0, 1] devolve a câmera; em u = 1 devolve EXATAMENTE `to`. `length` é o comprimento do
+ * trajeto (unidade adimensional usada para a duração).
+ */
+export const FLIGHT_RHO = 0.7;
+
+export interface FlightPath { length: number; at(u: number): Camera }
+
+export function flightPath(from: Camera, to: Camera, vp: Viewport, rho = FLIGHT_RHO): FlightPath {
+  const W = Math.max(vp.width, 1);
+  const c0 = cameraCenter(from, vp), c1 = cameraCenter(to, vp);
+  const w0 = W / from.zoom, w1 = W / to.zoom;
+  const dx = c1.x - c0.x, dy = c1.y - c0.y;
+  const d = Math.hypot(dx, dy);
+  const rho2 = rho * rho;
+  const end = (u: number) => u >= 1;
+  const cam = (cx: number, cy: number, w: number) => centerOn({ x: cx, y: cy }, W / w, vp);
+
+  // Sem deslocamento (só zoom): w varia em escala logarítmica.
+  if (d < 1e-6 * Math.max(w0, w1)) {
+    const k = Math.log(w1 / w0);
+    return {
+      length: Math.abs(k) / rho,
+      at: (u) => (end(u) ? { ...to } : u <= 0 ? { ...from } : cam(c0.x + dx * u, c0.y + dy * u, w0 * Math.exp(k * u))),
+    };
+  }
+  const b = (i: 0 | 1) => (w1 * w1 - w0 * w0 + (i ? -1 : 1) * rho2 * rho2 * d * d) / (2 * (i ? w1 : w0) * rho2 * d);
+  const r = (bi: number) => Math.log(Math.sqrt(bi * bi + 1) - bi);
+  const r0 = r(b(0)), r1 = r(b(1));
+  const S = (r1 - r0) / rho;
+  const coshR0 = Math.cosh(r0), sinhR0 = Math.sinh(r0);
+  return {
+    length: S,
+    at: (u) => {
+      if (end(u)) return { ...to };
+      if (u <= 0) return { ...from };
+      const s = u * S;
+      const along = (w0 / rho2) * (coshR0 * Math.tanh(rho * s + r0) - sinhR0); // distância percorrida (mundo)
+      const w = (w0 * coshR0) / Math.cosh(rho * s + r0);
+      return cam(c0.x + (dx / d) * along, c0.y + (dy / d) * along, w);
+    },
+  };
+}
+
+/** Velocidade da viagem (preferência pessoal). */
+export type NavigationSpeed = 'fast' | 'smooth' | 'cinematic';
+/** Animar a câmera: seguir o sistema (prefers-reduced-motion), sempre ou nunca. */
+export type NavigationMotion = 'system' | 'always' | 'never';
+export interface NavigationPrefs { motion: NavigationMotion; speed: NavigationSpeed }
+export const DEFAULT_NAVIGATION_PREFS: NavigationPrefs = { motion: 'system', speed: 'smooth' };
+export const NAVIGATION_SPEED_LABEL: Record<NavigationSpeed, string> = { fast: 'Rápida', smooth: 'Suave', cinematic: 'Cinematográfica' };
+
+/**
+ * Duração = mínimo + ganho × comprimento do trajeto, limitada ao máximo. Números do perfil “Suave” (padrão):
+ * ~400 ms para uma tela, ~1,1 s para 12 telas, teto de 1,2 s (antes: 220–650 ms para qualquer distância).
+ */
+export const SPEED_PROFILE: Record<NavigationSpeed, { min: number; gain: number; max: number }> = {
+  fast: { min: 180, gain: 90, max: 700 },
+  smooth: { min: 280, gain: 170, max: 1200 },
+  cinematic: { min: 420, gain: 300, max: 2000 },
+};
+
+export function sanitizeNavigationPrefs(raw: unknown): NavigationPrefs {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const motion = o.motion === 'always' || o.motion === 'never' ? o.motion : 'system';
+  const speed = o.speed === 'fast' || o.speed === 'cinematic' ? o.speed : 'smooth';
+  return { motion, speed };
+}
+
+/** Plano da viagem: trajeto de voo e duração conforme a velocidade escolhida. */
+export function travelPlan(from: Camera, to: Camera, vp: Viewport, speed: NavigationSpeed = 'smooth'): { duration: number; path: FlightPath } {
+  const path = flightPath(from, to, vp);
+  const p = SPEED_PROFILE[speed] ?? SPEED_PROFILE.smooth;
+  const duration = Math.round(Math.min(p.max, p.min + p.gain * (Number.isFinite(path.length) ? path.length : 0)));
+  return { duration, path };
 }
 
 /**

@@ -53,6 +53,7 @@ import { CONNECTION_KINDS } from './Toolbar';
 import { connectionStyle } from '../core/connectionStyle';
 import { CUSTOM_RANGE, SENSITIVITY_LABEL, sensitivityOf, type ZoomSensitivityPreset } from '../core/camera';
 import { AnimationPreference, GifAnimationControls } from './GifControls';
+import { NavigationPreference } from './NavigationPrefs';
 
 function common<T>(els: AuroraElement[], get: (e: AuroraElement) => T): T | null {
   if (!els.length) return null;
@@ -454,6 +455,7 @@ function BoardSettings() {
         <div className="text-[10px] text-soft">Touchpad: dois dedos navegam, pinça faz zoom. Ctrl+roda sempre faz zoom.</div>
       </div>
       <ZoomSensitivity />
+      <NavigationPreference />
       <AnimationPreference />
     </>
   );
