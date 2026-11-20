@@ -11,6 +11,7 @@ import { boundTextBox, measureLine, wrapText } from '../core/text';
 import { elementParts, linearLocalPoints } from './shapes';
 import { summarizeElement, getWidget } from '../widgets/registry';
 import { getAsset } from '../store/actions';
+import { staticImageURL } from '../canvas/gifDisplay';
 
 const FONT_URLS: Record<FontFamily, { url: string; family: string }> = {
   hand: { url: kalamUrl, family: 'Kalam' },
@@ -72,7 +73,8 @@ async function elementSVG(el: AuroraElement): Promise<string> {
   let inner = '';
   if (el.type === 'image') {
     const a = await getAsset(el.assetId);
-    inner = a ? `<image href="${esc(a.dataURL)}" width="${el.width}" height="${el.height}" preserveAspectRatio="none"/>` : `<rect width="${el.width}" height="${el.height}" fill="#182436"/>`;
+    // Ciclo 6: PNG/SVG são estáticos — GIF animado sai sempre no PRIMEIRO quadro (determinístico).
+    inner = a ? `<image href="${esc(staticImageURL(el.assetId, a.dataURL))}" width="${el.width}" height="${el.height}" preserveAspectRatio="none"/>` : `<rect width="${el.width}" height="${el.height}" fill="#182436"/>`;
   } else if (el.type === 'text') {
     const lines = el.autoSize ? el.text.split('\n') : wrapText(el.text, el.style, el.width - 4);
     inner = textLines(lines, 2, 0, el.width - 4, el.style);

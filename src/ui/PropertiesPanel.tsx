@@ -49,6 +49,7 @@ import { makeHostApi, STATUS_LABEL } from '../widgets/WidgetFrame';
 import { CONNECTION_KINDS } from './Toolbar';
 import { connectionStyle } from '../core/connectionStyle';
 import { CUSTOM_RANGE, SENSITIVITY_LABEL, sensitivityOf, type ZoomSensitivityPreset } from '../core/camera';
+import { AnimationPreference, GifAnimationControls } from './GifControls';
 
 function common<T>(els: AuroraElement[], get: (e: AuroraElement) => T): T | null {
   if (!els.length) return null;
@@ -448,6 +449,7 @@ function BoardSettings() {
         <div className="text-[10px] text-soft">Touchpad: dois dedos navegam, pinça faz zoom. Ctrl+roda sempre faz zoom.</div>
       </div>
       <ZoomSensitivity />
+      <AnimationPreference />
     </>
   );
 }
@@ -498,6 +500,7 @@ export function PropertiesPanel() {
         {(styleTargets.length > 0 || els.length === 0) && <StyleEditor els={styleTargets} style={style} />}
         {linears.length > 0 && linears.length === els.length && <ArrowEditor els={linears} />}
         {els.length === 0 && (tool === 'arrow' || tool === 'connect') && <ArrowDefaults />}
+        {els.some((e) => e.type === 'image') && <GifAnimationControls els={els} />}
         {single && <Geometry el={single} />}
         {els.length > 0 && (
           <>

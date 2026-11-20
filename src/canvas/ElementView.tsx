@@ -7,6 +7,9 @@ import { elementParts, linearLocalPoints } from '../render/shapes';
 import { cachedAsset, getAsset } from '../store/actions';
 import { WidgetFrame } from '../widgets/WidgetFrame';
 import { checkImageBytes, dataURLHead, type ImageVerdict } from '../core/media';
+import { useEditor } from '../store/editor';
+import { decideDisplay, imageAnimationOf, STATIC_REASON_LABEL } from '../core/animation';
+import { gifDisplay } from './gifDisplay';
 
 /** URL do asset; `undefined` enquanto carrega, `null` se o arquivo não existe mais. */
 export function useAssetURL(id: string): string | null | undefined {
@@ -75,7 +78,43 @@ function ImageContent({ el }: { el: Extract<AuroraElement, { type: 'image' }> })
         {url === null ? 'Imagem indisponível (arquivo não encontrado neste navegador)' : 'Carregando imagem…'}
       </div>
     );
-  return <img src={url} alt="" draggable={false} className="w-full h-full select-none pointer-events-none" style={{ objectFit: 'fill', borderRadius: el.style.roundness === 'round' ? 8 : 0 }} />;
+  return <ImageBitmap el={el} url={url} />;
+}
+
+/** Movimento reduzido do sistema (atualiza ao vivo). */
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!mq) return;
+    const on = () => setReduced(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return reduced;
+}
+
+/**
+ * Imagem no canvas. GIF animado (ciclo 6): repete continuamente por padrão (variante com repetição infinita,
+ * só na exibição — o arquivo salvo é o original), ou fica no primeiro quadro quando pausado, com movimento
+ * reduzido, com animações desligadas ou pesado demais. As URLs são estáveis por arquivo (gifDisplay).
+ */
+function ImageBitmap({ el, url }: { el: Extract<AuroraElement, { type: 'image' }>; url: string }) {
+  const prefs = useEditor((s) => s.animationPrefs);
+  const reduced = useReducedMotion();
+  const gif = useMemo(() => gifDisplay(el.assetId, url), [el.assetId, url]);
+  const choice = gif && gif.info.ok ? decideDisplay(gif.info, imageAnimationOf(el.animation), prefs, reduced) : null;
+  const src = !gif || !choice ? url : choice.mode === 'static' ? gif.firstFrame : choice.loop === 'infinite' ? gif.infinite : gif.original;
+  return (
+    <>
+      <img src={src} alt="" draggable={false} data-gif={gif ? (choice?.mode ?? 'still') : undefined} className="w-full h-full select-none pointer-events-none" style={{ objectFit: 'fill', borderRadius: el.style.roundness === 'round' ? 8 : 0 }} />
+      {choice?.mode === 'static' && (
+        <span data-testid="gif-static-badge" className="absolute left-1 bottom-1 px-1 rounded bg-black/60 text-white text-[9px] font-bold tracking-wider pointer-events-none select-none" title={STATIC_REASON_LABEL[choice.reason]}>
+          GIF ⏸
+        </span>
+      )}
+    </>
+  );
 }
 
 function polylineMidpoint(pts: { x: number; y: number }[]) {

@@ -112,6 +112,8 @@ export interface EditorState {
   checkpointFlash: { id: string; at: number } | null;
   /** Preferência GERAL do usuário (não do quadro): sensibilidade do zoom. */
   zoomPrefs: import('../core/camera').ZoomPreferences;
+  /** Preferência GERAL: animações de GIF (sistema/sempre/nunca). */
+  animationPrefs: import('../core/animation').AnimationPrefs;
   toasts: Toast[];
   /** Último snapshot de dados de fluxo calculado (cache para widgets). */
   dataflowVersion: number;

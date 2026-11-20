@@ -127,6 +127,8 @@ export const ImageElementSchema = z.object({
   ...BaseElementShape,
   type: z.literal('image'),
   assetId: z.string(),
+  /** Ciclo 6 (opcional): reprodução e repetição de GIF animado. Ausente = automático + repetição contínua. */
+  animation: z.object({ playback: z.enum(['auto', 'play', 'pause']), loop: z.enum(['infinite', 'original']) }).optional(),
 });
 
 export const WidgetElementSchema = z.object({
