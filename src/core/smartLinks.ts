@@ -211,13 +211,17 @@ export function displayLabel(title: string | undefined, url: string, v: Pick<Lin
  * nome exibido anterior). Limpar o nome devolve o título padrão, para o nome automático (site/domínio) voltar;
  * um título personalizado à parte nunca é tocado. null = manter o título.
  */
+export const TITLE_MAX = 80;
+const asTitle = (s: string) => s.trim().slice(0, TITLE_MAX).trim();
+
 export function titleFollowingLabel(title: string, oldShown: string, nextLabel: string): string | null {
   const t = title.trim();
-  const following = DEFAULT_TITLES.has(t) || t === oldShown.trim();
+  // Compara com a MESMA forma usada ao gravar o título (cortada em 80): nomes longos continuam sincronizados.
+  const following = DEFAULT_TITLES.has(t) || t === oldShown.trim() || t === asTitle(oldShown);
   if (!following) return null;
   const next = nextLabel.trim();
   if (!next) return DEFAULT_TITLES.has(t) ? null : 'Link';
-  return next.slice(0, 80);
+  return asTitle(next);
 }
 
 /* ------------------------------------------------------------------ */

@@ -153,6 +153,12 @@ describe('nome e site conhecidos (sem rede)', () => {
     expect(titleFollowingLabel('Meu canal', 'Meu canal', '')).toBe('Link');
     expect(displayLabel('Link', 'https://studio.youtube.com/', { label: '' })).toBe('YouTube Studio');
     expect(titleFollowingLabel('Meu título', 'Meu canal', '')).toBeNull(); // título independente fica
+    // nome com mais de 80 caracteres: o título (cortado) continua acompanhando renomear e limpar
+    const longo = 'Canal de referências '.repeat(5).trim(); // > 80
+    const t1 = titleFollowingLabel('Link', 'YouTube', longo)!;
+    expect(t1.length).toBeLessThanOrEqual(80);
+    expect(titleFollowingLabel(t1, longo, 'Curto')).toBe('Curto');
+    expect(titleFollowingLabel(t1, longo, '')).toBe('Link');
   });
 });
 
