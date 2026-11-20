@@ -80,9 +80,9 @@ test.describe('Issue #10 — laterais redimensionáveis', () => {
     // Janela 1440: 1440 − 360 (canvas) − 256 (Biblioteca) = 824 → limitado a 650.
     expect(max).toBe(650);
     await page.setViewportSize({ width: 1100, height: 900 });
-    const w = await widths(page);
-    expect(w.canvas).toBeGreaterThanOrEqual(360);
-    expect(w.properties).toBeLessThan(650);
+    // A interface reage ao evento de redimensionamento da janela: espera o novo layout.
+    await expect.poll(async () => (await widths(page)).canvas).toBeGreaterThanOrEqual(360);
+    expect((await widths(page)).properties).toBeLessThan(650);
   });
 
   test('teclado e ARIA: setas, Shift+setas, Enter restaura; foco visível na alça', async ({ page }) => {
