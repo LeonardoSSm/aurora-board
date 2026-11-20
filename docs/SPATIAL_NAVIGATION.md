@@ -24,7 +24,26 @@ Para cada checkpoint fora da tela, calcula-se o vetor do **centro da área útil
 
 ## Navegar
 
-Clicar num indicador, num item do grupo ou da lista centraliza o checkpoint: `cameraX = W/2 − x·z`, `cameraY = H/2 − y·z`, com o **zoom atual** (ou o memorizado, se “restaurar zoom” estiver ligado). A viagem leva de 220 a 650 ms, conforme a distância, com um leve afastamento no meio em viagens longas, e termina exatamente no destino, com um destaque breve no marcador. Outro clique substitui o destino; pan, arrasto, pinça, troca de quadro e **Esc** interrompem. Com movimento reduzido, a câmera vai direto. Detalhes em [CAMERA_ENGINE.md](CAMERA_ENGINE.md).
+Clicar num indicador, num item do grupo ou da lista, ou em **Ir** no formulário do checkpoint (aberto pelo marcador visível) chama a mesma função, `navigateToCheckpoint`, e centraliza o checkpoint: `cameraX = W/2 − x·z`, `cameraY = H/2 − y·z`, com o **zoom atual** (ou o memorizado, se “restaurar zoom” estiver ligado). A câmera **viaja** pelo canvas (trajeto de voo, afastamento discreto proporcional à distância) e termina exatamente no destino; o destaque do marcador só aparece depois de chegar. Outro clique substitui o destino a partir da posição visível (sem salto, sem fila); pan, arrasto, pinça, roda, troca de quadro, mudança de tamanho da tela e **Esc** interrompem (no painel Locais, o primeiro Esc interrompe a viagem e o segundo fecha o painel). Detalhes em [CAMERA_ENGINE.md](CAMERA_ENGINE.md).
+
+### Viagem suave (issue #12)
+
+**Diagnóstico real (antes da correção).** A animação já existia (`animateCameraTo`, `requestAnimationFrame`), mas era percebida como teleporte por dois motivos, medidos no Chromium com `prefers-reduced-motion: no-preference` e dois locais a ~12 telas de distância:
+
+1. **Duração curta demais para a distância.** O teto de 650 ms valia para qualquer distância: ~12 telas em 39 quadros, com a maior parte do deslocamento concentrada em ~200 ms no meio do `easeInOutCubic` — o conteúdo passava em saltos de mais de uma tela por quadro. O afastamento no meio (`arc`, até 45%) era pequeno demais para reduzir essa velocidade na tela.
+2. **Movimento reduzido sem saída.** Com `prefers-reduced-motion: reduce` (no Windows: *Configurações → Acessibilidade → Efeitos visuais → Efeitos de animação* desligado, que o navegador repassa) a câmera ia direto — 0 quadros intermediários — e não havia como o proprietário pedir a animação mesmo assim. No notebook onde o app roda o sistema **não** pede movimento reduzido; o PC principal não pôde ser inspecionado daqui, por isso o painel agora mostra o estado detectado (“O sistema pede movimento reduzido…”).
+
+Não foram causa: rede/latência (a animação roda inteira no navegador), React Strict Mode (o motor é um módulo único, fora dos componentes), o painel em modo compacto (fecha antes de a viagem começar e não muda o tamanho do canvas) nem a falta de `requestAnimationFrame`.
+
+**Preferência pessoal** (painel Propriedades sem seleção → *Animação de navegação*; configuração local `navigationPreferences`, fora dos quadros, dos backups e do razão financeiro):
+
+| Opção | Efeito |
+|---|---|
+| **Sistema** (padrão) | anima, exceto com movimento reduzido no sistema |
+| **Sempre** | anima mesmo com movimento reduzido no sistema (escolha explícita do proprietário) |
+| **Nunca** | vai direto, sem animação |
+
+**Velocidade:** Rápida / **Suave** (padrão) / Cinematográfica — durações na tabela de [CAMERA_ENGINE.md](CAMERA_ENGINE.md#viagem). Valores inválidos gravados são descartados e voltam ao padrão. Os controles são `radiogroup` com rótulo e navegáveis por teclado.
 
 ## Persistência e compatibilidade
 
@@ -49,6 +68,9 @@ Clicar num indicador, num item do grupo ou da lista centraliza o checkpoint: `ca
 16,7 ms = 1 quadro a 60 Hz. Com 50–100 checkpoints aparece ocasionalmente um quadro perdido (33 ms). O zoom pela roda custa 1 quadro por evento; pan durante a animação não deixa quadros residuais (12/12).
 
 ## Limitações
+
+- WebKit no Windows (Playwright, renderização por software): com o painel **Locais** aberto, cada quadro da viagem custa ~130 ms por causa do `backdrop-filter` (efeito de vidro) sobre o canvas em movimento; sem o painel, ~31 ms. A viagem continua correta (chega exata, sem recuar), só com menos quadros. Chromium: 16–17 ms por quadro.
+- “Sempre” também vale para o zoom suave da roda: há um único motor de câmera e uma única preferência de movimento da câmera.
 
 - Indicadores de grupo mostram a lista ao clicar; não há prévia visual do destino.
 - A área útil é estimada por margens fixas (barra superior, controles de zoom); menus temporários podem cobrir um indicador enquanto abertos.

@@ -13,6 +13,7 @@ import {
 } from '../store/checkpointActions';
 import { CHECKPOINT_COLORS, CHECKPOINT_ICONS, CHECKPOINT_LIMITS, type CheckpointIcon } from '../core/checkpoints';
 import { CHECKPOINT_ICON } from '../canvas/CheckpointLayer';
+import { cancelCameraAnimation, isCameraAnimating } from '../store/cameraMotion';
 
 export function LocationsPanel() {
   const open = useEditor((s) => s.locationsOpen);
@@ -35,7 +36,8 @@ export function LocationsPanel() {
       data-testid="locations-panel"
       style={compact ? undefined : { left: Math.min(left, Math.max(12, window.innerWidth - 332)) }}
       className={`fixed z-[60] glass rounded-2xl flex flex-col max-h-[70vh] ${compact ? 'left-2 right-2 top-14' : 'top-14 w-[320px] max-w-[calc(100vw-24px)]'}`}
-      onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape') close(); }}
+      // Esc: primeiro interrompe a viagem em curso (a câmera fica onde está); com a câmera parada, fecha o painel.
+      onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape') { if (isCameraAnimating()) cancelCameraAnimation(); else close(); } }}
     >
       <div className="flex items-center justify-between px-3 pt-3">
         <div>

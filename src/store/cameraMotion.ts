@@ -8,11 +8,12 @@
  *   exponencial dependente do tempo; a âncora (ponto sob o cursor) fica parada em TODOS os quadros.
  * - viagem (botões, enquadrar, checkpoints): interpolação de centro e zoom com duração limitada.
  *
- * Cancelamento: novo pan/arrasto/pinça (controller), troca de quadro, Esc, mudança de viewport e
- * `prefers-reduced-motion` (movimento imediato). Cada animação guarda o quadro em que começou e para
+ * Cancelamento: novo pan/arrasto/pinça (controller), troca de quadro, Esc, mudança de viewport. Movimento
+ * imediato quando a preferência pessoal `navigationPrefs.motion` é “Nunca”, ou “Sistema” com
+ * `prefers-reduced-motion: reduce`; “Sempre” anima mesmo assim (issue #12). Cada animação guarda o quadro em que começou e para
  * sozinha se o quadro mudar, sem escrever câmera em outro quadro.
  */
-import { clampZoom, approachZoom, easeInOutCubic, interpolateCamera, isValidCamera, toWorldPoint, travelPlan, zoomAround, centerOn, fitBox, type Camera } from '../core/camera';
+import { clampZoom, approachZoom, easeInOutCubic, interpolateCamera, isValidCamera, toWorldPoint, travelPlan, zoomAround, centerOn, fitBox, type Camera, type FlightPath } from '../core/camera';
 import type { Box, Vec } from '../core/geometry';
 import { getState, setState } from './editor';
 
@@ -33,16 +34,28 @@ export function __setCameraTestHooks(c: Clock | null, motion: boolean | null = n
   motionOverride = motion;
 }
 
-/** Animar? Não com `prefers-reduced-motion: reduce` nem fora de um navegador. */
+/** O sistema operacional/navegador pede movimento reduzido? */
+export function systemPrefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/**
+ * Animar? Fora de um navegador (sem requestAnimationFrame), nunca. Depois, a preferência pessoal:
+ * “Nunca” → imediato; “Sempre” → anima mesmo com movimento reduzido no sistema; “Sistema” (padrão) →
+ * anima, exceto com `prefers-reduced-motion: reduce`.
+ */
 export function motionEnabled(): boolean {
   if (motionOverride !== null) return motionOverride;
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function' || typeof requestAnimationFrame !== 'function') return false;
-  return !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (typeof window === 'undefined' || typeof requestAnimationFrame !== 'function') return false;
+  const mode = getState().navigationPrefs?.motion ?? 'system';
+  if (mode === 'never') return false;
+  if (mode === 'always') return true;
+  return !systemPrefersReducedMotion();
 }
 
 type Anim =
   | { kind: 'zoom'; boardId: string; target: number; anchor: Vec; anchorWorld: Vec; last: number }
-  | { kind: 'travel'; boardId: string; from: Camera; to: Camera; start: number; duration: number; arc: number; onDone?: () => void };
+  | { kind: 'travel'; boardId: string; from: Camera; to: Camera; start: number; duration: number; path: FlightPath | null; onDone?: () => void };
 
 let anim: Anim | null = null;
 let frame = 0;
@@ -86,7 +99,8 @@ function tick() {
     if (done) { anim = null; return; }
   } else {
     const t = Math.min(1, (now - a.start) / a.duration);
-    write(interpolateCamera(a.from, a.to, easeInOutCubic(t), s.viewport, a.arc));
+    const e = easeInOutCubic(t);
+    write(a.path ? a.path.at(e) : interpolateCamera(a.from, a.to, e, s.viewport));
     if (t >= 1) { anim = null; a.onDone?.(); return; }
   }
   frame = clock.raf(tick);
@@ -120,15 +134,24 @@ export function panCamera(dx: number, dy: number) {
   write({ ...c, x: c.x + dx, y: c.y + dy });
 }
 
-/** Viagem até uma câmera (duração proporcional ao logaritmo da distância, 220–650 ms). */
+/**
+ * Viagem até uma câmera. Sem `duration`: trajeto de voo (afastamento discreto proporcional à distância) com a
+ * duração da velocidade escolhida (Suave: ~0,3–1,2 s). Com `duration` (botões de zoom): interpolação direta
+ * e curta. Parte SEMPRE da câmera visível atual — um novo destino durante uma viagem não dá salto.
+ */
 export function animateCameraTo(target: Camera, opts: { onDone?: () => void; duration?: number } = {}) {
   const s = getState();
   const to = { ...target, zoom: clampZoom(target.zoom) };
   if (!isValidCamera(to)) return;
   cancelCameraAnimation();
   if (!motionEnabled()) { write(to); opts.onDone?.(); return; }
-  const plan = travelPlan(s.camera, to, s.viewport);
-  anim = { kind: 'travel', boardId: s.boardId, from: s.camera, to, start: clock.now(), duration: opts.duration ?? plan.duration, arc: plan.arc, onDone: opts.onDone };
+  const from = s.camera;
+  if (opts.duration !== undefined) {
+    anim = { kind: 'travel', boardId: s.boardId, from, to, start: clock.now(), duration: Math.max(1, opts.duration), path: null, onDone: opts.onDone };
+  } else {
+    const plan = travelPlan(from, to, s.viewport, s.navigationPrefs?.speed ?? 'smooth');
+    anim = { kind: 'travel', boardId: s.boardId, from, to, start: clock.now(), duration: Math.max(1, plan.duration), path: plan.path, onDone: opts.onDone };
+  }
   run();
 }
 

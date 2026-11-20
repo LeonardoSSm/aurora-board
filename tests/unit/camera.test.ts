@@ -77,12 +77,12 @@ describe('interpolação', () => {
       expect(Math.abs(cross) / Math.hypot(c1.x - c0.x, c1.y - c0.y)).toBeLessThan(1e-6);
     }
   });
-  it('viagens longas são rápidas (≤ 650 ms) e com arco; curtas sem arco', () => {
+  it('issue #12: viagens longas duram o suficiente para serem vistas (≤ 1,2 s no Suave); curtas são breves', () => {
     const far = travelPlan(a, b, vp), close = travelPlan(a, centerOn({ x: 30, y: 0 }, 1, vp), vp);
-    expect(far.duration).toBeLessThanOrEqual(650);
-    expect(far.arc).toBeGreaterThan(0);
-    expect(close.arc).toBe(0);
-    expect(close.duration).toBeGreaterThanOrEqual(220);
+    expect(far.duration).toBeGreaterThanOrEqual(900);
+    expect(far.duration).toBeLessThanOrEqual(1200);
+    expect(close.duration).toBeGreaterThanOrEqual(280);
+    expect(close.duration).toBeLessThan(400);
   });
   it('aproximação exponencial depende do tempo, não da taxa de quadros', () => {
     let z60 = 1, z30 = 1;
