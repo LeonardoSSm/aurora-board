@@ -103,8 +103,9 @@ const DATASET_DASHBOARD = `<style>
   <table><thead><tr id="cab"></tr></thead><tbody id="corpo"></tbody></table>
 </div>
 <script>
-  // Preferências (NUNCA linhas): medida e filtro escolhidos.
-  const pref = Object.assign({ medida: '', coluna: '', valor: '' }, aurora.state || {});
+  // Preferências (NUNCA linhas): medida e filtro escolhidos. valor: null = todos; '' = células vazias.
+  const pref = Object.assign({ medida: '', coluna: '', valor: null }, aurora.state || {});
+  if (typeof pref.valor !== 'string') pref.valor = null;
   const $ = (id) => document.getElementById(id);
   const fmt = (n) => (typeof n === 'number' && isFinite(n) ? n.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—');
   const txt = (v) => (v === null || v === undefined ? '' : String(v));
@@ -115,24 +116,29 @@ const DATASET_DASHBOARD = `<style>
     for (const o of list) { const op = el('option', o.label); op.value = o.value; sel.appendChild(op); }
     sel.value = list.some((o) => o.value === current) ? current : '';
   }
+  // Opção de valor: 'v:' + valor (assim “(vazio)” = 'v:' nunca se confunde com “(todos)” = '').
+  const optValor = (v) => 'v:' + v;
   let last = { linhas: [], colunas: [], resumo: null, grupos: null };
   function render() {
-    const { linhas, colunas, resumo, grupos } = last;
-    $('vazio').style.display = colunas.length ? 'none' : '';
+    const { linhas, resumo, grupos } = last;
+    // Só as colunas que vêm nas linhas (resumo.projectedColumns): as demais existem no conjunto, mas não foram entregues.
+    const proj = resumo && Array.isArray(resumo.projectedColumns) ? new Set(resumo.projectedColumns) : linhas.length ? new Set(Object.keys(linhas[0])) : null;
+    const colunas = proj ? last.colunas.filter((c) => proj.has(c.id)) : last.colunas;
+    $('vazio').style.display = last.colunas.length ? 'none' : '';
     const numericas = colunas.filter((c) => c.type === 'number');
     const textuais = colunas.filter((c) => c.type !== 'number');
     if (!numericas.some((c) => c.id === pref.medida)) pref.medida = numericas.length ? numericas[0].id : '';
     options($('sMedida'), numericas.map((c) => ({ value: c.id, label: c.label })), pref.medida, numericas.length ? '' : '(sem colunas numéricas)');
-    // A coluna do filtro sumiu (dados trocados): o filtro deixa de valer — e a tela mostra isso.
-    if (pref.coluna && !textuais.some((c) => c.id === pref.coluna)) { pref.coluna = ''; pref.valor = ''; }
+    // A coluna do filtro sumiu (dados trocados ou não projetada): o filtro deixa de valer — e a tela mostra isso.
+    if (pref.coluna && !textuais.some((c) => c.id === pref.coluna)) { pref.coluna = ''; pref.valor = null; }
     options($('sColuna'), textuais.map((c) => ({ value: c.id, label: c.label })), pref.coluna, '(sem filtro)');
     const valores = pref.coluna ? [...new Set(linhas.map((r) => txt(r[pref.coluna])))].slice(0, 100) : [];
-    const opcoes = valores.map((v) => ({ value: v, label: v || '(vazio)' }));
+    const opcoes = valores.map((v) => ({ value: optValor(v), label: v || '(vazio)' }));
     // O valor escolhido continua visível mesmo sem linhas nesta página: o seletor mostra o filtro que está valendo.
-    if (pref.coluna && pref.valor && !valores.includes(pref.valor)) opcoes.unshift({ value: pref.valor, label: pref.valor + ' (sem linhas aqui)' });
-    options($('sValor'), opcoes, pref.valor, '(todos)');
+    if (pref.coluna && pref.valor !== null && !valores.includes(pref.valor)) opcoes.unshift({ value: optValor(pref.valor), label: (pref.valor || '(vazio)') + ' (sem linhas aqui)' });
+    options($('sValor'), opcoes, pref.valor === null ? '' : optValor(pref.valor), '(todos)');
     $('sValor').style.display = pref.coluna ? '' : 'none';
-    const filtradas = linhas.filter((r) => !pref.coluna || !pref.valor || txt(r[pref.coluna]) === pref.valor);
+    const filtradas = linhas.filter((r) => !pref.coluna || pref.valor === null || txt(r[pref.coluna]) === pref.valor);
     const nums = filtradas.map((r) => r[pref.medida]).filter((v) => typeof v === 'number' && isFinite(v));
     const soma = nums.reduce((a, b) => a + b, 0);
     const media = nums.length ? soma / nums.length : null;
@@ -178,8 +184,8 @@ const DATASET_DASHBOARD = `<style>
   }
   function save() { aurora.setState({ medida: pref.medida, coluna: pref.coluna, valor: pref.valor }); render(); }
   $('sMedida').onchange = (e) => { pref.medida = e.target.value; save(); };
-  $('sColuna').onchange = (e) => { pref.coluna = e.target.value; pref.valor = ''; save(); };
-  $('sValor').onchange = (e) => { pref.valor = e.target.value; save(); };
+  $('sColuna').onchange = (e) => { pref.coluna = e.target.value; pref.valor = null; save(); };
+  $('sValor').onchange = (e) => { pref.valor = e.target.value ? e.target.value.slice(2) : null; save(); };
   aurora.onInputs((i) => {
     last = { linhas: Array.isArray(i.linhas) ? i.linhas : [], colunas: Array.isArray(i.colunas) ? i.colunas : [], resumo: i.resumo && typeof i.resumo === 'object' ? i.resumo : null, grupos: i.grupos && typeof i.grupos === 'object' ? i.grupos : null };
     render();

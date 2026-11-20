@@ -281,6 +281,33 @@ test.describe('Issue #24 — Data Hub (D2-B): dashboard HTML conectado', () => {
     await expect(dash(page).locator('#sColuna option:checked')).toHaveText('(sem filtro)');
   });
 
+  // Revisão do Codex (PR #28, 2ª rodada): “(vazio)” se confundia com “(todos)”; o painel oferecia colunas que não
+  // vêm nas linhas projetadas.
+  test('H: filtro por células vazias é distinto de “todos”; só colunas projetadas viram medida/filtro', async ({ page }) => {
+    await ready(page);
+    const id = await addDataset(page);
+    await importFile(page, page.getByTestId('dataset-import'), { name: 'v.csv', mimeType: 'text/csv', text: 'produto,região,a,b\nCafé,,10,42\nPão,Sul,20,8\n' });
+    await page.getByRole('dialog').getByRole('button', { name: 'Importar', exact: true }).click();
+    await page.evaluate((x) => (window as any).__aurora.actions.setSelection([x]), id);
+    await page.getByTestId('dataset-create-dashboard').click();
+    await expect(dash(page).locator('#kSoma')).toHaveText('30'); // medida a (primeira numérica)
+    await dash(page).locator('#sColuna').selectOption('região');
+    await dash(page).locator('#sValor').selectOption({ label: '(vazio)' });
+    await expect(dash(page).locator('#kFiltradas')).toHaveText('1');
+    await expect(dash(page).locator('#kSoma')).toHaveText('10');
+    await dash(page).locator('#sValor').selectOption({ label: '(todos)' });
+    await expect(dash(page).locator('#kFiltradas')).toHaveText('2');
+
+    // Projetar só produto e b: “a” e “região” não chegam nas linhas e não podem ser medida/filtro.
+    await page.evaluate((x) => (window as any).__aurora.actions.setSelection([x]), id);
+    await page.getByLabel('Coluna produto', { exact: true }).check();
+    await page.getByLabel('Coluna b', { exact: true }).check();
+    await expect(dash(page).locator('#sMedida option')).toHaveText(['b']);
+    await expect(dash(page).locator('#kSoma')).toHaveText('50');
+    await expect(dash(page).locator('#sColuna option:checked')).toHaveText('(sem filtro)');
+    await expect(dash(page).locator('#sColuna option')).toHaveText(['(sem filtro)', 'produto']);
+  });
+
   test('F: isolamento — HTML conectado a dados importados não tem rede, armazenamento, acesso ao app nem pop-ups', async ({ page }) => {
     await ready(page);
     const id = await addDataset(page);

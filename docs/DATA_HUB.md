@@ -137,7 +137,9 @@ Dados importados ──rows──▶ linhas ┐
   Publica `total`, `media`, `valores`, `filtradas` (number), `porGrupo` (object) e `resumo` (text). **Política sem
   números:** `media` = 0 e `valores` = 0 (uma saída publicada não pode ser apagada; quem consome confere `valores`).
   O filtro escolhido aparece sempre no seletor — “(sem linhas aqui)” quando a página não tem o valor — e é limpo se a
-  coluna deixar de existir. Sem agrupamento nativo, o gráfico usa a página **com o filtro**. Monta o DOM só com
+  coluna deixar de existir. “(vazio)” filtra células vazias e é distinto de “(todos)”. Medida e filtro só oferecem
+  colunas que vêm nas linhas (`summary.projectedColumns`). Sem agrupamento nativo, o gráfico usa a página **com o
+  filtro**. Monta o DOM só com
   `createElement`/`textContent` — dados importados nunca viram HTML — e usa `aurora.setState` só para
   preferências (`{ medida, coluna, valor }`), nunca para linhas.
 - **Escopo das agregações:** o que o HTML calcula cobre as linhas **entregues** (uma página, até 500). Para o conjunto
@@ -227,7 +229,8 @@ seguem os limites do Bridge (64 KB, 8 níveis, 5.000 itens por lista…).
   HTML conectado”, KPIs/tabela/gráfico, HTML → Fórmula, filtro dentro do iframe (só preferência no estado) e
   substituição dos dados atualizando sem recarregar o iframe; F (D2-B) — sonda de isolamento: o HTML recebe a linha,
   mas `fetch`, IndexedDB, `localStorage`, `parent.document`, `window.open` e imagem remota são bloqueados; G (D2-B,
-  revisão do Codex) — gráfico de reserva com o filtro, média sem valores = 0 e filtro sempre visível ou limpo.
+  revisão do Codex) — gráfico de reserva com o filtro, média sem valores = 0 e filtro sempre visível ou limpo; H —
+  filtro por células vazias distinto de “todos” e só colunas projetadas como medida/filtro.
 - Revisão do Codex no PR #27 (3 achados, todos com teste de regressão que falhava antes): detecção do delimitador
   com mais de 200 registros na amostra; laço de despejo/recarga do cache com datasets em uso; “ausente” preso no
   cache após restaurar os dados. 2ª rodada (2 achados, também com regressão): arquivo grande só com CR e limite de
