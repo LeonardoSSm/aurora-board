@@ -6,6 +6,11 @@ updates:
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
     groups:
+      # CI-1 (#25): o Playwright vem num PR próprio, porque a imagem Docker fixada em .github/workflows/ci.yml
+      # (tag + digest) precisa subir junto — tests/unit/ci-workflow.test.ts falha enquanto divergirem.
+      # Fica antes de minor-e-patch: o Dependabot usa o primeiro grupo que casar.
+      playwright:
+        patterns: ['@playwright/test', 'playwright', 'playwright-core']
       minor-e-patch:
         update-types: [minor, patch]
   - package-ecosystem: github-actions
