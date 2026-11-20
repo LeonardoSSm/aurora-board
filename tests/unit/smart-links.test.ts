@@ -149,6 +149,10 @@ describe('nome e site conhecidos (sem rede)', () => {
     expect(titleFollowingLabel('YouTube Studio', 'YouTube Studio', 'Military Fails')).toBe('Military Fails');
     expect(titleFollowingLabel('Meu título', 'YouTube Studio', 'Military Fails')).toBeNull();
     expect(titleFollowingLabel('Link', 'x', '  ')).toBeNull();
+    // limpar o nome que o título acompanhava devolve o nome automático (revisão do PR #23)
+    expect(titleFollowingLabel('Meu canal', 'Meu canal', '')).toBe('Link');
+    expect(displayLabel('Link', 'https://studio.youtube.com/', { label: '' })).toBe('YouTube Studio');
+    expect(titleFollowingLabel('Meu título', 'Meu canal', '')).toBeNull(); // título independente fica
   });
 });
 

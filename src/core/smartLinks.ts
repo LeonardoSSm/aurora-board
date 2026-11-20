@@ -206,11 +206,18 @@ export function displayLabel(title: string | undefined, url: string, v: Pick<Lin
   return initialLabel(url) || 'Configurar link';
 }
 
-/** Novo título do bloco ao renomear o atalho: acompanha só se o título ainda era automático. */
+/**
+ * Novo título do bloco ao renomear o atalho: acompanha só se o título ainda era automático (padrão ou igual ao
+ * nome exibido anterior). Limpar o nome devolve o título padrão, para o nome automático (site/domínio) voltar;
+ * um título personalizado à parte nunca é tocado. null = manter o título.
+ */
 export function titleFollowingLabel(title: string, oldShown: string, nextLabel: string): string | null {
   const t = title.trim();
-  if (!nextLabel.trim()) return null;
-  return DEFAULT_TITLES.has(t) || t === oldShown.trim() ? nextLabel.trim().slice(0, 80) : null;
+  const following = DEFAULT_TITLES.has(t) || t === oldShown.trim();
+  if (!following) return null;
+  const next = nextLabel.trim();
+  if (!next) return DEFAULT_TITLES.has(t) ? null : 'Link';
+  return next.slice(0, 80);
 }
 
 /* ------------------------------------------------------------------ */

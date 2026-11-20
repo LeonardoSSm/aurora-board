@@ -156,6 +156,11 @@ test('Propriedades: nome, URL, layout, ícone e imagem; inválido não abre; per
   const n1 = await byId(page, n0.id);
   expect(n1.data.url).toBe('https://www.youtube.com/@canal-ficticio');
   expect(n1.title).toBe('Military Fails — YouTube'); // título acompanhava o automático
+  // limpar o nome volta ao automático (site), sem título preso ao nome antigo
+  await insp.getByLabel('Nome exibido').fill('');
+  await expect(sc.getByTestId('link-shortcut-label')).toHaveText('YouTube');
+  await insp.getByLabel('Nome exibido').fill('Military Fails — YouTube');
+  await expect(sc.getByTestId('link-shortcut-label')).toHaveText('Military Fails — YouTube');
 
   // ícone manual e layout card (tamanho de referência)
   await insp.getByRole('radio', { name: 'Ícone Vídeo' }).click();
