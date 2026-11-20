@@ -103,6 +103,12 @@ export interface EditorState {
    * caber; o item nasce em `world`, o ponto original). `hover` = fatia ativa (ponteiro ou teclado).
    */
   radial: { center: { x: number; y: number }; origin: { x: number; y: number }; world: { x: number; y: number }; sub: 'shape' | 'connector' | 'more' | null; hover: number | null; source: 'pointer' | 'keyboard'; openedAt: number } | null;
+  /** Issue #13 — preferências pessoais dos assistentes-personagem (configuração LOCAL). */
+  companionPrefs: import('../core/companion').CompanionPrefs;
+  /** Issue #13 — mini chat aberto (pelo personagem no canvas ou pelo dock). */
+  companionOpen: { id: string; from: 'canvas' | 'dock'; anchor?: { x: number; y: number } } | null;
+  /** Issue #13 — conversa completa (componente clássico num diálogo). */
+  companionFull: string | null;
   /** Issue #14 — Command Center (Ctrl+K) e Captura rápida (Ctrl+Shift+Espaço) abertos. */
   commandOpen: boolean;
   captureOpen: boolean;

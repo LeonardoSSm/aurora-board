@@ -55,6 +55,7 @@ import { CUSTOM_RANGE, SENSITIVITY_LABEL, sensitivityOf, type ZoomSensitivityPre
 import { AnimationPreference, GifAnimationControls } from './GifControls';
 import { NavigationPreference } from './NavigationPrefs';
 import { RadialFavorites } from './RadialFavorites';
+import { CompanionPreferences } from './companions/CompanionSettings';
 
 function common<T>(els: AuroraElement[], get: (e: AuroraElement) => T): T | null {
   if (!els.length) return null;
@@ -459,6 +460,7 @@ function BoardSettings() {
       <NavigationPreference />
       <AnimationPreference />
       <RadialFavorites />
+      <CompanionPreferences />
     </>
   );
 }

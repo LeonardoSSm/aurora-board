@@ -11,6 +11,11 @@ import { ContextMenu, DialogHost, ShortcutsDialog, Toasts, ZoomControls } from '
 import { RadialMenu } from './ui/RadialMenu';
 import { CommandCenter } from './ui/CommandCenter';
 import { QuickCapture } from './ui/QuickCapture';
+import { MiniChat } from './ui/companions/MiniChat';
+import { CompanionDock } from './ui/companions/CompanionDock';
+import { startAIChatHousekeeping } from './integrations/aiChat';
+
+startAIChatHousekeeping();
 import { BetaNotice } from './ui/BetaNotice';
 import { FinanceHub } from './ui/finance/FinanceHub';
 import { PairingDialog } from './ui/PairingDialog';
@@ -96,6 +101,8 @@ export function App() {
       <RadialMenu />
       <CommandCenter />
       <QuickCapture />
+      <CompanionDock />
+      <MiniChat />
       <BoardsPanel />
       <LocationsPanel />
       <CheckpointDialog />

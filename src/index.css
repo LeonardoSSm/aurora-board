@@ -125,6 +125,50 @@ button:disabled {
 @keyframes search-flash { 0% { opacity: 0; } 15% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .search-flash { animation: none; } }
 
+/* AI Companions (issue #13): animações só por CSS (transform/opacity), por estado real e microação. */
+.companion svg * { transform-box: fill-box; transform-origin: center; }
+.companion .c-badge-error, .companion .c-badge-unread, .companion .c-dots, .companion .c-steam { opacity: 0; }
+.companion[data-state="error"] .c-badge-error, .companion[data-state="unread"] .c-badge-unread { opacity: 1; }
+.companion[data-state="thinking"] .c-dots { opacity: 1; }
+.companion[data-state="thinking"] .c-screen rect:first-child { fill: #2f4466; }
+.companion[data-state="error"] .c-head { transform: translateY(3px) rotate(-4deg); }
+.companion[data-state="error"] .c-code { opacity: 0.2; }
+.companion[data-state="attention"] .c-head { transform: rotate(-5deg); }
+.companion[data-state="attention"] .c-pupils { transform: translateY(-1.5px); }
+.companion:not([data-motion="off"])[data-state="idle"] .c-body { animation: c-breathe 4.8s ease-in-out infinite; }
+.companion:not([data-motion="off"]) .c-eyes { animation: c-blink 6.5s infinite; }
+.companion[data-motion="discreet"] .c-eyes { animation-duration: 9s; }
+.companion:not([data-motion="off"])[data-state="thinking"] .c-hand-l { animation: c-type 0.32s ease-in-out infinite alternate; }
+.companion:not([data-motion="off"])[data-state="thinking"] .c-hand-r { animation: c-type 0.32s ease-in-out infinite alternate-reverse; }
+.companion:not([data-motion="off"])[data-state="thinking"] .c-dots circle { animation: c-dot 1.1s ease-in-out infinite; }
+.companion:not([data-motion="off"])[data-state="thinking"] .c-dots circle:nth-child(2) { animation-delay: 0.18s; }
+.companion:not([data-motion="off"])[data-state="thinking"] .c-dots circle:nth-child(3) { animation-delay: 0.36s; }
+.companion:not([data-motion="off"])[data-state="replying"] .c-head { animation: c-nod 0.9s ease-in-out 2; }
+.companion:not([data-motion="off"])[data-state="unread"] .c-badge-unread { animation: c-dot 1.6s ease-in-out infinite; }
+.companion[data-micro="blink"] .c-eyes { animation: c-blink-once 0.3s; }
+.companion[data-micro="look"] .c-pupils { animation: c-look 1.5s ease-in-out; }
+.companion[data-micro="hair"] .c-hair { animation: c-sway 1.4s ease-in-out; }
+.companion[data-micro="foot"] .c-foot { animation: c-foot 1.2s ease-in-out; }
+.companion[data-micro="posture"] .c-body { animation: c-posture 1.4s ease-in-out; }
+.companion[data-micro="laptop"] .c-head { animation: c-look-down 1.5s ease-in-out; }
+.companion[data-micro="type"] .c-hand-r { animation: c-type 0.28s ease-in-out 4 alternate; }
+.companion[data-micro="mug"] .c-mug { animation: c-mug 1.5s ease-in-out; }
+.companion[data-micro="mug"] .c-steam { opacity: 1; }
+.companion[data-motion="expressive"][data-micro] .c-head { animation-duration: 1.1s; }
+@keyframes c-breathe { 0%, 100% { transform: translateY(0) scaleY(1); } 50% { transform: translateY(-0.6px) scaleY(1.012); } }
+@keyframes c-blink { 0%, 95%, 100% { transform: scaleY(1); } 97% { transform: scaleY(0.1); } }
+@keyframes c-blink-once { 50% { transform: scaleY(0.1); } }
+@keyframes c-type { from { transform: translateY(0); } to { transform: translateY(-2.5px); } }
+@keyframes c-dot { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+@keyframes c-nod { 50% { transform: translateY(2px) rotate(3deg); } }
+@keyframes c-look { 30%, 70% { transform: translateX(3px); } }
+@keyframes c-look-down { 30%, 70% { transform: translateY(3px) rotate(2deg); } }
+@keyframes c-sway { 30% { transform: rotate(3deg); } 65% { transform: rotate(-2deg); } }
+@keyframes c-foot { 25%, 75% { transform: rotate(-12deg); } 50% { transform: rotate(8deg); } }
+@keyframes c-posture { 50% { transform: translateY(-2px); } }
+@keyframes c-mug { 35%, 65% { transform: translate(-8px, -14px) rotate(-14deg); } }
+@media (prefers-reduced-motion: reduce) { .companion[data-motion="off"] * { animation: none !important; } }
+
 /* Markdown dentro do bloco de notas */
 .md {
   line-height: 1.55;

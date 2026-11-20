@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { cancelAIRequest, sendAIMessage, useAIRequest, watchConversation } from '../../integrations/aiChat';
+import { CompanionCharacter } from '../../ui/companions/CompanionCharacter';
+import { CompanionInspector } from '../../ui/companions/CompanionSettings';
 import { Eye, Loader2, RefreshCw, Send, Sparkles, Trash2 } from 'lucide-react';
 import type { WidgetPlugin, WidgetProps } from '../registry';
 import { sanitizeAI, type AIData, type AIMessage } from '../../core/widgetData';
 import { WIDGET } from '../../core/widgetIds';
-import { uid } from '../../core/elements';
 import type { AuroraElement } from '../../core/schema';
 import { useEditor } from '../../store/editor';
-import { fetchAIStatus, sendChat, type AIStatus, type ProviderId } from '../../integrations/aiClient';
+import { fetchAIStatus, type AIStatus } from '../../integrations/aiClient';
 import { buildContextText, buildSystemPrompt, contextSources, type QuickMode } from '../../integrations/aiContext';
 import { interpretFinancialRequest, localMoneyAction, parseAIProposal, proposalDisplayText, proposalKey, type FinancialRequest, type ParsedProposal } from '../../integrations/aiActions';
 import { renderMarkdown } from './notes';
@@ -69,7 +71,21 @@ export const aiPlugin: WidgetPlugin<AIData> = {
   sanitize: sanitizeAI,
   compute: (d) => ({ reply: [...d.messages].reverse().find((m) => m.role === 'assistant')?.content ?? '' }),
   summarize: (d) => `Instrução: ${d.instruction}\n` + d.messages.slice(-6).map((m) => `${m.role === 'user' ? 'Usuário' : 'IA'}: ${m.content}`).join('\n'),
+  // Issue #13: o mesmo assistente em dois visuais. O personagem usa moldura mínima (arrastar move o bloco).
+  frameFor: (d) => (d.companion?.displayMode === 'character' ? 'bare' : 'standard'),
   Component: function AIBlock(props) {
+    if (props.data.companion?.displayMode === 'character') return <CompanionCharacter element={props.element} data={props.data} />;
+    return <AIClassic {...props} />;
+  },
+  Inspector: CompanionInspector,
+};
+
+/**
+ * Visual clássico (chat completo, contexto, autorização, propostas). O envio passa pelo controlador compartilhado
+ * (`integrations/aiChat.ts`), o mesmo do personagem e do dock: desmontar ou trocar o visual não cancela nem
+ * duplica a conversa. Usado também na “conversa completa” aberta pelo mini chat.
+ */
+export function AIClassic(props: WidgetProps<AIData>) {
     const { data, update, element, api } = props;
     const { status, refresh } = useAIStatus();
     const elements = useEditor((s) => s.elements);
@@ -86,11 +102,13 @@ export const aiPlugin: WidgetPlugin<AIData> = {
       return out;
     }, [data.messages]);
     const [input, setInput] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
+    const req = useAIRequest(element.id);
+    const loading = req.status === 'sending';
+    const error = req.status === 'error' ? req.error : '';
     const [showPayload, setShowPayload] = useState(false);
-    const abortRef = useRef<AbortController | null>(null);
     const listRef = useRef<HTMLDivElement>(null);
+    // Conversa visível = lida (o dock não marca “nova resposta” enquanto o bloco está à vista).
+    useEffect(() => watchConversation(element.id), [element.id]);
 
     const configured = status?.state === 'ready' ? status.providers.filter((p) => p.configured) : [];
     const provider = configured.find((p) => p.id === data.provider) ?? configured[0];
@@ -99,25 +117,10 @@ export const aiPlugin: WidgetPlugin<AIData> = {
 
     const contextText = buildContextText(elements, sources);
     const send = async (text: string, mode: QuickMode) => {
-      if (!text.trim() || loading) return;
-      if (!provider) { setError('Nenhum provedor configurado.'); return; }
-      setError('');
-      const userMsg: AIMessage = { id: uid(), role: 'user', content: text.trim(), at: Date.now() };
-      const history = [...data.messages.slice(-12), userMsg].map((m) => ({ role: m.role, content: m.content }));
-      update((d) => ({ ...d, messages: [...d.messages, userMsg] }));
+      if (!text.trim() || loading || !provider) return;
       setInput('');
-      setLoading(true);
-      const ctrl = new AbortController();
-      abortRef.current = ctrl;
-      try {
-        const res = await sendChat({ provider: provider.id as ProviderId, model: data.model || undefined, system: buildSystemPrompt(data.instruction, contextText, mode), messages: history }, ctrl.signal);
-        update((d) => ({ ...d, messages: [...d.messages, { id: uid(), role: 'assistant', content: res.text, at: Date.now(), provider: res.provider, model: res.model }] }));
-      } catch (e) {
-        if ((e as Error).name !== 'AbortError') setError((e as Error).message);
-      } finally {
-        setLoading(false);
-        abortRef.current = null;
-      }
+      // Mesmo contexto/autorização/prompt: o controlador recalcula com as mesmas funções no momento do envio.
+      await sendAIMessage(element.id, text, mode);
     };
 
     return (
@@ -201,7 +204,7 @@ export const aiPlugin: WidgetPlugin<AIData> = {
         {/* Conversa */}
         <div ref={listRef} className="flex-1 min-h-[60px] overflow-auto flex flex-col gap-1.5" data-scrollable>
           {data.messages.map((m) => <MessageView key={m.id} m={m} request={requests.get(m.id) ?? null} props={props} validIds={validIds} elements={elements} />)}
-          {loading && <div className="text-[11px] text-muted flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Aguardando {provider?.name}… <button className="underline" onClick={() => abortRef.current?.abort()}>cancelar</button></div>}
+          {loading && <div className="text-[11px] text-muted flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Aguardando {provider?.name}… <button className="underline" onClick={() => cancelAIRequest(element.id)}>cancelar</button></div>}
           {error && <div className="text-[11px] text-danger">{error}</div>}
         </div>
 
@@ -228,5 +231,5 @@ export const aiPlugin: WidgetPlugin<AIData> = {
         </div>
       </div>
     );
-  },
-};
+}
+

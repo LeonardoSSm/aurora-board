@@ -1,5 +1,6 @@
 /** Estruturas de dados dos widgets nativos + saneamento (para importação e migração). */
 import { uid } from './elements';
+import { sanitizeCompanion } from './companion';
 import { sanitizeBridge, type BridgeConfig } from './htmlBridge';
 
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
@@ -60,6 +61,8 @@ export interface AIData {
   authorized: Record<string, boolean>;
   /** Propostas já aplicadas (chave da mensagem → quando). Gravado junto com a aplicação: desfazer reabre a proposta. */
   applied: Record<string, number>;
+  /** Issue #13: visual do assistente (clássico/personagem), preset, nome e dock. Ausente = clássico. */
+  companion?: import('./companion').CompanionData;
 }
 export const sanitizeAI = (raw: unknown): AIData => {
   const d = obj(raw);
@@ -68,6 +71,7 @@ export const sanitizeAI = (raw: unknown): AIData => {
   const applied: Record<string, number> = {};
   // Até 2 chaves por mensagem (proposta da IA + interpretação local), e as mensagens são limitadas a 200.
   for (const [k, v] of Object.entries(obj(d.applied)).slice(-400)) if (k !== '__proto__' && k.length <= 200 && typeof v === 'number' && Number.isFinite(v)) applied[k] = v;
+  const companion = sanitizeCompanion(d.companion);
   return {
     provider: str(d.provider),
     model: str(d.model),
@@ -80,6 +84,7 @@ export const sanitizeAI = (raw: unknown): AIData => {
       .slice(-200),
     authorized,
     applied,
+    ...(companion ? { companion } : {}),
   };
 };
 

@@ -333,6 +333,14 @@ export async function setNavigationPrefs(p: Partial<import('../core/camera').Nav
   await getAdapter().setSetting('navigationPreferences', next);
 }
 
+/** Issue #13: animação dos assistentes-personagem e lado do dock — preferência local (fora de quadros e backups). */
+export async function setCompanionPrefs(p: Partial<import('../core/companion').CompanionPrefs>) {
+  const { sanitizeCompanionPrefs } = await import('../core/companion');
+  const next = sanitizeCompanionPrefs({ ...getState().companionPrefs, ...p });
+  setState({ companionPrefs: next });
+  await getAdapter().setSetting('companionPreferences', next);
+}
+
 /** Ciclo 6: preferência geral de animação de GIFs (vale para todos os quadros). */
 export async function setAnimationPrefs(p: Partial<AnimationPrefs>) {
   const next = sanitizeAnimationPrefs({ ...getState().animationPrefs, ...p });
@@ -979,6 +987,8 @@ export async function openBoard(id: string) {
       editingGroupId: null,
       editingTextId: null,
       contextMenu: null,
+      companionOpen: null,
+      companionFull: null,
       tool: 'select',
     }),
   );
