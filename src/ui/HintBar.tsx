@@ -36,7 +36,14 @@ export function useHint(): string {
     const el = selected[0];
     if (el.locked) return 'Elemento bloqueado · Ctrl+Shift+L desbloqueia';
     if (isLinear(el)) return selectedPoint !== null ? 'Delete remove o ponto selecionado · arraste para mover · Shift: 15°' : 'Arraste os pontos · arraste ◦ entre pontos para criar um novo · clique num ponto e Delete remove · duplo clique: rótulo';
-    if (el.type === 'widget' && getWidget(el.widgetType)?.frame === 'bare') return 'Arraste para mover · duplo clique abre as configurações · botão direito: mais ações · Alt+arrastar duplica';
+    if (el.type === 'widget') {
+      const p = getWidget(el.widgetType);
+      const data = p?.sanitize(el.data);
+      // Moldura conforme os dados (frameFor), como no WidgetFrame — ex.: atalho visual do Link, personagem de IA.
+      const bare = p && (p.frameFor ? p.frameFor(data) : p.frame) === 'bare';
+      if (bare && p.clickAction?.(data, el)) return 'Clique abre o atalho · Enter também · arraste ou clique na borda para mover/selecionar · botão direito: editar';
+      if (bare) return 'Arraste para mover · duplo clique abre as configurações · botão direito: mais ações · Alt+arrastar duplica';
+    }
     if (el.type === 'widget') return 'Selecionado: o conteúdo fica interativo (selecionar texto, rolar) · mova pelo cabeçalho · duplo clique no título renomeia';
     if (['rectangle', 'ellipse', 'diamond', 'sticky'].includes(el.type)) return 'Enter para escrever · Ctrl+setas cria um fluxo conectado · Alt+setas navega · Alt+arrastar duplica';
     return 'Alt+arrastar duplica · Shift ao redimensionar mantém proporção';

@@ -11,7 +11,7 @@ import { uid } from '../core/elements';
 import { ElementView } from './ElementView';
 import { Overlay } from './Overlay';
 import { TextEditor } from './TextEditor';
-import { cancelGesture, currentGesture, doubleClick, elementAt, isSpaceHeld, pointerCancel, pointerDown, pointerMove, pointerUp, type PointerInfo } from './controller';
+import { cancelGesture, clickableWidgetAt, currentGesture, doubleClick, elementAt, isSpaceHeld, pointerCancel, pointerDown, pointerMove, pointerUp, type PointerInfo } from './controller';
 import { hitHandle, linearHandles, transformHandles } from './handles';
 import { handleCursor } from '../core/transform';
 import { isLinear } from '../core/schema';
@@ -147,6 +147,8 @@ export function Canvas() {
     const th = hitHandle(transformHandles(selected, s.camera), p.screen, 9);
     if (th) return th.kind === 'rotate' ? 'grab' : handleCursor(th.handle!, th.angle);
     const hit = elementAt(p.world);
+    // Issue #22: atalho visual — o centro abre (mãozinha); a borda e Shift/Ctrl/Alt só selecionam/movem.
+    if (hit && clickableWidgetAt(hit, { ...p, button: 0 })) return 'pointer';
     if (hit) return hit.locked ? 'not-allowed' : 'move';
     return 'default';
   };

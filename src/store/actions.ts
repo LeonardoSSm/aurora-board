@@ -29,6 +29,7 @@ import { confirmDialog, openDialog, toast } from './ui';
 import { flushCurrentBoard, flushSave, forgetBoard, getAdapter, markLoaded, runExclusive, syncSaveState, withoutAutosave } from '../persistence/autosave';
 import { migrateBoard, normalizeElement } from '../persistence/migrations';
 import { blockActiveContent } from '../core/widgetData';
+import { defaultVisual, initialLabel, referenceSize, revokeRemoteImageConsent } from '../core/smartLinks';
 import { checkImageBytes } from '../core/media';
 import { checkImportBudget } from '../persistence/importBudget';
 import { dataflowSpec, findWidgetPreset, getWidget } from '../widgets/registry';
@@ -789,6 +790,7 @@ export async function pasteContent(text: string | null, files: File[], at: Vec |
           return;
         }
         blockActiveContent(els, 'paste', WIDGET.sandbox);
+        revokeRemoteImageConsent(els, WIDGET.link);
       }
       const box = getCommonBounds(els)!;
       pasteCount++;
@@ -806,7 +808,10 @@ export async function pasteContent(text: string | null, files: File[], at: Vec |
   if (!trimmed) return;
   const pos = at ?? viewportCenterWorld();
   if (/^https?:\/\/\S+$/.test(trimmed)) {
-    addWidget(WIDGET.link, pos, { url: trimmed });
+    // Issue #22: URL colada vira Atalho Visual horizontal com nome LOCAL (site conhecido ou domínio) — sem buscar nada.
+    const name = initialLabel(trimmed);
+    const visual = defaultVisual({ label: name });
+    addWidget(WIDGET.link, pos, { url: trimmed, visual }, { size: { ...referenceSize(visual) }, ...(name ? { title: name.slice(0, 80) } : {}) });
     return;
   }
   const style = { ...getState().currentStyle, textAlign: 'left' as const };

@@ -5,6 +5,7 @@ import { migrateBoard } from './migrations';
 import { importLegacy, isLegacyFormat } from './legacy';
 import { checkGenericBudget, checkImportBudget, IMPORT_LIMITS, ImportBudgetError } from './importBudget';
 import { blockActiveContent } from '../core/widgetData';
+import { revokeRemoteImageConsent } from '../core/smartLinks';
 import type { PersistenceAdapter } from './adapter';
 
 export const APP_VERSION = 'Aurora Board 1.0.0';
@@ -38,6 +39,9 @@ export function assetIdsOf(elements: AuroraElement[]): Set<string> {
     if (el.type === 'widget' && el.data && typeof el.data === 'object') {
       const docs = (el.data as { docs?: { assetId?: string }[] }).docs;
       if (Array.isArray(docs)) for (const d of docs) if (d?.assetId) ids.add(d.assetId);
+      // Issue #22: imagem enviada de um atalho visual.
+      const visual = (el.data as { visual?: { assetId?: unknown } }).visual;
+      if (el.widgetType === 'aurora.link' && visual && typeof visual.assetId === 'string' && visual.assetId) ids.add(visual.assetId);
     }
   }
   return ids;
@@ -94,6 +98,7 @@ export function parseImport(text: string, workspaceId: string): ImportResult {
     }
     if (total > IMPORT_LIMITS.maxTotalElements) throw new ImportError(`Importação recusada por segurança: mais de ${IMPORT_LIMITS.maxTotalElements} elementos no total.`);
     const activeContent = r.boards.reduce((n, b) => n + blockActiveContent(b.elements as never, 'import'), 0);
+    for (const b of r.boards) revokeRemoteImageConsent(b.elements as never);
     return { source: 'legacy-v0.3', boards: r.boards, assets: r.assets, warnings: r.warnings, stats: { boards: r.stats.boards, elements: r.stats.elements + r.stats.connections + r.stats.strokes, activeContent } };
   }
   const parsed = ExportFileSchema.safeParse(data);
@@ -132,6 +137,8 @@ export function parseImport(text: string, workspaceId: string): ImportResult {
   }
   // Conteúdo ativo importado começa desativado, sobrescrevendo qualquer marcação vinda do arquivo (S1-SEC-003).
   const activeContent = boards.reduce((n, b) => n + blockActiveContent(b.elements as never, 'import'), 0);
+  // Issue #22: opt-in de imagem remota de atalhos não atravessa backups (o arquivo não pode se declarar autorizado).
+  for (const b of boards) revokeRemoteImageConsent(b.elements as never);
   return { source: 'aurora', boards, assets, warnings, stats: { boards: boards.length, elements, activeContent } };
 }
 
