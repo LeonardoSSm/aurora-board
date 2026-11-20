@@ -210,7 +210,8 @@ describe('ícones locais', () => {
       const svg = linkIconSVG(ic.id);
       expect(svg.startsWith('<svg')).toBe(true);
       expect(svg).toMatch(/<(path|circle|rect|line|polyline)/);
-      expect(svg).not.toMatch(/https?:\/\/(?!www\.w3\.org\/2000\/svg)/);
+      // A única URL permitida é o namespace do SVG (nada hospedado fora).
+      expect(svg.match(/https?:\/\/[^\s"'<>]+/g)).toEqual(['http://www.w3.org/2000/svg']);
       if (ic.kind === 'brand') expect(svg).toContain('<path fill="#ffffff" d="M');
     }
     expect(linkIconSVG('nao-existe')).toBe(linkIconSVG('globe'));
@@ -340,6 +341,21 @@ describe('gesto de clique no canvas', () => {
     setState({ elements: [{ ...shortcut, locked: true }] });
     click(220, 128);
     expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('arrastar um atalho bloqueado (que não se move) também não abre', () => {
+    setState({ elements: [{ ...shortcut, locked: true }] });
+    pointerDown(ptr(220, 128));
+    pointerMove(ptr(260, 150));
+    pointerUp(ptr(260, 150));
+    expect(getState().elements[0].x).toBe(100);
+    expect(open).not.toHaveBeenCalled();
+    // voltar ao ponto de partida antes de soltar continua sendo arrasto
+    pointerDown(ptr(220, 128));
+    pointerMove(ptr(240, 128));
+    pointerMove(ptr(220, 128));
+    pointerUp(ptr(220, 128));
+    expect(open).not.toHaveBeenCalled();
   });
 });
 

@@ -558,6 +558,8 @@ function moveSelection(g: Extract<Gesture, { type: 'move' }>, p: PointerInfo) {
   const s = getState();
   if (!g.started) {
     if (dist(g.start, p.world) * s.camera.zoom < 3) return;
+    // Passou do limiar: é arrasto, nunca clique — mesmo que nada se mova (seleção toda bloqueada).
+    g.click = null;
     const locked = s.elements.filter((e) => g.ids.has(e.id) && e.locked);
     if (locked.length === g.ids.size) return;
     for (const l of locked) g.ids.delete(l.id);
