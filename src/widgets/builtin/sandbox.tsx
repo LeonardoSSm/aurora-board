@@ -274,7 +274,7 @@ export const sandboxPlugin: WidgetPlugin<SandboxData> = {
   version: '1.0.0',
   category: 'Desenvolvimento',
   status: 'experimental',
-  statusNote: 'Isolado por iframe sandbox + CSP. Sem rede, sem acesso aos dados do quadro.',
+  statusNote: 'Isolado por iframe sandbox + CSP. Sem rede; só recebe os dados das conexões que você ligar às entradas dele.',
   accent: '#9cb1cf',
   permissions: ['sandbox:scripts'],
   defaultSize: { width: 360, height: 300 },

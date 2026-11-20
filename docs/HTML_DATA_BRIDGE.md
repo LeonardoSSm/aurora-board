@@ -54,6 +54,8 @@ Valor publicado: até 64 KB de JSON, 8 níveis, 5.000 itens por lista, 500 chave
 
 ## Painel de Propriedades
 
+![Painel de Propriedades de um bloco HTML com entradas, saídas e status (dados fictícios)](img/html-bridge.png)
+
 - **Ativar entradas e saídas** em um bloco legado. Depois, cada porta tem nome (`[a-zA-Z][a-zA-Z0-9_]*`), rótulo e tipo. Cada entrada mostra quantas conexões tem, o selo “sem conexão” ou o erro da conexão (tipo incompatível, porta inexistente, ciclo). Cada saída mostra “publicado (N bytes)”, “desatualizado” ou o motivo da recusa (sem o valor).
 - **Depuração** sem vazar valores: contagem de mensagens aceitas e recusadas. Nada é escrito no console do app.
 - **Exemplos editáveis:** painel de receitas/despesas/saldo, contagem de tarefas e meta de gastos (fórmula/gráfico).
