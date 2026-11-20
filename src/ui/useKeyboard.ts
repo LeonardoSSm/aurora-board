@@ -32,6 +32,7 @@ import { flushSave } from '../persistence/autosave';
 import { abortDraft, cancelGesture, finishDraft, isDrafting, setSpaceHeld } from '../canvas/controller';
 import { TOOL_BY_KEY } from './tools';
 import { openRadialFromKeyboard } from './radialOpen';
+import { openCapture, openCommandCenter } from './commandOpen';
 import { acceptsBoundText, isText } from '../core/schema';
 
 /** Alvo é um campo de digitação? Atalhos não devem interferir. */
@@ -58,6 +59,10 @@ export function useKeyboard() {
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
       if (mod && key === 's') { e.preventDefault(); void flushSave(); return; }
+      // Issue #14: Ctrl/Cmd+K abre o Command Center e Ctrl+Shift+Espaço a captura rápida — também a partir de campos
+      // (não são teclas de digitação). Com diálogo aberto, nada.
+      if (mod && !e.shiftKey && !e.altKey && key === 'k') { e.preventDefault(); openCommandCenter(); return; }
+      if (mod && e.shiftKey && !e.altKey && e.code === 'Space') { e.preventDefault(); openCapture(); return; }
       if (isTypingTarget(e.target) || modalOpen()) return;
       const s = getState();
       if (s.editingTextId) return;

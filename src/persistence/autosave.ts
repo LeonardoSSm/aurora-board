@@ -166,6 +166,16 @@ export function scheduleSave() {
   refreshSaveState();
 }
 
+/**
+ * Issue #14: o quadro tem trabalho ainda não confirmado no armazenamento (gravação pendente ou com falha, ou
+ * diário de recuperação)? Nesse caso a cópia gravada não é a mais nova e não pode receber escrita direta.
+ */
+export function hasUnsavedWork(boardId: string): boolean {
+  if (failed.has(boardId)) return true;
+  if ((latestRev.get(boardId) ?? 0) > (savedRev.get(boardId) ?? 0)) return true;
+  return readJournals().some((j) => j.boardId === boardId);
+}
+
 export function hasPendingChanges() {
   return timer !== null || activeSaves > 0 || failed.size > 0 || anyDirty();
 }

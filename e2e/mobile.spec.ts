@@ -165,3 +165,26 @@ test('Aurora Wheel no celular (#15): toque longo não abre a roda; o botão “C
   await expect(wheel).toHaveCount(0);
   expect((await state(page)).elements.map((e) => e.widgetType)).toEqual(['aurora.tasks']);
 });
+
+test('Command Center no celular (#14): botão de busca visível, paleta cabe na tela e encontra o conteúdo', async ({ page }) => {
+  await ready(page);
+  await page.evaluate(async () => {
+    const a = (window as any).__aurora;
+    await a.actions.createBoard('Busca celular');
+    a.actions.addWidget('aurora.notes', { x: 0, y: 0 }, { markdown: 'lista do mercado', mode: 'preview' }, { title: 'Compras' });
+    a.store.setState({ editingWidgetId: null, selectedIds: [] });
+  });
+  const btn = page.getByRole('button', { name: 'Buscar (Ctrl+K)' });
+  await expect(btn).toBeVisible();
+  await btn.tap();
+  const pal = page.getByTestId('command-center');
+  await expect(pal).toBeVisible();
+  const box = (await pal.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await pal.getByRole('combobox').fill('mercado');
+  await expect(pal.getByTestId('command-row').first()).toContainText('Compras');
+  await pal.getByTestId('command-row').first().tap();
+  await expect(pal).toHaveCount(0);
+  expect((await state(page)).selectedIds).toHaveLength(1);
+});

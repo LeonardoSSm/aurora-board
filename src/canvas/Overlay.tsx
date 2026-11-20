@@ -7,6 +7,18 @@ import { getDataflow } from '../widgets/dataflow';
 
 const ACCENT = '#8f9bff';
 
+/** Issue #14: destaque breve (1,6 s) do elemento encontrado pela busca. Sem animação com movimento reduzido. */
+function SearchFlash({ elements }: { elements: AuroraElement[] }) {
+  const flash = useEditor((s) => s.elementFlash);
+  const cam = useEditor((s) => s.camera);
+  if (!flash || Date.now() - flash.at > 1600) return null;
+  const el = elements.find((e) => e.id === flash.id);
+  if (!el) return null;
+  const b = getElementBounds(el);
+  const a = toScreen({ x: b.minX, y: b.minY }, cam);
+  return <rect key={flash.at} data-testid="search-flash" className="search-flash" x={a.x - 8} y={a.y - 8} width={(b.maxX - b.minX) * cam.zoom + 16} height={(b.maxY - b.minY) * cam.zoom + 16} rx={10} fill="none" stroke="#ffd36a" strokeWidth={2.5} />;
+}
+
 function Outline({ el, dashed, color = ACCENT }: { el: AuroraElement; dashed?: boolean; color?: string }) {
   const cam = useEditor((s) => s.camera);
   const f = selectionFrame([el], cam);
@@ -94,6 +106,7 @@ export function Overlay() {
           rx={6}
         />
       )}
+      <SearchFlash elements={elements} />
       {hover && !isLinear(hover) && <Outline el={hover} color="#5d6bd8" />}
       {hover && isLinear(hover) && (() => {
         const b = getElementBounds(hover);

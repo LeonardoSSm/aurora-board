@@ -9,6 +9,8 @@ import { BoardsPanel } from './ui/BoardsPanel';
 import { CheckpointDialog, LocationsPanel } from './ui/LocationsPanel';
 import { ContextMenu, DialogHost, ShortcutsDialog, Toasts, ZoomControls } from './ui/Overlays';
 import { RadialMenu } from './ui/RadialMenu';
+import { CommandCenter } from './ui/CommandCenter';
+import { QuickCapture } from './ui/QuickCapture';
 import { BetaNotice } from './ui/BetaNotice';
 import { FinanceHub } from './ui/finance/FinanceHub';
 import { PairingDialog } from './ui/PairingDialog';
@@ -92,6 +94,8 @@ export function App() {
       </div>
       <ContextMenu />
       <RadialMenu />
+      <CommandCenter />
+      <QuickCapture />
       <BoardsPanel />
       <LocationsPanel />
       <CheckpointDialog />

@@ -954,7 +954,8 @@ export async function openBoard(id: string) {
   flushTextEditor();
   abandonGesture();
   await flushCurrentBoard();
-  const raw = await getAdapter().loadBoard(id);
+  // Lido na mesma fila das gravações (issue #14): uma escrita no Inbox em curso termina antes desta leitura.
+  const raw = await runExclusive(() => getAdapter().loadBoard(id));
   if (!raw) { toast('Quadro não encontrado.', 'error'); return; }
   // Dados lidos do armazenamento passam pela mesma validação/reparo da importação.
   const { board, warnings } = migrateBoard(raw, raw.workspaceId);
