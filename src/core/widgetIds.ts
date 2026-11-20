@@ -15,4 +15,6 @@ export const WIDGET = {
   financePeriod: 'aurora.finance-period',
   formula: 'aurora.formula',
   bankQuery: 'aurora.bank-query',
+  /** Data Hub (issue #24): conjunto de dados importado (CSV/JSON). */
+  dataset: 'aurora.dataset',
 } as const;

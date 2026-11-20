@@ -58,6 +58,7 @@ export class IndexedDBAdapter implements PersistenceAdapter {
   }
   async getAsset(id: string) { return (await (await this.dbp).get('assets', id)) ?? null; }
   async putAsset(asset: Asset) { await (await this.dbp).put('assets', asset); }
+  async deleteAsset(id: string) { await (await this.dbp).delete('assets', id); }
   /** Importação atômica: uma única transação readwrite; qualquer erro aborta tudo (S1-SEC-006). */
   async commitImport(batch: { assets: Asset[]; boards: Board[]; workspace: Workspace }) {
     const db = await this.dbp;

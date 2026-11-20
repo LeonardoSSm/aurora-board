@@ -72,6 +72,7 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | [docs/finance/PERSONAL_FINANCE.md](docs/finance/PERSONAL_FINANCE.md) | Minhas contas (ciclo F1): contas, cartões, extratos, conciliação, canvas, IA, backups — índice dos documentos em `docs/finance/` |
 | [docs/finance/MEU_PLUGGY.md](docs/finance/MEU_PLUGGY.md) | Meu Pluggy (uso pessoal, somente leitura): passo a passo de configuração local, arquitetura, decisões e testes |
 | [docs/HTML_DATA_BRIDGE.md](docs/HTML_DATA_BRIDGE.md) | HTML Data Bridge (protocolo 1): entradas/saídas tipadas para widgets HTML, IA só com saídas autorizadas, proteção financeira transitiva |
+| [docs/DATA_HUB.md](docs/DATA_HUB.md) | Data Hub: bloco “Dados importados” (CSV/JSON), persistência local, exportação segura, saídas limitadas e política de backup |
 | [docs/PANELS.md](docs/PANELS.md) | Laterais redimensionáveis (arrastar, teclado, padrão) e formulários de Propriedades responsivos |
 | [docs/ANIMATED_GIFS.md](docs/ANIMATED_GIFS.md) | GIFs animados (ciclo 6): auditoria do suporte nativo, repetição, pausa, movimento reduzido, exportação, limites |
 | [docs/VISUAL_FINANCE.md](docs/VISUAL_FINANCE.md) | Finanças visuais: valores, meses, regras de cálculo, precisão, uso e desempenho |
@@ -118,6 +119,7 @@ Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuraç
 | Assistente IA | 🟡 | OpenAI, Claude e Gemini via servidor local; só envia contexto conectado e autorizado; respostas estruturadas viram blocos/tarefas/conexões **somente após confirmação** |
 | Gráfico | ✅ | Barras/rosca a partir de blocos financeiros conectados |
 | HTML isolado | ✅ experimental | Base de plugins de terceiros (iframe sandbox + CSP); ponte de dados com entradas/saídas tipadas e IA só com saídas autorizadas (docs/HTML_DATA_BRIDGE.md) |
+| Dados importados | ✅ | CSV/JSON com prévia e validação, guardados no dispositivo, exportação CSV/JSON segura, saídas paginadas para Fórmula/Gráfico/HTML; nunca enviados à IA (docs/DATA_HUB.md) |
 | AI Tiles | ✅ | ChatGPT, Codex, Claude, Claude Code, Gemini e Grok com logos locais; modos compacto, normal e detalhado; arrastar da biblioteca, conectar, agrupar, exportar PNG/SVG com a logo. Não exige API; vínculo opcional com um bloco Assistente IA. Ver [docs/AI_TILES.md](docs/AI_TILES.md) |
 | Valor | ✅ | Dinheiro (receita/despesa/neutro, em centavos), número ou porcentagem; digita-se no próprio bloco; “Converter em valor” transforma um texto com número |
 | Mês financeiro | ✅ | Soma os valores conectados: receitas, despesas, saldo, comprometimento, categorias; sem dupla contagem; avisa moeda/competência diferentes |

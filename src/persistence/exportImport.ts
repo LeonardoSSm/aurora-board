@@ -7,6 +7,8 @@ import { checkGenericBudget, checkImportBudget, IMPORT_LIMITS, ImportBudgetError
 import { blockActiveContent } from '../core/widgetData';
 import { revokeRemoteImageConsent } from '../core/smartLinks';
 import type { PersistenceAdapter } from './adapter';
+import { decodeDatasetAsset, isDatasetAsset } from '../data/codec';
+import { uid } from '../core/elements';
 
 export const APP_VERSION = 'Aurora Board 1.0.0';
 export const MAX_IMPORT_BYTES = IMPORT_LIMITS.maxFileBytes;
@@ -42,8 +44,34 @@ export function assetIdsOf(elements: AuroraElement[]): Set<string> {
       // Issue #22: imagem enviada de um atalho visual.
       const visual = (el.data as { visual?: { assetId?: unknown } }).visual;
       if (el.widgetType === 'aurora.link' && visual && typeof visual.assetId === 'string' && visual.assetId) ids.add(visual.assetId);
+      // Issue #24 (Data Hub): conteúdo de um conjunto de dados importado.
+      const ds = datasetAssetIdOf(el);
+      if (ds) ids.add(ds);
     }
   }
+  return ids;
+}
+
+/** Issue #24: id do asset de dados importados referenciado por um bloco `aurora.dataset` (ou null). */
+export function datasetAssetIdOf(el: AuroraElement): string | null {
+  if (el.type !== 'widget' || el.widgetType !== 'aurora.dataset' || !el.data || typeof el.data !== 'object') return null;
+  const source = (el.data as { source?: { assetId?: unknown } }).source;
+  return source && typeof source.assetId === 'string' && source.assetId ? source.assetId : null;
+}
+
+/** Troca a referência de dados importados de um bloco segundo o mapa (ids antigos → novos). */
+function remapDatasetAsset(el: AuroraElement, remap: ReadonlyMap<string, string>): AuroraElement {
+  const old = datasetAssetIdOf(el);
+  const next = old ? remap.get(old) : undefined;
+  if (!next || el.type !== 'widget') return el;
+  const data = el.data as { source: Record<string, unknown> };
+  return { ...el, data: { ...data, source: { ...data.source, assetId: next } } };
+}
+
+/** Assets de dados importados (Data Hub) usados por estes elementos — os backups pedem decisão explícita sobre eles. */
+export function datasetAssetIdsOf(elements: AuroraElement[]): Set<string> {
+  const ids = new Set<string>();
+  for (const el of elements) { const id = datasetAssetIdOf(el); if (id) ids.add(id); }
   return ids;
 }
 
@@ -129,6 +157,10 @@ export function parseImport(text: string, workspaceId: string): ImportResult {
     if (seenAssets.has(a.id)) { warnings.push(`Arquivo/imagem ${a.id} repetido no backup: mantida a primeira cópia.`); continue; }
     seenAssets.add(a.id);
     if (!DATA_URL_HEAD.test(a.dataURL)) { warnings.push(`Arquivo "${a.name.slice(0, 60)}" (${a.id}) com conteúdo inválido descartado.`); continue; }
+    // Issue #24: dados importados (Data Hub) são validados por inteiro ANTES de gravar (estrutura, tipos, limites).
+    if (isDatasetAsset(a)) {
+      try { decodeDatasetAsset(a); } catch (e) { warnings.push(`Dados importados "${a.name.slice(0, 60)}" (${a.id}) inválidos descartados: ${(e as Error).message}`); continue; }
+    }
     assets.push(a);
   }
   const available = new Set(assets.map((a) => a.id));
@@ -159,7 +191,18 @@ export async function applyImport(
   newId: () => string,
 ): Promise<{ boardIds: string[]; workspace: Workspace }> {
   const assets: Asset[] = [];
-  for (const a of result.assets) if (!(await adapter.getAsset(a.id))) assets.push(a);
+  // Issue #24: um conjunto de dados do backup com o MESMO id de um asset local DIFERENTE ganha id novo, e os
+  // blocos importados passam a apontar para ele — nunca exibem silenciosamente o dado local no lugar do importado.
+  const remap = new Map<string, string>();
+  for (const a of result.assets) {
+    const existing = await adapter.getAsset(a.id);
+    if (!existing) { assets.push(a); continue; }
+    if (isDatasetAsset(a) && existing.dataURL !== a.dataURL) {
+      const id = uid('ds_');
+      remap.set(a.id, id);
+      assets.push({ ...a, id });
+    }
+  }
   const ids: string[] = [];
   const boards: Board[] = [];
   const taken = new Set<string>();
@@ -167,7 +210,8 @@ export async function applyImport(
     let id = b.id;
     if (taken.has(id) || (await adapter.loadBoard(id))) id = newId();
     taken.add(id);
-    const board: Board = { ...b, id, workspaceId: workspace.id, archived: false, updatedAt: Date.now() };
+    const elements = remap.size ? b.elements.map((el) => remapDatasetAsset(el, remap)) : b.elements;
+    const board: Board = { ...b, id, elements, workspaceId: workspace.id, archived: false, updatedAt: Date.now() };
     try {
       structuredClone(board);
     } catch {
