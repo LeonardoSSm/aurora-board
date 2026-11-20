@@ -956,15 +956,27 @@ export async function refreshBoards() {
   setState({ boards: orderBoards(metas, ws) });
 }
 
-export async function openBoard(id: string) {
+/**
+ * Geração da navegação entre quadros: a ÚLTIMA chamada de `openBoard` vence. Uma abertura que ainda está lendo
+ * quando outra começa (inclusive outra que volta ao quadro ATUAL e nem precisa ler) é abandonada antes de
+ * instalar o quadro — nunca troca o quadro depois do destino mais recente (apontamento do PR #18).
+ */
+let openGen = 0;
+export type OpenBoardResult = 'opened' | 'superseded' | 'missing';
+
+export async function openBoard(id: string): Promise<OpenBoardResult> {
+  const gen = ++openGen;
+  const superseded = () => gen !== openGen;
   const s = getState();
-  if (s.boardId === id && s.status === 'ready') return;
+  if (s.boardId === id && s.status === 'ready') return 'opened';
   flushTextEditor();
   abandonGesture();
   await flushCurrentBoard();
+  if (superseded()) return 'superseded';
   // Lido na mesma fila das gravações (issue #14): uma escrita no Inbox em curso termina antes desta leitura.
   const raw = await runExclusive(() => getAdapter().loadBoard(id));
-  if (!raw) { toast('Quadro não encontrado.', 'error'); return; }
+  if (superseded()) return 'superseded';
+  if (!raw) { toast('Quadro não encontrado.', 'error'); return 'missing'; }
   // Dados lidos do armazenamento passam pela mesma validação/reparo da importação.
   const { board, warnings } = migrateBoard(raw, raw.workspaceId);
   if (warnings.length) {
@@ -973,10 +985,14 @@ export async function openBoard(id: string) {
     const key = `backup-before-repair:${raw.id}`;
     if (!(await getAdapter().getSetting(key))) await getAdapter().setSetting(key, { savedAt: Date.now(), board: raw });
     toast(`${warnings.length} problema(s) de integridade corrigido(s) neste quadro. Detalhes no console.`, 'warning', 6000);
+    if (superseded()) return 'superseded';
   }
   cancelCameraAnimation(); // animação do quadro anterior nunca continua no novo
+  // O quadro instalado e a workspace ativa nunca divergem (troca de workspace concorrente com outra navegação).
+  const wsChanged = board.workspaceId !== getState().workspaceId && getState().workspaces.some((w) => w.id === board.workspaceId);
   withoutAutosave(() =>
     setState({
+      ...(wsChanged ? { workspaceId: board.workspaceId } : {}),
       boardId: board.id,
       elements: board.elements,
       camera: board.camera,
@@ -994,7 +1010,9 @@ export async function openBoard(id: string) {
   );
   markLoaded(board.elements, board.camera);
   syncSaveState();
+  if (wsChanged) await refreshBoards();
   await getAdapter().setSetting(`lastBoard:${board.workspaceId}`, board.id);
+  return 'opened';
 }
 
 export async function createBoard(name: string, description = '', open = true): Promise<Board> {

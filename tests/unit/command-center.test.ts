@@ -5,6 +5,7 @@ import { flushSave, setAdapter } from '../../src/persistence/autosave';
 import { getState, initialEditorState, setState } from '../../src/store/editor';
 import { __resetIndex, indexSize, jumpTo, refreshIndex, search } from '../../src/store/commandCenter';
 import { capture } from '../../src/store/quickCapture';
+import { addElements, openBoard, redo, undo } from '../../src/store/actions';
 import { createBoard as makeBoard, createText } from '../../src/core/elements';
 import { registerBuiltinWidgets } from '../../src/widgets/builtin';
 import { __setCameraTestHooks } from '../../src/store/cameraMotion';
@@ -96,6 +97,44 @@ describe('navegação', () => {
     setState({ elements: [] });
     expect(await jumpTo(r.doc)).toBe('missing');
   });
+
+  // Apontamento do PR #18: A→B carregando e o usuário escolhe um resultado em A; a abertura antiga de B vencia.
+  it('a última navegação vence: abertura antiga em curso não troca o quadro depois', async () => {
+    const alfa = createText(0, 0, 'alfa'), beta = createText(0, 0, 'beta');
+    const a = await addBoard('A', [alfa]);
+    const b = await addBoard('B', [beta]);
+    await openAs(a);
+    await refreshIndex();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const orig = adapter.loadBoard.bind(adapter);
+    adapter.loadBoard = async (id) => { if (id === b.id) await gate; return orig(id); };
+    const toB = jumpTo(search('beta')[0].doc);
+    await new Promise((r) => setTimeout(r, 0));
+    const toA = jumpTo(search('alfa')[0].doc);
+    release();
+    expect(await toA).toBe('ok');
+    expect(await toB).toBe('stale');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(getState().boardId).toBe(a.id);
+    expect(getState().selectedIds).toEqual([alfa.id]);
+  });
+
+  it('abrir quadros em sequência rápida: fica o último pedido', async () => {
+    const a = await addBoard('A'), b = await addBoard('B'), c = await addBoard('C');
+    await openAs(a);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const orig = adapter.loadBoard.bind(adapter);
+    adapter.loadBoard = async (id) => { if (id === b.id) await gate; return orig(id); };
+    const p1 = openBoard(b.id);
+    await new Promise((r) => setTimeout(r, 0));
+    const p2 = openBoard(c.id); // leituras são serializadas na fila do autosave: C lê depois de B
+    release();
+    expect(await p1).toBe('superseded');
+    expect(await p2).toBe('opened');
+    expect(getState().boardId).toBe(c.id);
+  });
 });
 
 describe('captura rápida', () => {
@@ -143,6 +182,32 @@ describe('captura rápida', () => {
     setState({ elements: [createText(0, 0, 'editando o atual')] });
     await flushSave(true);
     expect((await adapter.loadBoard(inbox.id))!.elements).toHaveLength(1);
+  });
+
+  // Apontamento do PR #18: histórico retido do Inbox (editado antes nesta sessão) apagava a captura no desfazer/refazer.
+  it('desfazer/refazer edições antigas do Inbox não apaga o item capturado com ele fechado', async () => {
+    const old = createText(0, 0, 'antigo');
+    const inbox = await addBoard('Inbox', [old]);
+    const cur = await addBoard('Atual', []);
+    await openAs(cur);
+    await openBoard(inbox.id);
+    addElements([createText(0, 100, 'edição antiga')], false);
+    expect(getState().history[inbox.id]?.undo.length).toBe(1);
+    await openBoard(cur.id);
+    const res = await capture({ kind: 'note', title: 'Capturado', details: '' }, inbox.id);
+    await openBoard(inbox.id);
+    const ids = () => getState().elements.map((e) => e.id);
+    expect(ids()).toContain(res.elementId);
+    undo();
+    expect(ids()).toContain(res.elementId);
+    expect(getState().elements.some((e) => (e as { text?: string }).text === 'edição antiga')).toBe(false);
+    redo();
+    expect(ids()).toContain(res.elementId);
+    undo();
+    await flushSave(true);
+    const saved = (await adapter.loadBoard(inbox.id))!.elements.map((e) => e.id);
+    expect(saved).toContain(res.elementId);
+    expect(saved).toContain(old.id);
   });
 });
 

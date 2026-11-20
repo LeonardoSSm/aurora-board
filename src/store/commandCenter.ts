@@ -192,11 +192,11 @@ export async function jumpTo(doc: SearchDoc): Promise<'ok' | 'stale' | 'missing'
     await switchWorkspace(doc.workspaceId);
     if (stale()) return 'stale';
   }
-  if (getState().boardId !== doc.boardId) {
-    await openBoard(doc.boardId);
-    if (stale()) return 'stale';
-    if (getState().boardId !== doc.boardId) { toast('Não foi possível abrir o quadro deste resultado.', 'error'); return 'missing'; }
-  }
+  // Sempre passa por `openBoard`, MESMO se o destino já é o quadro atual: isso invalida uma abertura anterior ainda
+  // em curso (A→B carregando e o usuário escolhe um resultado em A: fica em A, não em B).
+  const opened = await openBoard(doc.boardId);
+  if (stale() || opened === 'superseded') return 'stale';
+  if (getState().boardId !== doc.boardId) { toast('Não foi possível abrir o quadro deste resultado.', 'error'); return 'missing'; }
   if (doc.kind === 'board') return 'ok';
   if (doc.kind === 'checkpoint') {
     if (!getState().checkpoints.some((c) => c.id === doc.id)) { toast('Este local foi excluído desde a busca.', 'warning'); return 'missing'; }

@@ -62,6 +62,23 @@ describe('extração com privacidade', () => {
     expect(docsOf(c)[0]).toMatchObject({ filter: 'code' });
     expect(docsOf(c)[0].body).toContain('soma');
   });
+  // Apontamento do PR #18: a pontuação era trocada antes de remover a URL, que ficava partida e pesquisável.
+  it.each([
+    'https://example.test/path#access_token=secret123',
+    'https://example.test/a-b_c/d?x=1&api_key=secret123',
+    '[link](https://example.test/x_y-z#frag-secret123)',
+    '<https://example.test/~u/secret123>',
+    'ftp://user:secret123@example.test/file',
+    'mailto:pessoa@example.test?subject=secret123',
+    'www.example.test/secret123',
+  ])('notas: URL removida inteira (%s)', (url) => {
+    const n = widget(WIDGET.notes, 'Diário', { markdown: `Antes ${url} depois`, mode: 'edit' });
+    const [d] = docsOf(n);
+    expect(d.body).toContain('Antes');
+    expect(d.body).toContain('depois');
+    expect(d.body).not.toMatch(/secret123|access|token|api|example/);
+    expect(JSON.stringify(snippet(d.body, terms('depois')))).not.toMatch(/secret123/);
+  });
   it('widget desconhecido (terceiros): só o título', () => {
     const w = widget('acme.plugin', 'Meu plugin', { segredo: 'x' });
     expect(docsOf(w)[0]).toMatchObject({ body: '', contentHidden: true });

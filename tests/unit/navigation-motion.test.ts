@@ -75,6 +75,29 @@ describe('trajeto de voo (van Wijk)', () => {
     const p = flightPath(a, centerOn({ x: 9e8, y: -9e8 }, 8, vp), vp);
     for (let u = 0; u <= 1; u += 0.01) for (const v of Object.values(p.at(u))) expect(Number.isFinite(v)).toBe(true);
   });
+
+  // Apontamento do PR #16: centro quase parado + grande mudança de zoom cancelava √(b²+1) − b → NaN e “teleporte”.
+  it.each([
+    [{ x: 0, y: 0 }, 8, { x: 0.011, y: 0 }, 0.1],
+    [{ x: 0, y: 0 }, 0.1, { x: 0.011, y: 0 }, 8],
+    [{ x: 1e6, y: -1e6 }, 8, { x: 1e6 + 0.02, y: -1e6 }, MIN_ZOOM],
+    [{ x: 0, y: 0 }, 8, { x: 0, y: 0.0101 }, 0.1],
+  ])('estável com centro quase parado e grande mudança de zoom (%o z%s → %o z%s)', (c0, z0, c1, z1) => {
+    const from = centerOn(c0, z0, vp), to = centerOn(c1, z1, vp);
+    const p = flightPath(from, to, vp);
+    expect(Number.isFinite(p.length)).toBe(true);
+    expect(p.length).toBeGreaterThan(0);
+    let prevZoom = from.zoom;
+    for (let i = 1; i < 100; i++) {
+      const cam = p.at(i / 100);
+      for (const v of Object.values(cam)) expect(Number.isFinite(v)).toBe(true);
+      // Sem mudança de direção: o zoom vai monotonicamente da origem ao destino.
+      if (z1 < z0) expect(cam.zoom).toBeLessThanOrEqual(prevZoom * (1 + 1e-9));
+      else expect(cam.zoom).toBeGreaterThanOrEqual(prevZoom * (1 - 1e-9));
+      prevZoom = cam.zoom;
+    }
+    expect(p.at(1)).toEqual(to);
+  });
 });
 
 describe('durações por velocidade', () => {
