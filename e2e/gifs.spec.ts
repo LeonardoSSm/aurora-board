@@ -206,17 +206,22 @@ test('vários GIFs: pan e zoom continuam funcionando; ao voltar à tela o GIF n�
   expect(await isAnimating(page, first.id)).toBe(true);
 });
 
-test('colar um GIF da área de transferência insere a imagem animada', async ({ page, browserName }) => {
-  test.skip(browserName === 'webkit', 'WebKit não entrega clipboardData em eventos de colar sintéticos (ver KNOWN_ISSUES › Testes)');
+test('colar um GIF da área de transferência insere a imagem animada', async ({ page }) => {
   await board(page);
-  await page.evaluate((b64) => {
+  // Eventos de colar criados por script só carregam arquivos em alguns navegadores (Chromium e WebKit sim; o Firefox
+  // descarta o clipboardData). Onde não carregam, o teste não tem como simular o gesto real.
+  const delivered = await page.evaluate((b64) => {
     const bin = atob(b64);
     const u = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
     const dt = new DataTransfer();
     dt.items.add(new File([u], 'colado.gif', { type: 'image/gif' }));
-    document.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt }));
+    const ev = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt });
+    if (!ev.clipboardData?.files.length) return false;
+    document.dispatchEvent(ev);
+    return true;
   }, toBase64(loopingGif('once')));
+  test.skip(!delivered, 'Este navegador não entrega arquivos em eventos de colar sintéticos (ver KNOWN_ISSUES › GIFs animados)');
   await expect.poll(async () => (await images(page)).length).toBe(1);
   const [el] = await images(page);
   await page.waitForTimeout(600);

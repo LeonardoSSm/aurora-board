@@ -60,7 +60,7 @@ Ver a tabela em [PERFORMANCE.md](PERFORMANCE.md#gifs-animados-ciclo-6) (`e2e/per
 ## Testes
 
 - `tests/unit/gif.test.ts` — leitura, duração, repetição, primeiro quadro, robustez, decisão de exibição, normalização na importação, preservação no backup.
-- `e2e/gifs.spec.ts` — seletor de arquivos e arrastar-e-soltar, animação por capturas sucessivas, repetição contínua × “como no arquivo”, pausar/desfazer, movimento reduzido, preferência geral persistente, duplicar/redimensionar/agrupar/recarregar, exportação SVG determinística + PNG + JSON, 24 GIFs com pan/zoom e saída/volta da tela, arquivo inválido.
+- `e2e/gifs.spec.ts` — seletor de arquivos, arrastar-e-soltar e colar (colar no Chromium e WebKit; o Firefox não entrega arquivos em eventos de colar sintéticos), animação por capturas sucessivas, repetição contínua × “como no arquivo”, pausar/desfazer, movimento reduzido, preferência geral persistente, duplicar/redimensionar/agrupar/recarregar, exportação SVG determinística + PNG + JSON, 24 GIFs com pan/zoom e saída/volta da tela, arquivo inválido.
 - GIFs de teste gerados por `tests/fixtures/gifEncoder.ts` (código e conteúdo do projeto; sem imagens de terceiros).
 
 ## Limitações

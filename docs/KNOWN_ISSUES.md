@@ -85,7 +85,7 @@ Estado ao final do ciclo 2. Itens marcados com ⚠ afetam uso real; os demais s�
 - PNG/SVG exportam o primeiro quadro; exportar o quadro como GIF/vídeo não existe.
 - GIFs que o leitor não entende (malformados ou com mais de 10.000 quadros) ficam por conta do navegador: sem repetição forçada, pausa ou prévia estática.
 - Retomar a animação ao voltar à tela (em vez de reiniciar) é comportamento do navegador, verificado no Chromium; não é garantido por especificação.
-- WebKit: o teste de **colar** GIF é pulado (eventos de colar sintéticos não trazem `clipboardData`); colar é coberto no Chromium/Firefox.
+- Firefox: o teste de **colar** GIF se pula sozinho, porque eventos de colar criados por script não carregam arquivos nesse navegador (visto na CI). Colar é coberto no Chromium e no WebKit; o caminho de inserção é o mesmo do seletor e do arrastar-e-soltar, testados nos três.
 
 ## Integrações não implementadas (escopo de ciclos futuros)
 
