@@ -69,7 +69,152 @@ const CALC = `<div style="padding:10px">
   aurora.onInputs(run);
 </script>`;
 
+/**
+ * Issue #24 (D2-B) — dashboard sobre “Dados importados”. Recebe a página de linhas, as colunas, o resumo e o
+ * agrupamento nativo (conjunto inteiro); mostra KPIs, filtro, tabela e gráfico de barras; publica métricas.
+ * Só DOM por createElement/textContent (dados importados nunca viram HTML). O estado guarda só preferências.
+ */
+const DATASET_DASHBOARD = `<style>
+  body{font:12px system-ui,sans-serif;color:#dbe6f5;margin:0}
+  .w{padding:10px;display:flex;flex-direction:column;gap:8px}
+  .k{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px}
+  .c{border:1px solid #2a3a52;border-radius:8px;padding:6px 8px}
+  .l{font-size:10px;color:#9cb1cf}.v{font-size:16px;font-weight:700}
+  .f{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  select{background:#0f1826;color:#dbe6f5;border:1px solid #2a3a52;border-radius:6px;padding:2px 4px;max-width:150px}
+  table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #22324a;padding:2px 6px;text-align:left;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis}
+  th{color:#9cb1cf;font-weight:600}.n{text-align:right}.m{color:#9cb1cf}
+</style>
+<div class="w">
+  <div id="vazio" class="m">Conecte um bloco “Dados importados” (linhas, colunas, resumo e agrupamento).</div>
+  <div class="k">
+    <div class="c"><div class="l">Linhas no conjunto</div><div class="v" id="kTotal">—</div></div>
+    <div class="c"><div class="l">Linhas filtradas (página)</div><div class="v" id="kFiltradas">—</div></div>
+    <div class="c"><div class="l" id="lSoma">Soma</div><div class="v" id="kSoma">—</div></div>
+    <div class="c"><div class="l" id="lMedia">Média</div><div class="v" id="kMedia">—</div></div>
+  </div>
+  <div class="f">
+    <label>Medida <select id="sMedida"></select></label>
+    <label>Filtrar <select id="sColuna"></select></label>
+    <select id="sValor"></select>
+  </div>
+  <svg id="grafico" width="100%" height="120" viewBox="0 0 320 120" preserveAspectRatio="none"></svg>
+  <div class="m" id="legenda"></div>
+  <table><thead><tr id="cab"></tr></thead><tbody id="corpo"></tbody></table>
+</div>
+<script>
+  // Preferências (NUNCA linhas): medida e filtro escolhidos. valor: null = todos; '' = células vazias.
+  const pref = Object.assign({ medida: '', coluna: '', valor: null }, aurora.state || {});
+  if (typeof pref.valor !== 'string') pref.valor = null;
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n) => (typeof n === 'number' && isFinite(n) ? n.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—');
+  const txt = (v) => (v === null || v === undefined ? '' : String(v));
+  function el(tag, text, cls) { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; }
+  function options(sel, list, current, first) {
+    sel.replaceChildren();
+    if (first) sel.appendChild(el('option', first)).value = '';
+    for (const o of list) { const op = el('option', o.label); op.value = o.value; sel.appendChild(op); }
+    sel.value = list.some((o) => o.value === current) ? current : '';
+  }
+  // Opção de valor: 'v:' + valor (assim “(vazio)” = 'v:' nunca se confunde com “(todos)” = '').
+  const optValor = (v) => 'v:' + v;
+  let last = { linhas: [], colunas: [], resumo: null, grupos: null };
+  function render() {
+    const { linhas, resumo, grupos } = last;
+    // Só as colunas que vêm nas linhas (resumo.projectedColumns): as demais existem no conjunto, mas não foram entregues.
+    const proj = resumo && Array.isArray(resumo.projectedColumns) ? new Set(resumo.projectedColumns) : linhas.length ? new Set(Object.keys(linhas[0])) : null;
+    const colunas = proj ? last.colunas.filter((c) => proj.has(c.id)) : last.colunas;
+    $('vazio').style.display = last.colunas.length ? 'none' : '';
+    const numericas = colunas.filter((c) => c.type === 'number');
+    const textuais = colunas.filter((c) => c.type !== 'number');
+    if (!numericas.some((c) => c.id === pref.medida)) pref.medida = numericas.length ? numericas[0].id : '';
+    options($('sMedida'), numericas.map((c) => ({ value: c.id, label: c.label })), pref.medida, numericas.length ? '' : '(sem colunas numéricas)');
+    // A coluna do filtro sumiu (dados trocados ou não projetada): o filtro deixa de valer — e a tela mostra isso.
+    if (pref.coluna && !textuais.some((c) => c.id === pref.coluna)) { pref.coluna = ''; pref.valor = null; }
+    options($('sColuna'), textuais.map((c) => ({ value: c.id, label: c.label })), pref.coluna, '(sem filtro)');
+    const valores = pref.coluna ? [...new Set(linhas.map((r) => txt(r[pref.coluna])))].slice(0, 100) : [];
+    const opcoes = valores.map((v) => ({ value: optValor(v), label: v || '(vazio)' }));
+    // O valor escolhido continua visível mesmo sem linhas nesta página: o seletor mostra o filtro que está valendo.
+    if (pref.coluna && pref.valor !== null && !valores.includes(pref.valor)) opcoes.unshift({ value: optValor(pref.valor), label: (pref.valor || '(vazio)') + ' (sem linhas aqui)' });
+    options($('sValor'), opcoes, pref.valor === null ? '' : optValor(pref.valor), '(todos)');
+    $('sValor').style.display = pref.coluna ? '' : 'none';
+    const filtradas = linhas.filter((r) => !pref.coluna || pref.valor === null || txt(r[pref.coluna]) === pref.valor);
+    const nums = filtradas.map((r) => r[pref.medida]).filter((v) => typeof v === 'number' && isFinite(v));
+    const soma = nums.reduce((a, b) => a + b, 0);
+    const media = nums.length ? soma / nums.length : null;
+    const medidaLabel = (colunas.find((c) => c.id === pref.medida) || {}).label || 'medida';
+    $('kTotal').textContent = resumo ? fmt(resumo.rowCount) : fmt(linhas.length);
+    $('kFiltradas').textContent = fmt(filtradas.length);
+    $('lSoma').textContent = 'Soma de ' + medidaLabel; $('kSoma').textContent = fmt(soma);
+    $('lMedia').textContent = 'Média de ' + medidaLabel; $('kMedia').textContent = fmt(media);
+    // Gráfico: agrupamento nativo (conjunto inteiro) quando conectado; senão, a página filtrada por grupo.
+    let barras = [];
+    if (grupos && Array.isArray(grupos.groups)) {
+      barras = grupos.groups.slice(0, 8).map((g) => ({ label: g.group === null ? '(vazio)' : g.group, valor: grupos.measure ? g.sum : g.count }));
+      $('legenda').textContent = (grupos.measure ? 'Soma de ' + grupos.measure.label : 'Contagem') + ' por ' + grupos.groupBy.label + ' (conjunto inteiro' + (grupos.truncated ? ', limitado' : '') + ')';
+    } else if (pref.coluna) {
+      const m = new Map();
+      for (const r of filtradas) { const k = txt(r[pref.coluna]); const v = r[pref.medida]; m.set(k, (m.get(k) || 0) + (typeof v === 'number' ? v : 0)); }
+      barras = [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([label, valor]) => ({ label: label || '(vazio)', valor }));
+      $('legenda').textContent = 'Soma de ' + medidaLabel + ' por grupo (página, com o filtro)';
+    } else $('legenda').textContent = '';
+    const svg = $('grafico'); svg.replaceChildren();
+    const max = Math.max(1, ...barras.map((b) => Math.abs(b.valor)));
+    const ns = 'http://www.w3.org/2000/svg';
+    barras.forEach((b, i) => {
+      const w = 320 / Math.max(1, barras.length), h = (Math.abs(b.valor) / max) * 96;
+      const rect = document.createElementNS(ns, 'rect');
+      rect.setAttribute('x', String(i * w + 4)); rect.setAttribute('y', String(100 - h)); rect.setAttribute('width', String(Math.max(2, w - 8))); rect.setAttribute('height', String(h)); rect.setAttribute('fill', '#7fc4ff');
+      const tip = document.createElementNS(ns, 'title'); tip.textContent = b.label + ': ' + fmt(b.valor); rect.appendChild(tip); svg.appendChild(rect);
+      const t = document.createElementNS(ns, 'text'); t.setAttribute('x', String(i * w + w / 2)); t.setAttribute('y', '114'); t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '9'); t.setAttribute('fill', '#9cb1cf'); t.textContent = b.label.slice(0, 12); svg.appendChild(t);
+    });
+    // Tabela: até 20 linhas filtradas e 6 colunas.
+    const cols = colunas.slice(0, 6);
+    $('cab').replaceChildren(...cols.map((c) => el('th', c.label)));
+    $('corpo').replaceChildren(...filtradas.slice(0, 20).map((r) => { const tr = el('tr'); for (const c of cols) tr.appendChild(el('td', txt(r[c.id]), typeof r[c.id] === 'number' ? 'n' : '')); return tr; }));
+    // Métricas para Fórmula/Gráfico/outro HTML (validadas pelo host).
+    // Política explícita: sem valores numéricos, média = 0 e “valores” = 0. Uma saída não pode ser apagada; quem
+    // consome confere “valores”. Assim nenhum valor antigo fica valendo.
+    aurora.publish('total', soma);
+    aurora.publish('media', media === null ? 0 : media);
+    aurora.publish('valores', nums.length);
+    aurora.publish('filtradas', filtradas.length);
+    aurora.publish('porGrupo', barras);
+    aurora.publish('resumo', fmt(filtradas.length) + ' linha(s) filtrada(s); soma de ' + medidaLabel + ': ' + fmt(soma) + '.');
+  }
+  function save() { aurora.setState({ medida: pref.medida, coluna: pref.coluna, valor: pref.valor }); render(); }
+  $('sMedida').onchange = (e) => { pref.medida = e.target.value; save(); };
+  $('sColuna').onchange = (e) => { pref.coluna = e.target.value; pref.valor = null; save(); };
+  $('sValor').onchange = (e) => { pref.valor = e.target.value ? e.target.value.slice(2) : null; save(); };
+  aurora.onInputs((i) => {
+    last = { linhas: Array.isArray(i.linhas) ? i.linhas : [], colunas: Array.isArray(i.colunas) ? i.colunas : [], resumo: i.resumo && typeof i.resumo === 'object' ? i.resumo : null, grupos: i.grupos && typeof i.grupos === 'object' ? i.grupos : null };
+    render();
+  });
+</script>`;
+
+/** Portas do dashboard de dados (o “Criar painel HTML conectado” liga rows/columns/summary/groups a elas). */
+export const DATASET_DASHBOARD_BRIDGE: BridgeConfig = {
+  version: 1,
+  inputs: [
+    { id: 'linhas', label: 'Linhas (página)', type: 'object' },
+    { id: 'colunas', label: 'Colunas', type: 'object' },
+    { id: 'resumo', label: 'Resumo', type: 'object' },
+    { id: 'grupos', label: 'Agrupamento', type: 'object' },
+  ],
+  outputs: [
+    { id: 'total', label: 'Soma da medida (filtrada)', type: 'number' },
+    { id: 'media', label: 'Média da medida (filtrada; 0 sem valores)', type: 'number' },
+    { id: 'valores', label: 'Valores numéricos na média', type: 'number' },
+    { id: 'filtradas', label: 'Linhas filtradas', type: 'number' },
+    { id: 'porGrupo', label: 'Barras do gráfico', type: 'object' },
+    { id: 'resumo', label: 'Resumo em texto', type: 'text' },
+  ],
+  ai,
+};
+export const DATASET_DASHBOARD_HTML = DATASET_DASHBOARD;
+
 export const BRIDGE_EXAMPLES: BridgeExample[] = [
+  { id: 'dataset-dashboard', name: 'Dashboard de dados importados (KPIs, filtro, tabela, gráfico)', html: DATASET_DASHBOARD, bridge: DATASET_DASHBOARD_BRIDGE },
   {
     id: 'dashboard',
     name: 'Painel: receitas, despesas e saldo',

@@ -58,7 +58,7 @@ Valor publicado: até 64 KB de JSON, 8 níveis, 5.000 itens por lista, 500 chave
 
 - **Ativar entradas e saídas** em um bloco legado. Depois, cada porta tem nome (`[a-zA-Z][a-zA-Z0-9_]*`), rótulo e tipo. Cada entrada mostra quantas conexões tem, o selo “sem conexão” ou o erro da conexão (tipo incompatível, porta inexistente, ciclo). Cada saída mostra “publicado (N bytes)”, “desatualizado” ou o motivo da recusa (sem o valor).
 - **Depuração** sem vazar valores: contagem de mensagens aceitas e recusadas. Nada é escrito no console do app.
-- **Exemplos editáveis:** painel de receitas/despesas/saldo, contagem de tarefas e meta de gastos (fórmula/gráfico).
+- **Exemplos editáveis:** dashboard de dados importados (issue #24 — KPIs, filtro, tabela e gráfico sobre o bloco “Dados importados”; ver `docs/DATA_HUB.md`), painel de receitas/despesas/saldo, contagem de tarefas e meta de gastos (fórmula/gráfico).
 - O formulário funciona na largura mínima das laterais (220 px; issue #10).
 
 ## IA

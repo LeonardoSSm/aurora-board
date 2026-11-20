@@ -6,8 +6,8 @@ servidor, IA ou rede.
 
 | Entrega | Escopo | Estado |
 |---|---|---|
-| **D2-A** | Bloco `aurora.dataset`, importação/validação, persistência, exportação segura, projeção para o fluxo de dados, backup | este documento |
-| D2-B | Dashboards HTML conectados (exemplos, publicação de métricas) | próximo PR |
+| **D2-A** | Bloco `aurora.dataset`, importação/validação, persistência, exportação segura, projeção para o fluxo de dados, backup | integrado (PR #27) |
+| **D2-B** | Agrupamento nativo (`groups`), dashboard HTML de exemplo, “Criar painel HTML conectado”, isolamento verificado | integrado neste documento |
 | D2-C | Atualização reativa e UX de substituição, consentimento granular para IA | próximo PR |
 
 ## Arquitetura
@@ -103,6 +103,7 @@ também não grava nada.
 | `columns` | `object` | `[{ id, label, type }]` de todas as colunas — `id` é a chave usada em `rows` (não se chama `key` porque o Bridge remove essa propriedade) |
 | `summary` | `object` | `name`, `rowCount`, `columnCount`, `page`, `pageSize`, `pageCount`, `offset`, `rowsInPage`, `projectedColumns`, `truncated`, `notes`, `stats` (por coluna numérica: `count`, `sum`, `min`, `max`, `mean`) |
 | `count` | `number` | Número de linhas (decimal exato) — serve direto a Fórmulas |
+| `groups` | `object` | **D2-B.** Agrupamento nativo sobre o **conjunto inteiro** (só existe com “Agrupar por” escolhido no painel): `{ groupBy: { id, label }, measure: { id, label } | null, groups: [{ group, count, valid, sum, mean, min, max }], groupCount, rowCount, truncated, notes }`. Ordenado pela soma (ou contagem); até 500 grupos e 60 KB; `group: null` = células vazias; `valid` = linhas com número na medida |
 
 **O conjunto inteiro nunca é enviado.** Página de até 500 linhas, até 50 colunas nas linhas, textos de célula
 encurtados a 2.000 caracteres e cada saída limitada a 60 KB de JSON — abaixo do limite de **valor** do HTML Data
@@ -112,6 +113,57 @@ escolhidas no painel do bloco (opções de exibição gravadas no bloco).
 
 A projeção é memoizada por conteúdo + visão: recalcular o fluxo de dados (ex.: um HTML publicando) não refaz
 estatísticas nem cria objetos novos.
+
+## Dashboards HTML (D2-B)
+
+O bloco HTML isolado (`aurora.sandbox-html`) recebe as saídas do bloco de dados pelas **entradas tipadas** do HTML
+Data Bridge (`aurora.inputs`, `aurora.onInputs`) e publica métricas com `aurora.publish` para Fórmula, Gráfico ou
+outro HTML. Nada muda no isolamento: `sandbox="allow-scripts"`, sem `allow-same-origin`, CSP sem rede; o iframe
+não recebe `File`/`Blob`, não usa `fetch`, IndexedDB, `localStorage` nem a página do app. Importar e exportar
+continuam exclusivos do bloco nativo, por gesto do usuário.
+
+```
+Dados importados ──rows──▶ linhas ┐
+                 ──columns──▶ colunas ├─ Painel HTML ──total/media/filtradas──▶ Fórmula / Gráfico / outro HTML
+                 ──summary──▶ resumo  │                ──porGrupo (object), resumo (text)
+                 ──groups───▶ grupos ┘
+```
+
+- **“Criar painel HTML conectado”** (painel do bloco de dados ou menu de contexto) cria, numa única entrada de
+  histórico, um bloco HTML com o exemplo abaixo e as quatro conexões. O HTML é editável como qualquer outro.
+- **Exemplo “Dashboard de dados importados”** (também em Exemplos do bloco HTML): KPIs (linhas do conjunto, linhas
+  filtradas, soma e média da medida), filtro por coluna/valor, tabela (20 linhas × 6 colunas) e gráfico de barras em
+  SVG — com o agrupamento nativo quando conectado (conjunto inteiro) ou, sem ele, agrupando a página filtrada.
+  Publica `total`, `media`, `valores`, `filtradas` (number), `porGrupo` (object) e `resumo` (text). **Política sem
+  números:** `media` = 0 e `valores` = 0 (uma saída publicada não pode ser apagada; quem consome confere `valores`).
+  O filtro escolhido aparece sempre no seletor — “(sem linhas aqui)” quando a página não tem o valor — e é limpo se a
+  coluna deixar de existir. “(vazio)” filtra células vazias e é distinto de “(todos)”. Medida e filtro só oferecem
+  colunas que vêm nas linhas (`summary.projectedColumns`). Sem agrupamento nativo, o gráfico usa a página **com o
+  filtro**. Monta o DOM só com
+  `createElement`/`textContent` — dados importados nunca viram HTML — e usa `aurora.setState` só para
+  preferências (`{ medida, coluna, valor }`), nunca para linhas.
+- **Escopo das agregações:** o que o HTML calcula cobre as linhas **entregues** (uma página, até 500). Para o conjunto
+  inteiro use `summary.stats` (por coluna numérica) e `groups` (por grupo), calculados no bloco nativo.
+- **Reatividade:** substituir os dados (ou mudar página, colunas, agrupamento) recalcula o fluxo e reenvia as
+  entradas; o iframe **não** é recarregado e o filtro escolhido continua.
+
+### Escrevendo o seu dashboard
+
+```html
+<div id="n"></div>
+<script>
+  aurora.onInputs((i) => {
+    const linhas = Array.isArray(i.linhas) ? i.linhas : [];   // [{ produto: 'Café', valor: 10 }, …]
+    const colunas = Array.isArray(i.colunas) ? i.colunas : []; // [{ id, label, type }] — use col.id para ler a linha
+    const total = linhas.reduce((s, r) => s + (typeof r.valor === 'number' ? r.valor : 0), 0);
+    document.getElementById('n').textContent = total.toLocaleString('pt-BR');
+    aurora.publish('total', total); // saída declarada como number
+  });
+</script>
+```
+
+Declare as portas no painel do bloco HTML (entradas `object`; saídas com o tipo publicado). Valores publicados
+seguem os limites do Bridge (64 KB, 8 níveis, 5.000 itens por lista…).
 
 ## Exportação
 
@@ -158,6 +210,11 @@ estatísticas nem cria objetos novos.
 
 ## Testes
 
+- `tests/unit/data-hub-dashboard.test.ts` (9, D2-B): agregação (estatísticas, vazios, não numéricos, ordenação,
+  limites de 500 grupos/64 KB), saída `groups` só configurada, exemplo HTML sem `innerHTML`/rede/armazenamento/
+  `eval` e com estado só de preferências, portas válidas, “Criar painel” com quatro conexões `ok` e entradas dentro
+  dos limites, e proteção transitiva para IA do painel derivado; agrupamento pelo valor original (não pelo rótulo
+  encurtado — revisão do Codex no PR #28).
 - `tests/unit/data-hub.test.ts` (73): CSV (BOM, aspas, quebras, delimitadores, decimal brasileiro, zeros à
   esquerda, inconsistência, cabeçalhos perigosos, binário/UTF-8, limites, fórmulas importadas como texto), JSON (duas
   variantes, células aninhadas, `__proto__`/`constructor` sem poluição, profundidade/itens, backups recusados),
@@ -168,7 +225,12 @@ estatísticas nem cria objetos novos.
 - `e2e/data-hub.spec.ts` (Chromium, Firefox, WebKit): A — importar CSV com prévia, persistir após recarregar,
   exportar CSV seguro e JSON, substituir pelo JSON; B — malformado, grande demais e prévia cancelada sem estado
   parcial; C — Dados → Fórmula e a pergunta do backup (com e sem os dados); D — em “outro dispositivo”, backup sem os dados
-  mostra “ausente” e o backup com os dados restaura sem recarregar.
+  mostra “ausente” e o backup com os dados restaura sem recarregar; E (D2-B) — agrupamento no painel, “Criar painel
+  HTML conectado”, KPIs/tabela/gráfico, HTML → Fórmula, filtro dentro do iframe (só preferência no estado) e
+  substituição dos dados atualizando sem recarregar o iframe; F (D2-B) — sonda de isolamento: o HTML recebe a linha,
+  mas `fetch`, IndexedDB, `localStorage`, `parent.document`, `window.open` e imagem remota são bloqueados; G (D2-B,
+  revisão do Codex) — gráfico de reserva com o filtro, média sem valores = 0 e filtro sempre visível ou limpo; H —
+  filtro por células vazias distinto de “todos” e só colunas projetadas como medida/filtro.
 - Revisão do Codex no PR #27 (3 achados, todos com teste de regressão que falhava antes): detecção do delimitador
   com mais de 200 registros na amostra; laço de despejo/recarga do cache com datasets em uso; “ausente” preso no
   cache após restaurar os dados. 2ª rodada (2 achados, também com regressão): arquivo grande só com CR e limite de
