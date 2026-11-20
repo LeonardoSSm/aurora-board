@@ -8,6 +8,9 @@
  *   POST /api/link-preview        → { url } → título/descrição/imagem (Open Graph)
  *   POST /api/pairing/code | GET /api/pairing/devices | POST /api/pairing/revoke   (só este computador)
  *   POST /api/pairing/claim | GET /api/pairing/status                          (outro computador, via proxy)
+ *   GET  /api/pluggy/status | /api/pluggy/accounts?itemId | /api/pluggy/transactions?itemId&accountId&from&to
+ *        → Meu Pluggy, somente leitura (server/pluggy.ts). Só no computador principal, salvo
+ *          AURORA_PLUGGY_PAIRED_READ=1 (leitura também por dispositivos pareados).
  *
  * Proteções do próprio servidor (uso local, sem autenticação):
  *   - Host precisa ser local (anti DNS rebinding);
@@ -22,6 +25,7 @@
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http';
 import { PROVIDERS, type ChatRequest, type Provider, type ProviderId } from './providers';
 import { isAllowedLanHost, isSameOriginForHost, PairingError, type PairingStore } from './pairing';
+import { PluggyError, type PluggyClient } from './pluggy';
 import { FetchError, isAllowedHostHeader, isAllowedOrigin, isLoopbackAddress, redactSecrets, safeFetchText, UnsafeUrlError, type Resolver, type Transport } from './netSafety';
 
 const MAX_BODY = 2 * 1024 * 1024;
@@ -101,10 +105,19 @@ export function validateChat(body: unknown): ChatRequest {
 
 /** Limites por rota (S1-SEC-014). Defesa em profundidade contra laços/abuso local — não é autenticação. */
 export interface RouteLimit { perMinute: number; concurrent: number }
-export const DEFAULT_LIMITS_BY_ROUTE: Record<'chat' | 'linkPreview', RouteLimit> = {
+export const DEFAULT_LIMITS_BY_ROUTE: Record<'chat' | 'linkPreview' | 'pluggy', RouteLimit> = {
   chat: { perMinute: 30, concurrent: 3 },
   linkPreview: { perMinute: 60, concurrent: 4 },
+  pluggy: { perMinute: 60, concurrent: 2 },
 };
+
+/** Meu Pluggy no servidor local. `client` nulo = não configurado (`problems` diz o que falta, sem valores). */
+export interface PluggyDeps {
+  client: PluggyClient | null;
+  problems: string[];
+  /** Permite que dispositivos PAREADOS leiam status/contas/movimentações (padrão: só o computador principal). */
+  allowPaired?: boolean;
+}
 
 export interface AppDeps {
   providers?: Record<ProviderId, Provider>;
@@ -116,6 +129,8 @@ export interface AppDeps {
   isLocalPeer?: (addr: string | undefined) => boolean;
   /** Dispositivos pareados. Sem isso, chamadas remotas são sempre recusadas. */
   pairing?: PairingStore | null;
+  /** Meu Pluggy (uso pessoal). Ausente = as rotas respondem "não configurado". */
+  pluggy?: PluggyDeps | null;
 }
 
 /** Janela deslizante de 60 s + contador de chamadas em andamento. */
@@ -144,6 +159,7 @@ export function createApp(deps: AppDeps = {}): RequestListener {
   const limiters = {
     chat: createLimiter({ ...DEFAULT_LIMITS_BY_ROUTE.chat, ...deps.limits?.chat }, now),
     linkPreview: createLimiter({ ...DEFAULT_LIMITS_BY_ROUTE.linkPreview, ...deps.limits?.linkPreview }, now),
+    pluggy: createLimiter({ ...DEFAULT_LIMITS_BY_ROUTE.pluggy, ...deps.limits?.pluggy }, now),
   };
   const guarded = async <T,>(name: keyof typeof limiters, res: ServerResponse, fn: () => Promise<T>): Promise<T | undefined> => {
     const slot = limiters[name].acquire();
@@ -200,6 +216,37 @@ export function createApp(deps: AppDeps = {}): RequestListener {
         }
       }
 
+      if (url.pathname.startsWith('/api/pluggy/')) {
+        const pl = deps.pluggy ?? { client: null, problems: ['Meu Pluggy não configurado neste servidor.'] };
+        // Dados bancários: por padrão só o computador principal consulta (o pareado guardaria cópia própria).
+        if (remote && !pl.allowPaired) throw new HttpError(403, 'O Meu Pluggy só pode ser consultado no computador principal.', 'local_only');
+        if (req.method !== 'GET') throw new HttpError(405, 'Somente leitura.');
+        if (url.pathname === '/api/pluggy/status' && !pl.client) return send(res, 200, { configured: false, problems: pl.problems.slice(0, 10) });
+        const client = pl.client;
+        if (!client) throw new HttpError(503, pl.problems[0] ?? 'Meu Pluggy não configurado.', 'not_configured');
+        const ctrl = new AbortController();
+        const onClose = () => { if (!res.writableEnded) ctrl.abort(); };
+        res.on('close', onClose);
+        try {
+          const q = (k: string) => { const v = url.searchParams.get(k); return v && v.length <= 100 ? v : ''; };
+          if (url.pathname === '/api/pluggy/status') {
+            const items = await guarded('pluggy', res, () => client.status(ctrl.signal));
+            return send(res, 200, { configured: true, environment: 'production', readOnly: true, items });
+          }
+          const itemId = q('itemId');
+          if (url.pathname === '/api/pluggy/accounts' || url.pathname === '/api/pluggy/transactions') {
+            if (!client.isConfiguredItem(itemId)) throw new HttpError(404, 'Item não configurado em PLUGGY_ITEM_IDS.', 'not_found');
+          }
+          if (url.pathname === '/api/pluggy/accounts') return send(res, 200, { accounts: await guarded('pluggy', res, () => client.accounts(itemId, ctrl.signal)) });
+          if (url.pathname === '/api/pluggy/transactions') {
+            return send(res, 200, await guarded('pluggy', res, () => client.transactions(itemId, q('accountId'), { from: q('from'), to: q('to') }, ctrl.signal)));
+          }
+          throw new HttpError(404, 'Rota não encontrada.');
+        } finally {
+          res.off('close', onClose);
+        }
+      }
+
       if (req.method === 'GET' && url.pathname === '/api/health') return send(res, 200, { ok: true });
       if (req.method === 'GET' && url.pathname === '/api/ai/providers') {
         return send(res, 200, { providers: Object.values(providers).map((p) => ({ id: p.id, name: p.name, configured: p.configured(), defaultModel: p.defaultModel() })) });
@@ -229,8 +276,9 @@ export function createApp(deps: AppDeps = {}): RequestListener {
       const err = e as Error & { status?: number };
       const status = err instanceof HttpError || err instanceof UnsafeUrlError || err instanceof FetchError || err instanceof PairingError ? err.status : typeof err.status === 'number' ? err.status : 500;
       const message = redactSecrets(err.message || 'Erro interno.');
-      if (status >= 500) log(`[api] ${req.method} ${url.pathname}: ${message}`);
-      const code = err instanceof HttpError ? err.code : undefined;
+      if (status >= 500) log(`[api] ${req.method} ${url.pathname}: ${message}${err instanceof PluggyError && err.upstream ? ` (${err.upstream})` : ''}`);
+      const code = err instanceof HttpError ? err.code : err instanceof PluggyError ? err.code : undefined;
+      if (err instanceof PluggyError && err.retryAfter && !res.headersSent) res.setHeader('retry-after', String(err.retryAfter));
       send(res, status, { error: status >= 500 && !(err instanceof FetchError) && !err.status ? 'Erro interno.' : message, ...(code ? { code } : {}) });
     }
   };

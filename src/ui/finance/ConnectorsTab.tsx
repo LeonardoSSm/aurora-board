@@ -1,7 +1,7 @@
 /**
- * Conectores (Open Finance). Neste ciclo só existe o provedor FICTÍCIO, ativado explicitamente como
- * “ambiente de testes” e sempre rotulado “DADOS FICTÍCIOS — AMBIENTE DE TESTES”. Provedores reais exigem
- * backend com credenciais e contrato — documentados em docs/finance/OPEN_FINANCE.md, não simulados aqui.
+ * Conectores (Open Finance). Dois caminhos, sempre separados e rotulados:
+ * - Meu Pluggy (uso pessoal, DADOS REAIS, somente leitura) — credenciais só no servidor local (PluggyConnector);
+ * - provedor FICTÍCIO, ativado explicitamente como “ambiente de testes” e rotulado “DADOS FICTÍCIOS — AMBIENTE DE TESTES”.
  */
 import { useEffect, useState } from 'react';
 import { MockBankProvider } from '../../finance/providers/mock';
@@ -10,6 +10,7 @@ import { CONNECTION_LABELS, type ProviderInstitution } from '../../finance/provi
 import { deleteAccountData, setTestMode, useFinance } from '../../finance/store';
 import { confirmDialog, toast } from '../../store/ui';
 import { btnCls, Card, dangerCls, primaryCls, todayISO } from './common';
+import { PluggyConnector } from './PluggyConnector';
 
 let mock: MockBankProvider | null = null;
 export function mockProvider(): MockBankProvider {
@@ -42,11 +43,12 @@ export function ConnectorsTab() {
 
   return (
     <div className="flex flex-col gap-3" data-testid="finance-connectors">
-      <Card title="Open Finance — estado real">
-        <div className="text-[12px] text-fg-2">Nenhuma conexão bancária real está configurada. O Open Finance Brasil só entrega dados transacionais a instituições autorizadas pelo Banco Central ou a intermediários contratados (ex.: Pluggy, Belvo), que exigem um <b>backend</b> com credenciais de aplicação — nada disso existe nesta versão local.</div>
-        <ul className="mt-2 text-[11px] text-muted list-disc pl-5">
-          <li>Pluggy / Belvo: <b>não configurado</b> — requer contrato/credenciais e servidor seguro (ver docs/finance/OPEN_FINANCE.md).</li>
-          <li>Enquanto isso, use <b>Importar extrato</b> (CSV/OFX) — funciona com dados reais e fica só neste navegador.</li>
+      <PluggyConnector />
+
+      <Card title="Outros caminhos">
+        <ul className="text-[11px] text-muted list-disc pl-5">
+          <li><b>Importar extrato</b> (CSV/OFX) continua disponível e funciona com qualquer banco, sem integração.</li>
+          <li>Open Finance comercial (Pluggy/Belvo pagos, outras instituições) <b>não</b> está configurado: o caminho suportado é o uso pessoal do Meu Pluggy acima (ver docs/finance/OPEN_FINANCE.md).</li>
         </ul>
       </Card>
 

@@ -30,7 +30,7 @@ Estado ao final do ciclo 2. Itens marcados com ⚠ afetam uso real; os demais s�
 
 ## Finanças pessoais (ciclo F1)
 
-- ⚠ **Nenhuma conexão Open Finance real.** Só o provedor fictício (ambiente de testes). Um conector real exige intermediário contratado e backend seguro (docs/finance/OPEN_FINANCE.md).
+- ⚠ **Meu Pluggy implementado, mas nenhuma conta real conectada ainda.** Os testes usam só uma Pluggy simulada. A primeira sincronização real deve ser conferida contra o app do banco, na prévia: sinal das movimentações de conta (a documentação só mostra em exemplos), unidade dos saldos e data das movimentações com horário (ver “Meu Pluggy” abaixo).
 - ⚠ **Armazenamento financeiro local não cifrado** (IndexedDB `aurora-finance`): quem acessa o perfil do navegador lê os dados. Backups financeiros podem ser cifrados.
 - Conversas do Assistente IA (que podem citar valores autorizados) ficam salvas no quadro e vão no backup visual; limpe a conversa antes de compartilhar.
 - Classificação automática por palavras-chave pode errar (PIX/TED para terceiros × entre contas próprias); pares só com contrapartida própria e evidência; tudo editável.
@@ -39,6 +39,16 @@ Estado ao final do ciclo 2. Itens marcados com ⚠ afetam uso real; os demais s�
 - Sem conversão de moedas; contas em moedas diferentes ficam fora do consolidado da outra moeda.
 - O consentimento do provedor fictício vive só na memória da aba (aparece como expirado após recarregar).
 - Um par conciliado automaticamente pode ficar errado se uma terceira conta com o mesmo valor for importada depois (desfaça pelo link “par”).
+
+## Meu Pluggy (issue #9)
+
+- A Pluggy atualiza os dados do Meu Pluggy ~1×/dia e não permite atualização forçada: “Sincronizar” traz só o que já está disponível lá.
+- Uma movimentação **pendente** cancelada no banco (que some da Pluggy) continua pendente no razão. Exclua-a manualmente se for o caso.
+- Renovar a autorização pode mudar o itemId. O Aurora reconhece as contas pelo tipo, instituição e final do número, mas, se houver duas contas iguais nesses critérios, nenhuma é religada automaticamente: vincule pela prévia.
+- Sem vínculo com uma conta de extrato, uma movimentação que a Pluggy descreve de outro jeito que o CSV/OFX entra com alerta (mesmo valor e data próxima). Use o vínculo da prévia para começar a Pluggy depois do histórico do arquivo.
+- A instituição de cada conta é deduzida do código COMPE ou do nome. Bancos fora da tabela aparecem como “Meu Pluggy”.
+- Sem webhooks (o servidor local não é exposto) e sem sincronização automática: o titular sincroniza quando quiser.
+- Por padrão, computadores pareados não acessam o Meu Pluggy (`AURORA_PLUGGY_PAIRED_READ=1` libera a leitura).
 
 ## AI Tiles
 

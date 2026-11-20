@@ -112,6 +112,12 @@ test('build público: cabeçalhos, sem depuração, sem /api, sem rede externa, 
     }
   }
 
+  // Meu Pluggy (issue #9): depende do servidor local; no build público só explica e não chama /api.
+  await page.getByTestId('open-finance').click();
+  await page.getByTestId('finance-tab-connectors').click();
+  await expect(page.getByTestId('pluggy-static')).toContainText('Indisponível nesta versão pública');
+  await expect(page.getByTestId('pluggy-check')).toHaveCount(0);
+
   // Persistência após recarregar.
   await page.reload();
   await expect(page.getByTestId('canvas')).toBeVisible();

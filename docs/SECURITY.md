@@ -106,7 +106,16 @@ Limites honestos: depois de ativado, um widget pode exibir conteúdo enganoso (p
 - Extratos: CSV (RFC 4180) e OFX (tokenizador próprio; `DOCTYPE/ENTITY` recusados; sem rede); limites de tamanho/linhas/colunas/profundidade; valores e datas estritos; exportação CSV protegida contra injeção de fórmulas.
 - Quadros guardam só a consulta (`aurora.bank-query`); em outro navegador o bloco fica “indisponível”.
 - IA: nada é enviado sem modo escolhido e **autorização local** (por bloco + configuração + razão deste navegador; não vem do quadro); dados derivados de consultas não autorizadas também são bloqueados; descrições tratadas como dados não confiáveis.
-- Open Finance: só contrato de leitura e provedor fictício; nenhum segredo no frontend. Detalhes e riscos residuais: [`finance/F1-SECURITY-REVIEW.md`](finance/F1-SECURITY-REVIEW.md), [`finance/FINANCIAL_PRIVACY.md`](finance/FINANCIAL_PRIVACY.md).
+- Open Finance: contrato só de leitura, provedor fictício e Meu Pluggy (abaixo); nenhum segredo no frontend. Detalhes e riscos residuais: [`finance/F1-SECURITY-REVIEW.md`](finance/F1-SECURITY-REVIEW.md), [`finance/FINANCIAL_PRIVACY.md`](finance/FINANCIAL_PRIVACY.md).
+
+### Meu Pluggy — dados bancários reais, somente leitura (issue #9 — `server/pluggy.ts`)
+
+- `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET` e `PLUGGY_ITEM_IDS` ficam **só** no `.env` do servidor local (ignorado pelo Git). A API Key da Pluggy (2 h) fica só na memória do processo e vai apenas no cabeçalho `X-API-KEY`. Nada disso chega ao navegador, a logs, a URLs, a quadros ou a backups.
+- Saída só para `https://api.pluggy.ai`, com TLS, sem seguir redirecionamentos. URLs são montadas no servidor, e o cursor `next` é aceito só como query string relativa (nunca outro host). Há tempo máximo por chamada, teto de tamanho, páginas, registros e intervalo de datas, cota de saída por minuto e cancelamento quando o navegador desiste.
+- Rotas `/api/pluggy/*`: só GET, com as mesmas defesas do servidor local (loopback, Host/Origin, limite por rota). O `itemId` precisa estar no `.env` e o `accountId` precisa pertencer ao item. **Dispositivos pareados recebem 403 `local_only`**, salvo `AURORA_PLUGGY_PAIRED_READ=1`.
+- Nenhum endpoint de escrita da Pluggy é chamado: nem pagamento, Pix ou transferência, nem atualização forçada de item, nem exclusão. Revogar é feito no portal meu.pluggy.ai.
+- Respostas validadas em tempo de execução. Dados de terceiros (`paymentData` com CPF/CNPJ, `taxNumber`, `owner`, número completo de conta ou cartão) são descartados no servidor. Erros não ecoam o corpo da Pluggy, e os logs guardam só o código de erro.
+- Testes só com uma Pluggy simulada; o CI não tem segredos da Pluggy. Ver [`finance/MEU_PLUGGY.md`](finance/MEU_PLUGGY.md).
 
 ### Conteúdo renderizado
 

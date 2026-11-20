@@ -47,6 +47,8 @@ export interface ProviderAccount {
   number?: string;
   balance?: { cents: number; asOf: string; availableCents?: number };
   card?: CardInfo;
+  /** Instituição da conta quando difere da conexão (ex.: o conector MeuPluggy agrega vários bancos). */
+  institutionName?: string;
 }
 
 export interface ProviderTransaction {

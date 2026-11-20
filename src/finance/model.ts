@@ -28,6 +28,13 @@ export interface ProviderRef {
   providerId: string;
   /** Identificador opaco no provedor (nunca um segredo). */
   externalId: string;
+  /** Conexão (consentimento/item do provedor) de onde a conta veio por último. */
+  connectionRef?: string;
+  /**
+   * Conta que já existia (CSV/OFX/manual) e foi VINCULADA ao provedor: só movimentações a partir desta data
+   * (AAAA-MM-DD) entram pelo provedor, para não duplicar o histórico importado por arquivo.
+   */
+  since?: string;
 }
 
 export interface FinancialInstitution {

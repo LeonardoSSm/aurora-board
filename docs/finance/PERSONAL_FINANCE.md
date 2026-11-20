@@ -31,7 +31,8 @@ Provedor (fictício)┴─> normalização ─> planejador ─> razão local (In
 | `src/finance/store.ts` | Estado em memória + operações do usuário. Grava no disco antes de mudar a memória. |
 | `src/finance/query.ts`, `aiShare.ts` | Consulta do canvas e texto autorizado para IA. |
 | `src/finance/backup.ts` | Backups financeiros (opcionalmente cifrados). |
-| `src/finance/providers/` | Contrato `BankDataProvider`, provedor fictício e sincronização. |
+| `src/finance/providers/` | Contrato `BankDataProvider`, provedor fictício, Meu Pluggy (`pluggy.ts`, só fala com `/api/pluggy/*`) e sincronização (prévia, vínculo com conta existente, renovação). |
+| `server/pluggy.ts` | Adaptador Meu Pluggy no servidor local (credenciais, API Key, cursor v2, normalização) — ver [MEU_PLUGGY.md](MEU_PLUGGY.md). |
 | `src/ui/finance/` | Interface “Minhas contas”. |
 | `src/widgets/builtin/bankQuery.tsx` | Bloco de consulta bancária no canvas. |
 
