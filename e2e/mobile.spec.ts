@@ -139,3 +139,29 @@ test.describe('checkpoints no celular', () => {
     await expect(page.getByTestId('checkpoint-marker')).toHaveCount(1);
   });
 });
+
+test('Aurora Wheel no celular (#15): toque longo não abre a roda; o botão “Criar” abre e o toque na fatia cria', async ({ page }) => {
+  await ready(page);
+  await page.evaluate(() => (window as any).__aurora.actions.createBoard('Roda celular'));
+  await expect.poll(async () => (await state(page)).elements.length).toBe(0);
+  const box = (await page.getByTestId('canvas').boundingBox())!;
+  const p = { x: box.x + box.width / 2, y: box.y + box.height * 0.6 };
+  // Toque longo (sem gesto implementado para toque nesta entrega): nada de roda.
+  await touch(page, 'pointerdown', 1, p.x, p.y);
+  await page.waitForTimeout(400);
+  await touch(page, 'pointerup', 1, p.x, p.y);
+  await expect(page.getByTestId('radial-menu')).toHaveCount(0);
+  // Botão “Criar” na barra.
+  const btn = page.getByTestId('radial-open-button');
+  await btn.scrollIntoViewIfNeeded();
+  await btn.tap();
+  const wheel = page.getByTestId('radial-menu');
+  await expect(wheel).toBeVisible();
+  const wb = (await wheel.boundingBox())!;
+  const vw = page.viewportSize()!;
+  expect(wb.x).toBeGreaterThanOrEqual(0);
+  expect(wb.x + wb.width).toBeLessThanOrEqual(vw.width);
+  await wheel.locator('[data-id="task"]').tap();
+  await expect(wheel).toHaveCount(0);
+  expect((await state(page)).elements.map((e) => e.widgetType)).toEqual(['aurora.tasks']);
+});

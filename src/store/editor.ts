@@ -5,6 +5,7 @@ import { DEFAULT_STYLE } from '../core/elements';
 import { DEFAULT_NAVIGATION_PREFS, DEFAULT_ZOOM_PREFS } from '../core/camera';
 import { DEFAULT_ANIMATION_PREFS } from '../core/animation';
 import { PANEL_DEFAULTS } from '../core/panels';
+import { DEFAULT_FAVORITES } from '../core/radial';
 
 export const initialEditorState: EditorState = {
   status: 'loading',
@@ -42,6 +43,8 @@ export const initialEditorState: EditorState = {
   shortcutsOpen: false,
   dialog: null,
   contextMenu: null,
+  radial: null,
+  radialFavorites: [...DEFAULT_FAVORITES],
   inspectorFocus: null,
   editingWidgetId: null,
   checkpoints: [],
