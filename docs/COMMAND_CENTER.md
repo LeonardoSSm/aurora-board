@@ -20,7 +20,7 @@ Busca **sem diferenciar maiúsculas nem acentos** (“orcamento” acha “Orça
 | Locais (checkpoints) | nome e descrição |
 | Textos, notas adesivas, formas, frames | texto e nome |
 | Conexões (setas/linhas) | rótulo e relação |
-| Notas (Markdown) | texto, sem URLs |
+| Notas (Markdown) | texto, sem URLs (removidas **inteiras** antes de tratar a pontuação: qualquer esquema, `mailto:`, `data:`, `www.`) |
 | Tarefas | cada item vira um resultado, com estado (a fazer/em andamento/concluída) e data |
 | Código | linguagem e código |
 | Documentos | **só metadados**: nome, descrição, etiquetas (nunca o arquivo nem a URL) |
@@ -44,7 +44,7 @@ Busca **sem diferenciar maiúsculas nem acentos** (“orcamento” acha “Orça
 - **Quadro:** troca de workspace se preciso e abre o quadro.
 - **Elemento/tarefa:** abre o quadro, **espera carregar**, seleciona e centraliza (`focusElement`, viagem suave da #12), com destaque breve. Coordenadas e histórico de desfazer não mudam.
 - **Local:** abre o quadro e chama `navigateToCheckpoint` (animação da #12, zoom memorizado e movimento reduzido respeitados).
-- **Corridas:** cada navegação recebe um token; se outra começar antes de a anterior terminar de abrir o quadro, a antiga não aplica foco. Item excluído desde a indexação → aviso, sem travar.
+- **Corridas — a última navegação vence:** `openBoard` tem uma geração; uma abertura que ainda está lendo quando outra começa é abandonada **antes** de instalar o quadro (inclusive quando a nova volta ao quadro atual e nem precisa ler: A→B carregando e o usuário escolhe um resultado em A → fica em A). `jumpTo` sempre passa por `openBoard` e só a última navegação aplica foco. O quadro instalado e a workspace ativa nunca divergem. Item excluído desde a indexação → aviso, sem travar.
 
 ## Captura rápida / Inbox
 
@@ -53,7 +53,7 @@ Busca **sem diferenciar maiúsculas nem acentos** (“orcamento” acha “Orça
 **Abordagem técnica**
 
 - **Quadro atual:** `addElements(..., select = false)` — uma entrada de desfazer, sem mexer em seleção/câmera/ferramenta; o autosave grava normalmente.
-- **Inbox em outro quadro:** escrita no adaptador **dentro da fila única do autosave** (`runExclusive`): lê a versão gravada mais recente, acrescenta só o elemento novo e grava. Nunca toca `getState().elements`. Recusa (mantendo o texto) se esse quadro tem gravação pendente ou com falha (`hasUnsavedWork`). `openBoard` também lê o quadro dentro dessa fila, então abrir o Inbox enquanto a captura grava sempre vê o item; se o quadro for aberto no meio, o item é injetado também no estado.
+- **Inbox em outro quadro:** escrita no adaptador **dentro da fila única do autosave** (`runExclusive`): lê a versão gravada mais recente, acrescenta só o elemento novo e grava. Nunca toca `getState().elements`. Recusa (mantendo o texto) se esse quadro tem gravação pendente ou com falha (`hasUnsavedWork`). `openBoard` também lê o quadro dentro dessa fila, então abrir o Inbox enquanto a captura grava sempre vê o item; se o quadro for aberto no meio, o item é injetado também no estado. Se o Inbox foi editado antes nesta sessão, o histórico de desfazer retido dele é **rebaseado** (`rebaseHistoryWith`): o item entra em todos os retratos, então desfazer/refazer edições antigas não o apaga (e o autosave não grava essa perda).
 - **Reuso:** blocos **Notas** e **Tarefas** existentes, com o `sanitize` de cada widget — nenhuma base paralela de tarefas. Nada de IA ou finanças é copiado.
 - **Sem migração:** quadros e backups não ganham campos. O Inbox escolhido é configuração local por workspace (`inboxBoard:<workspace>`).
 - **Falhas:** destino inexistente, cota esgotada ou erro do IndexedDB → mensagem no formulário, texto preservado, quadro intacto.

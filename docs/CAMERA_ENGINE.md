@@ -24,7 +24,7 @@ Um único laço de `requestAnimationFrame` por vez. Pedidos novos **substituem**
 
 ## Viagem
 
-`travelPlan(de, para, viewport, velocidade)` devolve o trajeto e a duração = mínimo + ganho × comprimento do trajeto, limitada ao máximo. `FLIGHT_RHO = 0,7` (o d3 usa √2): afastamento discreto em viagens curtas, maior só nas longas.
+`travelPlan(de, para, viewport, velocidade)` devolve o trajeto e a duração = mínimo + ganho × comprimento do trajeto, limitada ao máximo. `FLIGHT_RHO = 0,7` (o d3 usa √2): afastamento discreto em viagens curtas, maior só nas longas. O parâmetro `r(b)` usa a forma estável `−asinh(b)` (antes `ln(√(b²+1) − b)`, que cancelava com o centro quase parado e grande mudança de zoom → comprimento infinito, quadros NaN e “teleporte”; apontamento do PR #16, coberto em `navigation-motion.test.ts`).
 
 | Distância (larguras de tela) | Afastamento máximo | Rápida | **Suave (padrão)** | Cinematográfica |
 |---|---|---|---|---|
