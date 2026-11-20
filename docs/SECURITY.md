@@ -77,6 +77,8 @@ Limitação conhecida: um proxy HTTP do sistema (variáveis `HTTP_PROXY`) não �
 | Conteúdo importado | HTML vindo de **importação** ou **colagem externa** entra **desativado**; a marcação é do importador (um backup não consegue se declarar ativado). "Ver código" e "Ativar…" com confirmação; a decisão persiste. Editar e aplicar o HTML é autoria do usuário e o reativa |
 | Limites | 20 iframes simultâneos (excedentes pausados; fora da tela já são desmontados), HTML ≤ 500 000 caracteres, mensagens ≤ 100 KB, 10 atualizações/s |
 | Recuperação | `?safe` na URL desliga todo HTML personalizado na sessão |
+| WebRTC e DNS (issue #11) | `RTCPeerConnection` e afins são removidos antes do código do usuário (a CSP não cobre WebRTC; ICE/STUN vazaria dados); `x-dns-prefetch-control: off` |
+| Ponte de dados (issue #11) | Entradas/saídas tipadas por `postMessage` com token por montagem, chaves exatas, tamanho (64 KB por valor; 1 MB de entradas), profundidade (8), ≤ 200 publicações/s; saídas só em memória (nunca no quadro/backup); `publish` não dispara nenhuma ação externa. IA: só saídas escolhidas, com prévia e autorização LOCAL (`htmlAiGrants`, fora de quadros/backups), revogada ao mudar HTML/saídas/conexões; proteção transitiva (`financialTaint`) inclui blocos HTML. Ver [HTML_DATA_BRIDGE.md](HTML_DATA_BRIDGE.md) |
 | Plugins de terceiros | HTML do manifesto validado (nunca do quadro); prefixo `aurora.` reservado; permissões informativas |
 
 Limites honestos: depois de ativado, um widget pode exibir conteúdo enganoso (phishing visual) — o isolamento impede acesso a dados, não impede texto falso. Widgets HTML importados **antes** do ciclo S1 não têm marcação e são tratados como locais.

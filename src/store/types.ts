@@ -116,6 +116,8 @@ export interface EditorState {
   animationPrefs: import('../core/animation').AnimationPrefs;
   /** Preferência GERAL (issue #10): larguras das laterais (configurações locais, fora dos quadros). */
   panelWidths: import('../core/panels').PanelWidths;
+  /** Issue #11: autorizações LOCAIS de IA de blocos HTML (`<id>:<resumo>`). Nunca vêm de quadro ou backup. */
+  htmlAiGrants: string[];
   toasts: Toast[];
   /** Último snapshot de dados de fluxo calculado (cache para widgets). */
   dataflowVersion: number;

@@ -343,6 +343,23 @@ export async function setPanelWidth(side: PanelSide, width: number, persist = tr
   if (persist) await getAdapter().setSetting('panelWidths', getState().panelWidths);
 }
 
+/** Issue #11: autorizações locais de IA dos blocos HTML (configurações locais, fora de quadros e backups). */
+export const MAX_HTML_AI_GRANTS = 500;
+export function sanitizeHtmlAiGrants(raw: unknown): string[] {
+  return Array.isArray(raw) ? [...new Set(raw.filter((x): x is string => typeof x === 'string' && /^[A-Za-z0-9_-]{1,80}:[0-9a-f]{16}$/.test(x)))].slice(-MAX_HTML_AI_GRANTS) : [];
+}
+export async function grantHtmlAI(key: string) {
+  const next = sanitizeHtmlAiGrants([...getState().htmlAiGrants.filter((k) => k.split(':')[0] !== key.split(':')[0]), key]);
+  setState({ htmlAiGrants: next });
+  await getAdapter().setSetting('htmlAiGrants', next);
+}
+export async function revokeHtmlAI(elementId: string) {
+  const next = getState().htmlAiGrants.filter((k) => k.split(':')[0] !== elementId);
+  if (next.length === getState().htmlAiGrants.length) return;
+  setState({ htmlAiGrants: next });
+  await getAdapter().setSetting('htmlAiGrants', next);
+}
+
 export function resetPanelWidth(side: PanelSide) {
   return setPanelWidth(side, PANEL_DEFAULTS[side]);
 }

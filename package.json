@@ -22,7 +22,7 @@
     "audit:prod": "npm audit --omit=dev --audit-level=high",
     "perf": "playwright test -c playwright.perf.config.ts",
     "test:static": "playwright test -c playwright.static.config.ts",
-    "test:security": "vitest run tests/unit/media.test.ts tests/unit/import-hardening.test.ts tests/unit/active-content.test.ts tests/unit/server-hardening.test.ts tests/unit/hosting.test.ts tests/unit/security.test.ts && playwright test e2e/security.spec.ts --project=chromium",
+    "test:security": "vitest run tests/unit/html-bridge.test.ts tests/unit/media.test.ts tests/unit/import-hardening.test.ts tests/unit/active-content.test.ts tests/unit/server-hardening.test.ts tests/unit/hosting.test.ts tests/unit/security.test.ts && playwright test e2e/security.spec.ts e2e/html-bridge.spec.ts --project=chromium",
     "hosting:generate": "tsx scripts/generate-hosting-config.ts",
     "audit:full": "npm audit --audit-level=high",
     "test:finance": "vitest run tests/unit/finance-import.test.ts tests/unit/finance-ledger.test.ts tests/unit/finance-backup-providers.test.ts tests/unit/finance-canvas-ai.test.ts tests/unit/finance-pluggy.test.ts tests/unit/pluggy-server.test.ts && playwright test e2e/finance.spec.ts e2e/pluggy.spec.ts --project=chromium",

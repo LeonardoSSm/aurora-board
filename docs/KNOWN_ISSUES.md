@@ -50,6 +50,14 @@ Estado ao final do ciclo 2. Itens marcados com ⚠ afetam uso real; os demais s�
 - Sem webhooks (o servidor local não é exposto) e sem sincronização automática: o titular sincroniza quando quiser.
 - Por padrão, computadores pareados não acessam o Meu Pluggy (`AURORA_PLUGGY_PAIRED_READ=1` libera a leitura).
 
+## HTML Data Bridge (issue #11)
+
+- O host nunca grava entradas ou saídas, mas o **código** do HTML pode copiar entradas para `aurora.setState`, que é gravado no quadro. O painel avisa quando o bloco recebe dados bancários; revise HTML de terceiros antes de conectá-lo a uma Consulta bancária.
+- Saídas ficam em memória: depois de recarregar a página, fórmulas ligadas a um HTML ficam sem valor até o bloco rodar de novo (ele roda ao aparecer na tela).
+- A autorização de IA de um bloco HTML cobre a configuração, não os valores: a prévia mostra os valores do momento, e o envio usa os valores atuais (igual à Consulta bancária).
+- Removido por segurança: o resumo de blocos HTML deixou de incluir até 500 caracteres do estado (que ia à IA quando o bloco era conectado). Para enviar algo à IA, declare saídas e autorize.
+- A remoção das APIs de WebRTC é defesa em profundidade dentro do documento do sandbox; um navegador que exponha outro canal fora da CSP não está coberto.
+
 ## AI Tiles
 
 - Logos são marcas dos respectivos titulares; o uso no app é referencial. As diretrizes da OpenAI e da xAI não puderam ser lidas durante a pesquisa (bloqueio a leitura automatizada). Antes de distribuição comercial, confirmar condições com cada titular (docs/AI_TILES.md).

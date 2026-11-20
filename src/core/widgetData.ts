@@ -1,5 +1,6 @@
 /** Estruturas de dados dos widgets nativos + saneamento (para importação e migração). */
 import { uid } from './elements';
+import { sanitizeBridge, type BridgeConfig } from './htmlBridge';
 
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
 const str = (v: unknown, d = '') => (typeof v === 'string' ? v : d);
@@ -154,12 +155,15 @@ export const sanitizeChart = (raw: unknown): ChartData => {
  * então um backup não consegue se declarar "já ativado". Ausente = conteúdo criado neste navegador.
  */
 export interface SandboxActivation { state: 'blocked' | 'allowed'; source: 'import' | 'paste'; at: number }
-export interface SandboxData { html: string; state: unknown; activation?: SandboxActivation }
+/** `bridge`: portas da ponte de dados (issue #11). Ausente = bloco legado (só `aurora.setState`). */
+export interface SandboxData { html: string; state: unknown; activation?: SandboxActivation; bridge?: BridgeConfig }
 export const sanitizeSandbox = (raw: unknown): SandboxData => {
   const d = obj(raw);
   const a = obj(d.activation);
   const out: SandboxData = { html: str(d.html), state: d.state ?? null };
   if (a.state === 'blocked' || a.state === 'allowed') out.activation = { state: a.state, source: a.source === 'paste' ? 'paste' : 'import', at: Number(a.at) || 0 };
+  const bridge = sanitizeBridge(d.bridge);
+  if (bridge) out.bridge = bridge;
   return out;
 };
 
