@@ -54,7 +54,7 @@ gravado como um asset local com tipo próprio. O bloco guarda só a referência 
 
 - UTF-8 (com ou sem BOM). Arquivo binário (ex.: `.xlsx`) ou UTF-8 inválido é recusado com orientação.
 - RFC 4180: aspas, aspas duplicadas (`""`), quebras de linha dentro de campos, CRLF/LF/CR.
-- Delimitador detectado entre `,` `;` TAB `|` pela consistência numa amostra de 64 KB (cortada no fim de uma linha; se o corte cair dentro de um campo entre aspas, cortes menores são tentados). **Primeira linha = cabeçalho.**
+- Delimitador detectado entre `,` `;` TAB `|` pela consistência numa amostra de 64 KB (cortada no fim de uma linha — LF, CRLF ou só CR; se o corte cair dentro de um campo entre aspas, cortes menores são tentados). **Primeira linha = cabeçalho.**
 - Toda linha precisa ter o número de campos do cabeçalho; separadores vazios a mais no fim são tolerados (aviso).
   Qualquer outra diferença recusa o arquivo inteiro, com o número da linha.
 - Tipos por coluna: **número** (ponto decimal; formato brasileiro `1.234,56` só quando algum valor tem vírgula
@@ -87,7 +87,7 @@ Bridge remove `key`/`members`/`$…` de valores, e as três primeiras poluiriam 
 | Linhas / colunas / células | 50.000 / 100 / 1.000.000 |
 | Texto por célula / rótulo | 10.000 / 120 caracteres |
 | JSON bruto | 32 níveis, 3 milhões de itens (antes de converter) |
-| Conteúdo guardado | 24 MB de JSON normalizado (o asset em base64 cabe no limite de 36 MB dos backups) |
+| Conteúdo guardado | 24 MB (bytes UTF-8) de JSON normalizado — a mesma unidade na gravação e na leitura; o asset em base64 cabe no limite de 36 MB dos backups |
 | Cache em memória | 3 milhões de células (LRU); datasets do quadro aberto nunca são despejados (o teto pode ser ultrapassado por eles) |
 
 Acima de qualquer limite o arquivo é recusado **inteiro**, com a causa, e **nada** é gravado. Cancelar a prévia
@@ -149,7 +149,7 @@ estatísticas nem cria objetos novos.
 
 ## Testes
 
-- `tests/unit/data-hub.test.ts` (61): CSV (BOM, aspas, quebras, delimitadores, decimal brasileiro, zeros à
+- `tests/unit/data-hub.test.ts` (63): CSV (BOM, aspas, quebras, delimitadores, decimal brasileiro, zeros à
   esquerda, inconsistência, cabeçalhos perigosos, binário/UTF-8, limites, fórmulas importadas como texto), JSON (duas
   variantes, células aninhadas, `__proto__`/`constructor` sem poluição, profundidade/itens, backups recusados),
   validação do conteúdo guardado, codec, exportação (escape, 14 variantes de fórmula, números intactos, ida e volta
@@ -162,7 +162,8 @@ estatísticas nem cria objetos novos.
   mostra “ausente” e o backup com os dados restaura sem recarregar.
 - Revisão do Codex no PR #27 (3 achados, todos com teste de regressão que falhava antes): detecção do delimitador
   com mais de 200 registros na amostra; laço de despejo/recarga do cache com datasets em uso; “ausente” preso no
-  cache após restaurar os dados.
+  cache após restaurar os dados. 2ª rodada (2 achados, também com regressão): arquivo grande só com CR e limite de
+  gravação em caracteres UTF-16 × leitura em bytes UTF-8 (gravava conteúdo que não relia).
 
 ## Futuro: Social Analytics Hub (fora do D2)
 

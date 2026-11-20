@@ -77,11 +77,11 @@ function scoreDelimiters(sample: string, lim: Limits): string | null {
 
 function detectDelimiter(text: string, lim: Limits): string {
   if (text.length <= SAMPLE_CHARS) return scoreDelimiters(text, lim) ?? ',';
-  // Amostra cortada no fim de uma linha. Se o corte cair dentro de um campo entre aspas (com quebras de linha),
-  // nenhum candidato lê a amostra: tenta cortes anteriores, cada vez menores.
+  // Amostra cortada no fim de uma linha (LF, CRLF ou só CR — revisão do Codex, PR #27). Se o corte cair dentro de
+  // um campo entre aspas (com quebras de linha), nenhum candidato lê a amostra: tenta cortes menores.
   let end = SAMPLE_CHARS;
   for (let attempt = 0; attempt < 6 && end > 0; attempt++) {
-    const cut = text.lastIndexOf('\n', end - 1);
+    const cut = Math.max(text.lastIndexOf('\n', end - 1), text.lastIndexOf('\r', end - 1));
     if (cut <= 0) break;
     const best = scoreDelimiters(text.slice(0, cut), lim);
     if (best) return best;

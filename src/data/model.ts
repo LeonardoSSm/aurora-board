@@ -48,8 +48,8 @@ export const DATASET_LIMITS = {
   /** JSON: profundidade e nós da estrutura bruta, conferidos ANTES de converter (anti-bomba). */
   maxJsonDepth: 32,
   maxJsonNodes: 3_000_000,
-  /** JSON normalizado guardado no asset (≈ 24 MB; o asset em base64 fica abaixo do limite de 36 MB dos backups). */
-  maxStoredChars: 24 * 1024 * 1024,
+  /** JSON normalizado guardado no asset, em BYTES UTF-8 (24 MB; em base64 fica abaixo do limite de 36 MB dos backups). */
+  maxStoredBytes: 24 * 1024 * 1024,
   /** Datasets mantidos em memória ao mesmo tempo (células somadas); os menos usados saem do cache. */
   maxCachedCells: 3_000_000,
 } as const;

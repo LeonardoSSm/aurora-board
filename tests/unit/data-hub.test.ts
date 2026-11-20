@@ -130,6 +130,14 @@ describe('CSV', () => {
     expect(p.content.rows[1499]).toEqual([1499, 2998]);
   });
 
+  // Revisão do Codex (PR #27, 2ª rodada): só CR entre registros (sem LF) num arquivo > 64 KB caía na vírgula.
+  it('detecta o delimitador em arquivo grande com quebras só CR', () => {
+    const p = csv('a;b\r' + '1;2\r'.repeat(18_000));
+    expect(p.delimiter).toBe(';');
+    expect(p.content.columns.map((c) => c.type)).toEqual(['number', 'number']);
+    expect(p.content.rows).toHaveLength(18_000);
+  });
+
   it('detecta o delimitador quando a amostra corta um campo entre aspas com quebra de linha', () => {
     const head = 'a;b\n' + '1;2\n'.repeat(15_500); // ~62 KB
     const long = `"${'x\n'.repeat(4000)}"`; // 8 KB com quebras: o corte da amostra (64 KB) cai dentro das aspas
@@ -206,6 +214,20 @@ describe('codec do asset', () => {
     expect(a.dataURL.startsWith(`data:${DATASET_MIME};base64,`)).toBe(true);
     expect(decodeDatasetAsset(a)).toEqual(c);
   });
+  // Revisão do Codex (PR #27, 2ª rodada): a gravação limitava unidades UTF-16 e a leitura, bytes UTF-8 — um
+  // conteúdo com muito Unicode gravava e depois não relia (o bloco sumia ao recarregar).
+  it('o limite de gravação é em bytes UTF-8, o mesmo da leitura: o que grava sempre relê', () => {
+    const c = validateContent({ format: 'aurora-dataset', version: 1, columns: [{ label: 't', type: 'text' }], rows: [['漢'.repeat(30)], ['\u0001'.repeat(10)]] });
+    const json = JSON.stringify(c);
+    const bytes = new TextEncoder().encode(json).length;
+    expect(bytes).toBeGreaterThan(json.length);
+    // Cabe em caracteres, não em bytes: tem de ser recusado ANTES de gravar.
+    expect(() => encodeDatasetAsset(c, 'x', 'ds_x', json.length)).toThrow(/grande demais/);
+    const ok = encodeDatasetAsset(c, 'x', 'ds_x', bytes);
+    expect(decodeDatasetAsset(ok, bytes)).toEqual(c);
+    expect(() => decodeDatasetAsset(ok, bytes - 1)).toThrow(/grande demais/);
+  });
+
   it('recusa tipo errado, base64/JSON corrompido e conteúdo adulterado', () => {
     const a = encodeDatasetAsset(csv('a\n1\n').content, 'x');
     expect(() => decodeDatasetAsset({ ...a, mimeType: 'image/png' })).toThrow(DatasetError);
