@@ -68,6 +68,7 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | [docs/AI_ACTIONS.md](docs/AI_ACTIONS.md) | Ações da IA (contrato v2): blocos de valor, lançamentos financeiros, validação, prévia e confirmação |
 | [docs/AI_TILES.md](docs/AI_TILES.md) | AI Tiles: decisões, modos visual/funcional, procedência e condições de uso das logos |
 | [docs/finance/PERSONAL_FINANCE.md](docs/finance/PERSONAL_FINANCE.md) | Minhas contas (ciclo F1): contas, cartões, extratos, conciliação, canvas, IA, backups — índice dos documentos em `docs/finance/` |
+| [docs/ANIMATED_GIFS.md](docs/ANIMATED_GIFS.md) | GIFs animados (ciclo 6): auditoria do suporte nativo, repetição, pausa, movimento reduzido, exportação, limites |
 | [docs/VISUAL_FINANCE.md](docs/VISUAL_FINANCE.md) | Finanças visuais: valores, meses, regras de cálculo, precisão, uso e desempenho |
 | [docs/FORMULA_ENGINE.md](docs/FORMULA_ENGINE.md) | Motor de fórmulas: gramática, funções, tipos, variáveis |
 | [docs/DATAFLOW_PORTS.md](docs/DATAFLOW_PORTS.md) | Fluxo de dados: portas explícitas, tipos, estados das conexões, compatibilidade |
@@ -103,7 +104,7 @@ Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuraç
 | Finanças | ✅ | Receitas/despesas, categorias, vencimentos, parcelas, período, 3 moedas, 3 formatos, saldo previsto e realizado, entradas por conexão |
 | Calendário | ✅ local · 🔜 Google | Mês, eventos com horário. Google Calendar exige OAuth (não implementado) |
 | Documentos | ✅ | Arquivos guardados no IndexedDB (até 25 MB cada) ou referências por URL; prévia de imagem, PDF e texto |
-| Imagem | ✅ | Inserir por botão, colar ou arrastar arquivo |
+| Imagem | ✅ | Inserir por botão, colar ou arrastar arquivo. **GIFs animados** repetem continuamente no canvas, com pausar/reproduzir por imagem, preferência geral e respeito ao movimento reduzido; PNG/SVG exportam o primeiro quadro e o JSON preserva o GIF (ciclo 6, [docs/ANIMATED_GIFS.md](docs/ANIMATED_GIFS.md)) |
 | Link | ✅ · 🟡 prévia | Prévia Open Graph via servidor local (bloqueia endereços de rede local) |
 | Código | ✅ | Destaque de sintaxe (10 linguagens), Tab, copiar |
 | Assistente IA | 🟡 | OpenAI, Claude e Gemini via servidor local; só envia contexto conectado e autorizado; respostas estruturadas viram blocos/tarefas/conexões **somente após confirmação** |

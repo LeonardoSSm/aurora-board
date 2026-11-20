@@ -52,3 +52,15 @@ Custos isolados com 5.000 elementos: recalcular todas as setas 1,2 ms; serializa
 - **Muitos milhares de nós visíveis ao mesmo tempo** (enquadrar tudo num quadro de 5.000 elementos): o quadro fica limitado pela **pintura** do DOM/SVG (80–150 ms), não por JS. Experimento: escondendo as setas, o pan cai de 125 para 29 ms com setas longas; com setas realistas, de 46 para 29 ms. Não é resolvível com memoização; a alternativa é um nível de detalhe com renderização em `<canvas>` em zoom distante (ciclo futuro).
 - **Diário de recuperação** usa `localStorage` (~5 MB): quadros acima de ~10.000 elementos não cabem; o IndexedDB continua gravando normalmente e o app avisa só se o IndexedDB falhar.
 - As medições de quadro têm variação de ±15 ms entre execuções (pintura e agendamento do navegador); compare `work` para decisões finas.
+
+## GIFs animados (ciclo 6)
+
+`npx playwright test -c playwright.perf.config.ts e2e/perf/gifs.perf.ts` (build de produção, Chromium, i5-1135G7, movimento não reduzido; `perf-results/gifs-animados.json`). N GIFs de 96–208 px, todos visíveis e animando (quadros de 200 ms), 120 passos de pan + zoom:
+
+| GIFs visíveis | Quadro médio | p95 | Heap JS |
+|---|---|---|---|
+| 0 | 16,7 ms | 16,7 ms | 10 MB |
+| 25 | 16,8 ms | 16,8 ms | 10 MB |
+| 100 | 16,7 ms | 16,7 ms | 12 MB |
+
+A decodificação dos quadros é do navegador (fora do heap JS) e não pesou na navegação nessa escala; por isso não foi criada pausa automática fora da vista — o canvas já desmonta o que está fora da tela, e a retomada usa a mesma URL (sem reinício visível). GIFs grandes demais (largura × altura × quadros > 400 MP) ficam parados por proteção.

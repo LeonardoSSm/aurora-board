@@ -20,6 +20,7 @@
 | `npm run hosting:generate` | Regenera `public/_headers` e `vercel.json` a partir de `hosting/headers.ts` (a CI falha se estiverem desatualizados) |
 | `npm run perf` | Benchmark contra build de produção com `VITE_AURORA_TEST_HOOKS=1` |
 | `npm run test:finance` | Finanças pessoais (ciclo F1): unitários `tests/unit/finance-*.test.ts` + jornadas A–H de `e2e/finance.spec.ts` no Chromium |
+| `npm run perf:gifs` | Benchmark de pan/zoom com 0, 25 e 100 GIFs animados (`PERF_GIFS=…`) |
 | `npm run perf:finance` | Benchmark do razão financeiro (100 a 50.000 movimentações; `PERF_SIZES=…` para mudar) |
 
 Primeira vez: `npx playwright install chromium` (ou `firefox webkit` para os demais).
