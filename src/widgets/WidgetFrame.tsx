@@ -82,7 +82,8 @@ export function WidgetFrame({ element, selected }: { element: WidgetElement; sel
   const status = plugin ? STATUS_LABEL[plugin.status] : null;
   const inputCount = Object.values(inputs).reduce((n, l) => n + l.length, 0);
 
-  if (plugin?.frame === 'bare') {
+  const frame = plugin?.frameFor ? plugin.frameFor(data) : plugin?.frame;
+  if (plugin && frame === 'bare') {
     // Moldura mínima: o componente desenha tudo. Só controles interativos recebem o ponteiro;
     // o resto do corpo seleciona/arrasta como qualquer elemento do quadro.
     return (

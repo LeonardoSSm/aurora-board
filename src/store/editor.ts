@@ -6,6 +6,7 @@ import { DEFAULT_NAVIGATION_PREFS, DEFAULT_ZOOM_PREFS } from '../core/camera';
 import { DEFAULT_ANIMATION_PREFS } from '../core/animation';
 import { PANEL_DEFAULTS } from '../core/panels';
 import { DEFAULT_FAVORITES } from '../core/radial';
+import { DEFAULT_COMPANION_PREFS } from '../core/companion';
 
 export const initialEditorState: EditorState = {
   status: 'loading',
@@ -45,6 +46,9 @@ export const initialEditorState: EditorState = {
   contextMenu: null,
   radial: null,
   commandOpen: false,
+  companionPrefs: { ...DEFAULT_COMPANION_PREFS },
+  companionOpen: null,
+  companionFull: null,
   captureOpen: false,
   elementFlash: null,
   radialFavorites: [...DEFAULT_FAVORITES],

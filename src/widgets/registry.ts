@@ -106,6 +106,8 @@ export interface WidgetPlugin<D = unknown> {
    * sem cabeçalho; o corpo não captura o ponteiro — clicar e arrastar move o elemento).
    */
   frame?: 'standard' | 'bare';
+  /** Moldura conforme os dados (ex.: assistente no visual “Personagem” usa 'bare'). Tem prioridade sobre `frame`. */
+  frameFor?(data: D): 'standard' | 'bare';
   /** Variações prontas exibidas na biblioteca (clique insere, arrastar posiciona). */
   presets?: WidgetPreset<D>[];
   /** Título da seção da biblioteca para os presets (padrão: nome do widget). */

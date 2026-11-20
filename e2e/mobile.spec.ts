@@ -188,3 +188,28 @@ test('Command Center no celular (#14): botão de busca visível, paleta cabe na 
   await expect(pal).toHaveCount(0);
   expect((await state(page)).selectedIds).toHaveLength(1);
 });
+
+test('AI Companion no celular (#13): tocar no personagem abre o mini chat dentro da tela; dock acessível', async ({ page }) => {
+  await page.route('**/api/ai/providers', (r) => r.fulfill({ json: { providers: [{ id: 'anthropic', name: 'Anthropic', configured: true, defaultModel: 'mock' }] } }));
+  await page.route('**/api/ai/chat', (r) => r.fulfill({ json: { text: 'resposta no celular', provider: 'anthropic', model: 'mock' } }));
+  await ready(page);
+  const id = await page.evaluate(async () => {
+    const a = (window as any).__aurora;
+    await a.actions.createBoard('Companion celular');
+    const v = a.getState().viewport;
+    const el = a.actions.addWidget('aurora.ai', { x: 0, y: 0 }, { companion: { displayMode: 'character', preset: 'aurora', name: 'Aurora', docked: true } }, { size: { width: 160, height: 200 } });
+    a.store.setState({ selectedIds: [], camera: { x: v.width / 2, y: v.height / 2, zoom: 1 } });
+    return el.id;
+  });
+  await page.locator(`[data-testid="companion-character"][data-id="${id}"] [data-testid="companion-open"]`).tap();
+  const chat = page.getByTestId('companion-minichat');
+  await expect(chat).toBeVisible();
+  const box = (await chat.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
+  await chat.getByRole('textbox').fill('oi');
+  await chat.getByRole('button', { name: 'Enviar' }).tap();
+  await expect(chat.getByTestId('companion-bubble').last()).toContainText('resposta no celular');
+  await chat.getByRole('button', { name: 'Fechar conversa' }).tap();
+  await expect(page.locator(`[data-testid="companion-dock-item"][data-id="${id}"]`)).toBeVisible();
+});
