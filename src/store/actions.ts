@@ -14,6 +14,7 @@ import {
 } from '../core/elements';
 import { safeExternalUrl } from '../core/aiTiles';
 import { MAX_ZOOM, MIN_ZOOM, nextZoomStep, sanitizeZoomPrefs, zoomAround } from '../core/camera';
+import { imageAnimationOf, sanitizeAnimationPrefs, type AnimationPrefs, type ImageAnimation } from '../core/animation';
 import { cameraTarget, cancelCameraAnimation, fitCameraToBounds, panCamera, zoomToLevel } from './cameraMotion';
 import { createValueData, parseTextToValue, VALUE_SIZES } from '../core/valueTile';
 import { resolveLinear, updateBoundArrows, unbindDeleted } from '../core/bindings';
@@ -322,6 +323,18 @@ export async function setZoomPrefs(p: Partial<import('../core/camera').ZoomPrefe
   const next = sanitizeZoomPrefs({ ...getState().zoomPrefs, ...p });
   setState({ zoomPrefs: next });
   await getAdapter().setSetting('zoomPreferences', next);
+}
+
+/** Ciclo 6: preferência geral de animação de GIFs (vale para todos os quadros). */
+export async function setAnimationPrefs(p: Partial<AnimationPrefs>) {
+  const next = sanitizeAnimationPrefs({ ...getState().animationPrefs, ...p });
+  setState({ animationPrefs: next });
+  await getAdapter().setSetting('animationPreferences', next);
+}
+
+/** Ciclo 6: reprodução/repetição das imagens selecionadas (uma entrada de histórico). */
+export function setImageAnimation(ids: string[], patch: Partial<ImageAnimation>) {
+  updateElements(new Set(ids), (el) => (el.type === 'image' ? ({ ...el, animation: { ...imageAnimationOf(el.animation), ...patch }, version: el.version + 1, updatedAt: Date.now() } as AuroraElement) : el));
 }
 
 export function resetZoom() {

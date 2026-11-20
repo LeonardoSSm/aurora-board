@@ -83,6 +83,9 @@ Limites honestos: depois de ativado, um widget pode exibir conteúdo enganoso (p
 
 ### Documentos e mídias (`core/media.ts`, `documents.tsx`, `ElementView.tsx`)
 
+- **GIFs animados (ciclo 6, `core/gif.ts`)**: o leitor de estrutura trata o arquivo como não confiável (limites em todo acesso, sem decodificar pixels, até 10.000 quadros; testado com todos os prefixos truncados e 2.000 corrupções aleatórias). Variantes de exibição (repetição infinita, primeiro quadro) são `data:` URLs geradas localmente; o arquivo salvo é o original. GIF pesado demais (> 400 MP somados) não anima. Ver [ANIMATED_GIFS.md](ANIMATED_GIFS.md).
+
+
 - O tipo é decidido pelos **bytes** (assinatura), nunca por nome, extensão, MIME declarado ou cabeçalho do data URL.
 - Imagens raster e SVG: só em contexto de imagem (`<img>`: sem scripts, sem rede); a prévia de SVG usa `data:`.
 - Texto (inclusive HTML disfarçado): exibido como texto em `<pre>`, com aviso quando o tipo declarado diverge.

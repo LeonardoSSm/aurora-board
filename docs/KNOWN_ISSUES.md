@@ -79,6 +79,14 @@ Estado ao final do ciclo 2. Itens marcados com ⚠ afetam uso real; os demais s�
 - IA com credenciais reais não verificada (sem chave no ambiente); o contrato com cada provedor é testado com `fetch` simulado. As ações da IA (contrato v2) foram verificadas manualmente só com OpenAI `gpt-4.1-mini` (bloco de receita e lançamento em Finanças); Gemini e Anthropic não foram testados com chave real. Respostas fora do contrato são recusadas e o pedido financeiro inequívoco é coberto pela interpretação local.
 - Windows local: com a suíte unitária inteira em paralelo e o `npm run dev` aberto, `security.test.ts` e `server-hardening.test.ts` (servidores HTTP de teste) falham de forma intermitente sem mensagem (2 de ~20 execuções no ciclo das ações da IA); isolados passam sempre. Não reproduzido na CI (Linux).
 
+## GIFs animados (ciclo 6)
+
+- Pausar mostra o **primeiro quadro** (um `<img>` não congela no quadro atual).
+- PNG/SVG exportam o primeiro quadro; exportar o quadro como GIF/vídeo não existe.
+- GIFs que o leitor não entende (malformados ou com mais de 10.000 quadros) ficam por conta do navegador: sem repetição forçada, pausa ou prévia estática.
+- Retomar a animação ao voltar à tela (em vez de reiniciar) é comportamento do navegador, verificado no Chromium; não é garantido por especificação.
+- Firefox: o teste de **colar** GIF se pula sozinho, porque eventos de colar criados por script não carregam arquivos nesse navegador (visto na CI). Colar é coberto no Chromium e no WebKit; o caminho de inserção é o mesmo do seletor e do arrastar-e-soltar, testados nos três.
+
 ## Integrações não implementadas (escopo de ciclos futuros)
 
 Google Calendar, Google Drive, GitHub, API externa, indicadores financeiros, dashboards; sincronização em nuvem; colaboração em tempo real; autenticação.

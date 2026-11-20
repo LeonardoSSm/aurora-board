@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
-export interface El { id: string; type: string; x: number; y: number; width: number; height: number; text: string; groupIds: string[]; widgetType?: string; title?: string; data?: any; points?: [number, number][]; startBinding?: any; endBinding?: any; style: any }
+export interface El { id: string; type: string; x: number; y: number; width: number; height: number; text: string; groupIds: string[]; widgetType?: string; title?: string; data?: any; assetId?: string; animation?: { playback: string; loop: string }; points?: [number, number][]; startBinding?: any; endBinding?: any; style: any }
 
 export async function state(page: Page) {
   return page.evaluate(() => {

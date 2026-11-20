@@ -3,6 +3,7 @@ import type { AuroraElement, Board } from '../core/schema';
 import { BoardSettingsSchema, ElementSchema, SCHEMA_VERSION } from '../core/schema';
 import { DEFAULT_BOARD_SETTINGS, DEFAULT_STYLE, randomSeed, uid } from '../core/elements';
 import { sanitizeCheckpoints } from '../core/checkpoints';
+import { imageAnimationOf } from '../core/animation';
 
 type Raw = Record<string, unknown>;
 const obj = (v: unknown): Raw => (v && typeof v === 'object' ? (v as Raw) : {});
@@ -67,6 +68,8 @@ export function normalizeElement(raw: unknown): { element: AuroraElement | null;
     base.points = Array.isArray(r.points) ? (r.points as unknown[]).filter(Array.isArray).map((p) => [num(p[0], 0), num(p[1], 0), num(p[2], 0.5)]) : [];
     base.simulatePressure ??= true;
   }
+  // Ciclo 6: animação de GIF opcional; valor inválido volta ao padrão em vez de descartar a imagem.
+  if (type === 'image' && base.animation !== undefined) base.animation = imageAnimationOf(base.animation);
   if (type === 'widget') {
     base.widgetVersion ??= '1.0.0';
     base.title ??= '';
