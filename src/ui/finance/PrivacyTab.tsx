@@ -52,14 +52,15 @@ export function PrivacyTab() {
 
   const exportFinance = async (personal: boolean) => {
     if (pwdError) { toast(pwdError, 'error'); return; }
-    const ok = await confirmDialog(personal ? 'Backup pessoal completo' : 'Backup financeiro', `${personal ? 'O arquivo terá seus quadros E seus dados financeiros.' : 'O arquivo terá dados financeiros'} (${selected.length ? `${selected.length} conta(s)` : 'todas as contas'}): contas, movimentações, importações, categorias e regras. ${encrypted ? 'Ele será cifrado com a sua senha (AES-GCM). Sem a senha, o arquivo é irrecuperável — ninguém consegue recuperá-la.' : 'Ele NÃO será cifrado: qualquer pessoa com o arquivo lê seus dados.'} Consentimentos de conexões não entram.`, 'Gerar backup', !encrypted);
+    const ok = await confirmDialog(personal ? 'Backup pessoal completo' : 'Backup financeiro', `${personal ? 'O arquivo terá seus quadros (com os dados importados usados neles) E seus dados financeiros.' : 'O arquivo terá dados financeiros'} (${selected.length ? `${selected.length} conta(s)` : 'todas as contas'}): contas, movimentações, importações, categorias e regras. ${encrypted ? 'Ele será cifrado com a sua senha (AES-GCM). Sem a senha, o arquivo é irrecuperável — ninguém consegue recuperá-la.' : 'Ele NÃO será cifrado: qualquer pessoa com o arquivo lê seus dados.'} Consentimentos de conexões não entram.`, 'Gerar backup', !encrypted);
     if (!ok) return;
     setBusy(true);
     try {
       const fin = buildFinanceBackup(getFinance(), selected.length ? selected : undefined);
       let body = JSON.stringify(fin);
       if (personal) {
-        const ws = await buildWorkspaceExportText();
+        // Backup pessoal COMPLETO: inclui os dados importados (Data Hub), como avisado na confirmação.
+        const ws = await buildWorkspaceExportText({ datasets: true });
         const p: PersonalBackup = { format: 'aurora-personal-backup', version: 1, exportedAt: Date.now(), sensitive: true, boards: JSON.parse(ws.text), finance: fin };
         body = JSON.stringify(p);
       }

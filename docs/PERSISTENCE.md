@@ -4,7 +4,7 @@
 
 | Local | Conteúdo |
 |---|---|
-| IndexedDB `aurora-board` | `workspaces`, `boardMeta` (metadados para listagem), `boards` (quadro completo), `assets` (imagens/arquivos como data URL), `kv` (preferências e cópias de segurança) |
+| IndexedDB `aurora-board` | `workspaces`, `boardMeta` (metadados para listagem), `boards` (quadro completo), `assets` (imagens/arquivos como data URL; desde a issue #24 também os **dados importados** do Data Hub, tipo `application/vnd.aurora.dataset+json` — ver `docs/DATA_HUB.md`), `kv` (preferências e cópias de segurança) |
 | localStorage `aurora-board-journal:<idDoQuadro>` | Diário de recuperação: último snapshot ainda **não confirmado** no IndexedDB |
 | localStorage `aurora-board-v2-data` | Dados do protótipo v0.2/v0.3 — **nunca** apagados; importados uma vez na primeira execução |
 

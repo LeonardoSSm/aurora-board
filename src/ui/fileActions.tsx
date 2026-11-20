@@ -4,45 +4,101 @@ import { getState, setState } from '../store/editor';
 import { getAsset, openBoard, refreshBoards, selectedElements } from '../store/actions';
 import { openDialog, toast } from '../store/ui';
 import { flushSave, getAdapter, snapshotCurrentBoard } from '../persistence/autosave';
-import { applyImport, assetIdsOf, buildExport, checkImportFileSize, downloadBlob, downloadText, ImportError, parseImport, safeFileName } from '../persistence/exportImport';
+import { applyImport, assetIdsOf, buildExport, datasetAssetIdsOf, checkImportFileSize, downloadBlob, downloadText, ImportError, parseImport, safeFileName } from '../persistence/exportImport';
 import { LEGACY_STORAGE_KEY } from '../persistence/legacy';
 import { exportPNG, exportSVG } from '../render/exportImage';
+import { invalidateDatasets } from '../data/store';
 
-async function collectAssets(boards: Board[]): Promise<Asset[]> {
+/**
+ * Assets referenciados pelos quadros. Issue #24: dados importados (Data Hub) só entram com decisão EXPLÍCITA
+ * (`datasets: true`); sem ela, os blocos ficam com a referência e mostram “dados não disponíveis” ao restaurar.
+ * Os dados são lidos direto do armazenamento (sem passar pelo cache de imagens).
+ */
+async function collectAssets(boards: Board[], opts: { datasets: boolean }): Promise<Asset[]> {
   const ids = new Set<string>();
-  for (const b of boards) for (const id of assetIdsOf(b.elements)) ids.add(id);
+  const data = new Set<string>();
+  for (const b of boards) {
+    for (const id of datasetAssetIdsOf(b.elements)) data.add(id);
+    for (const id of assetIdsOf(b.elements)) ids.add(id);
+  }
   const out: Asset[] = [];
   for (const id of ids) {
+    if (data.has(id)) {
+      if (!opts.datasets) continue;
+      const a = await getAdapter().getAsset(id);
+      if (a) out.push(a);
+      continue;
+    }
     const a = await getAsset(id);
     if (a) out.push(a);
   }
   return out;
 }
 
+/** Issue #24: quantos conjuntos de dados importados os quadros usam (e o tamanho aproximado dos arquivos). */
+export function datasetUsage(boards: Board[]): { count: number; bytes: number } {
+  const seen = new Map<string, number>();
+  for (const b of boards) {
+    for (const el of b.elements) {
+      if (el.type !== 'widget' || el.widgetType !== 'aurora.dataset') continue;
+      const src = (el.data as { source?: { assetId?: unknown; bytes?: unknown } } | null)?.source;
+      if (src && typeof src.assetId === 'string') seen.set(src.assetId, typeof src.bytes === 'number' ? src.bytes : 0);
+    }
+  }
+  return { count: seen.size, bytes: [...seen.values()].reduce((a, b) => a + b, 0) };
+}
+
+/** Pergunta se os dados importados entram no backup. `null` = exportação cancelada. */
+export async function askDatasetInclusion(boards: Board[]): Promise<boolean | null> {
+  const u = datasetUsage(boards);
+  if (!u.count) return false;
+  const size = u.bytes >= 1024 * 1024 ? `${(u.bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(u.bytes / 1024))} KB`;
+  const r = await openDialog({
+    title: 'Incluir dados importados?',
+    message: `${u.count} conjunto(s) de dados importados (≈ ${size}) são usados aqui. Com eles, quem tiver o arquivo de backup lê esses dados. Sem eles, os blocos voltam vazios ao restaurar em outro dispositivo (exporte os dados em CSV/JSON pelo próprio bloco, se preferir).`,
+    buttons: [{ label: 'Cancelar', value: 'cancel' }, { label: 'Sem os dados', value: 'exclude' }, { label: 'Incluir dados', value: 'include', variant: 'primary' }],
+  });
+  return r.button === 'include' ? true : r.button === 'exclude' ? false : null;
+}
+
 export async function exportCurrentBoardJSON() {
   await flushSave();
   const board = snapshotCurrentBoard();
   if (!board) return;
+  const datasets = await askDatasetInclusion([board]);
+  if (datasets === null) return;
   const ws = getState().workspaces.find((w) => w.id === getState().workspaceId);
-  downloadText(`${safeFileName(board.name)}.aurora.json`, buildExport([board], await collectAssets([board]), ws));
-  toast('Quadro exportado (JSON).', 'success');
+  downloadText(`${safeFileName(board.name)}.aurora.json`, buildExport([board], await collectAssets([board], { datasets }), ws));
+  toast(datasets ? 'Quadro exportado (JSON) com os dados importados.' : 'Quadro exportado (JSON).', 'success');
 }
 
 /** Backup visual do workspace atual (texto JSON `aurora-board`). Não contém dados financeiros do razão. */
-export async function buildWorkspaceExportText(): Promise<{ text: string; boards: number; name: string }> {
+async function loadWorkspaceBoards(): Promise<Board[]> {
   await flushSave();
-  const s = getState();
   const boards: Board[] = [];
-  for (const m of s.boards) {
+  for (const m of getState().boards) {
     const b = await getAdapter().loadBoard(m.id);
     if (b) boards.push(b);
   }
+  return boards;
+}
+
+/**
+ * Issue #24: `datasets` decide se os dados importados (Data Hub) vão junto; o padrão é NÃO incluir — quem chama
+ * pergunta ao usuário (`askDatasetInclusion`) ou avisa que inclui (backup pessoal completo).
+ */
+export async function buildWorkspaceExportText(opts: { datasets: boolean } = { datasets: false }, preloaded?: Board[]): Promise<{ text: string; boards: number; name: string }> {
+  const boards = preloaded ?? (await loadWorkspaceBoards());
+  const s = getState();
   const ws = s.workspaces.find((w) => w.id === s.workspaceId);
-  return { text: buildExport(boards, await collectAssets(boards), ws), boards: boards.length, name: ws?.name ?? 'workspace' };
+  return { text: buildExport(boards, await collectAssets(boards, opts), ws), boards: boards.length, name: ws?.name ?? 'workspace' };
 }
 
 export async function exportWorkspaceJSON() {
-  const { text, boards, name } = await buildWorkspaceExportText();
+  const all = await loadWorkspaceBoards();
+  const datasets = await askDatasetInclusion(all);
+  if (datasets === null) return;
+  const { text, boards, name } = await buildWorkspaceExportText({ datasets }, all);
   downloadText(`${safeFileName(name)}-backup-${new Date().toISOString().slice(0, 10)}.aurora.json`, text);
   toast(`Backup com ${boards} quadro(s) exportado.`, 'success');
 }
@@ -134,15 +190,17 @@ export async function importFromText(name: string, textP: Promise<string>) {
   });
   if (button !== 'ok') return;
   const ws = getState().workspaces.find((w) => w.id === getState().workspaceId)!;
-  let ids: string[], updated;
+  let ids: string[], updated, assetIds: string[];
   try {
-    ({ boardIds: ids, workspace: updated } = await applyImport(getAdapter(), r, ws, () => uid('b_')));
+    ({ boardIds: ids, workspace: updated, assetIds } = await applyImport(getAdapter(), r, ws, () => uid('b_')));
   } catch (e) {
     // A gravação é uma transação única: se falhou, nada foi gravado (S1-SEC-006).
     const msg = e instanceof ImportError ? e.message : `Falha ao gravar: ${(e as Error).message}`;
     await openDialog({ title: 'Importação interrompida', message: `“${name}”: ${msg} Nenhum quadro ou arquivo foi gravado; seus quadros existentes não foram alterados.`, buttons: [{ label: 'Ok', value: 'ok', variant: 'primary' }] });
     return;
   }
+  // Issue #24: dados importados restaurados agora existem — esquece qualquer “ausente” guardado em cache.
+  invalidateDatasets(assetIds);
   setState({ workspaces: getState().workspaces.map((w) => (w.id === ws.id ? updated : w)) });
   await refreshBoards();
   await openBoard(ids[0]);

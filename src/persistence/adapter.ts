@@ -18,6 +18,8 @@ export interface PersistenceAdapter {
   deleteBoard(id: string): Promise<void>;
   getAsset(id: string): Promise<Asset | null>;
   putAsset(asset: Asset): Promise<void>;
+  /** Data Hub (D2-A): apaga um arquivo local (só usado ao excluir conscientemente dados importados sem outras referências). */
+  deleteAsset?(id: string): Promise<void>;
   getSetting<T>(key: string): Promise<T | undefined>;
   setSetting<T>(key: string, value: T): Promise<void>;
   /** Grava uma importação inteira de forma atômica (tudo ou nada). Opcional para adaptadores futuros. */
@@ -51,6 +53,7 @@ export class MemoryAdapter implements PersistenceAdapter {
   async deleteBoard(id: string) { this.boards.delete(id); }
   async getAsset(id: string) { return this.assets.get(id) ?? null; }
   async putAsset(asset: Asset) { this.assets.set(asset.id, asset); }
+  async deleteAsset(id: string) { this.assets.delete(id); }
   async getSetting<T>(key: string) { return this.settings.get(key) as T | undefined; }
   async setSetting<T>(key: string, value: T) { this.settings.set(key, value); }
   /** Para testes: falha simulada no meio da gravação de uma importação. */

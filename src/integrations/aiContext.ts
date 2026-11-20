@@ -31,7 +31,7 @@ export interface ContextSource {
  * Ciclo F1 + issue #11: um bloco cujo valor vem (por conexões de DADOS, direta ou indiretamente) de uma fonte
  * PROTEGIDA sem autorização para IA também não pode ser enviado — senão um Mês, uma Fórmula ou um bloco HTML
  * vazaria o que a fonte protege. Fontes protegidas: Consulta bancária e blocos HTML (saídas só com autorização
- * local). Retorna o motivo, ou null.
+ * local) e, desde a issue #24, Dados importados (`aurora.dataset`). Retorna o motivo, ou null.
  */
 export function financialTaint(elements: AuroraElement[], id: string): string | null {
   const byId = new Map(elements.map((e) => [e.id, e]));
@@ -44,6 +44,10 @@ export function financialTaint(elements: AuroraElement[], id: string): string | 
     } else if (el.widgetType === WIDGET.sandbox) {
       const pol = aiPolicyOf(el);
       if (!pol?.allowed) return `Depende de saídas de um bloco HTML não autorizadas para IA (“${el.title}”).`;
+    } else if (el.widgetType === WIDGET.dataset) {
+      // Data Hub (issue #24): dados importados são privados; nada derivado deles (fórmula, HTML…) vai à IA.
+      const pol = aiPolicyOf(el);
+      if (!pol?.allowed) return `Depende de dados importados não autorizados para IA (“${el.title}”).`;
     }
   }
   return null;

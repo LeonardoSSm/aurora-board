@@ -15,13 +15,14 @@ import { valuePlugin } from './value';
 import { financePeriodPlugin } from './period';
 import { formulaPlugin } from './formula';
 import { bankQueryPlugin } from './bankQuery';
+import { datasetPlugin } from './dataset';
 
 let done = false;
 
 export function registerBuiltinWidgets() {
   if (done) return;
   done = true;
-  for (const p of [notesPlugin, tasksPlugin, financePlugin, calendarPlugin, documentsPlugin, linkPlugin, codePlugin, aiPlugin, chartPlugin, sandboxPlugin, aiTilePlugin, valuePlugin, financePeriodPlugin, formulaPlugin, bankQueryPlugin]) registerWidget(p as never);
+  for (const p of [notesPlugin, tasksPlugin, financePlugin, calendarPlugin, documentsPlugin, linkPlugin, codePlugin, aiPlugin, chartPlugin, sandboxPlugin, aiTilePlugin, valuePlugin, financePeriodPlugin, formulaPlugin, bankQueryPlugin, datasetPlugin]) registerWidget(p as never);
 
   registerPlanned({ id: 'google.calendar', name: 'Google Calendar', description: 'Sincronizar eventos do Google com o bloco Calendário.', icon: CalendarClock, permissions: ['external:google-calendar'], activation: 'Requer OAuth 2.0 (Client ID do Google Cloud) e endpoint no servidor para troca de tokens.' });
   registerPlanned({ id: 'google.drive', name: 'Google Drive', description: 'Referenciar e visualizar arquivos do Drive no bloco Documentos.', icon: HardDrive, permissions: ['external:google-drive'], activation: 'Requer OAuth 2.0 com escopo drive.readonly.' });

@@ -122,3 +122,10 @@ Google Calendar, Google Drive, GitHub, API externa, indicadores financeiros, das
 
 - Os testes de navegador rodam na imagem `mcr.microsoft.com/playwright:v1.65.1-noble` (fixada por digest), baixada do MCR a cada job (~1 GB comprimido). Uma degradação do MCR ainda pode atrasar um job; o tempo aparece em "Initialize containers". O travamento original (apt do WebKit a ~50 kB/s) deixou de ser possível porque nada é instalado via apt.
 - Subir o `@playwright/test` exige atualizar a tag e o digest da imagem nos jobs `e2e` e `static`; `tests/unit/ci-workflow.test.ts` e o passo "Navegadores da imagem" falham enquanto divergirem (procedimento em `docs/DEVELOPMENT.md`).
+
+## Data Hub (issue #24, D2-A)
+
+- Importação de planilhas `.xlsx` não é suportada: salve como “CSV UTF-8”. Outras codificações (Latin-1/Windows-1252) são recusadas com orientação.
+- Textos que parecem fórmula saem no CSV com `'` na frente (proteção para planilhas); ao importar um CSV, o app remove esse `'` (como as planilhas). Um CSV de outra origem com `'=…` intencional chega como `=…` (texto).
+- Excluir um bloco de dados não apaga o arquivo local (como imagens), para o desfazer funcionar; apagar de fato é pelo painel do bloco (“Excluir dados deste dispositivo”). Arquivos sem referência não são coletados automaticamente.
+- A IA não recebe dados importados nem derivados deles neste estágio; o consentimento granular é do D2-C.
