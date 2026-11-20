@@ -16,7 +16,7 @@ import { buildContextText, contextSources, financialTaint } from '../../src/inte
 import { getWidget, summarizeElement } from '../../src/widgets/registry';
 import { BRIDGE_LIMITS, buildInputSnapshot, plainJSON } from '../../src/core/htmlBridge';
 import { DATASET_LIMITS, DATASET_MIME, DatasetError, validateContent, type DatasetContent } from '../../src/data/model';
-import { parseDatasetText } from '../../src/data/parse';
+import { decodeDatasetBytes, parseDatasetText } from '../../src/data/parse';
 import { datasetToCSV, datasetToJSON, isFormulaLike } from '../../src/data/export';
 import { decodeDatasetAsset, encodeDatasetAsset } from '../../src/data/codec';
 import { datasetEntry, deleteDatasetAsset, invalidateDatasets, loadDatasetContent, requestDataset, resetDatasetCacheForTests, saveDataset, setDatasetCacheLimitForTests } from '../../src/data/store';
@@ -105,9 +105,11 @@ describe('CSV', () => {
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 
-  it('binário, UTF-8 inválido, vazio e só cabeçalho', () => {
+  it('binário, UTF-8 inválido (nos BYTES), vazio e só cabeçalho', () => {
     expect(() => csv('PK\u0003\u0004\u0000\u0000xl/workbook.xml')).toThrow(/não parece texto/);
-    expect(() => csv('nome\nJo�o\n')).toThrow(/UTF-8/);
+    // Latin-1 “João” (0xE3 sozinho) não é UTF-8: recusado na decodificação estrita dos bytes.
+    expect(() => decodeDatasetBytes(new Uint8Array([0x6e, 0x0a, 0x4a, 0x6f, 0xe3, 0x6f, 0x0a]))).toThrow(/UTF-8/);
+    expect(decodeDatasetBytes(new TextEncoder().encode('\ufeffn\nJoão\n'))).toBe('n\nJoão\n'); // BOM removido
     expect(() => csv('   \n')).toThrow(/vazio/);
     expect(csv('a,b\n').warnings.join(' ')).toMatch(/só tem o cabeçalho/);
   });
@@ -277,6 +279,16 @@ describe('exportação CSV/JSON', () => {
   });
 
   // Revisão do Codex (PR #27, 4ª rodada): três casos em que a ida e volta CSV mudava estrutura ou valores.
+  // Revisão do Codex (PR #27, 5ª rodada): U+FFFD é um caractere legítimo; recusá-lo no texto decodificado
+  // impedia reimportar o que o próprio app exportou.
+  it('U+FFFD legítimo importa e volta pelo JSON e pelo CSV', () => {
+    const c = json('[{"f":"a\\ufffdb"}]').content;
+    expect(c.rows).toEqual([['a�b']]);
+    const viaBytes = (name: string, text: string) => parseDatasetText(name, decodeDatasetBytes(new TextEncoder().encode(text))).content;
+    expect(viaBytes('x.json', datasetToJSON(c, 'x'))).toEqual(c);
+    expect(viaBytes('x.csv', datasetToCSV(c))).toEqual(c);
+  });
+
   it('texto neutralizado continua texto na volta (não vira número)', () => {
     const c = json([{ f: '+123' }, { f: '-4' }]).content;
     const back = csv(datasetToCSV(c)).content;

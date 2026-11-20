@@ -27,7 +27,7 @@ import { getState } from '../../store/editor';
 import { getAdapter } from '../../persistence/autosave';
 import { assetIdsOf, downloadText, safeFileName } from '../../persistence/exportImport';
 import { cleanLabel, COLUMN_TYPE_LABELS, DATASET_LIMITS, DatasetError, type CellValue, type DatasetContent, type DatasetKind, type DatasetSource } from '../../data/model';
-import { checkDatasetFileSize, parseDatasetText, type ParsedDataset } from '../../data/parse';
+import { checkDatasetFileSize, decodeDatasetBytes, parseDatasetText, type ParsedDataset } from '../../data/parse';
 import { datasetEntry, deleteDatasetAsset, loadDatasetContent, requestDataset, saveDataset } from '../../data/store';
 import { PROJECTION_LIMITS, projectDataset, sanitizeView, type DatasetProjection, type DatasetView } from '../../data/project';
 import { datasetToCSV, datasetToJSON } from '../../data/export';
@@ -187,7 +187,7 @@ export async function importIntoBlock(elementId: string, api: Pick<WidgetHostApi
   let parsed: ParsedDataset;
   try {
     checkDatasetFileSize(f.size);
-    parsed = parseDatasetText(f.name, await f.text());
+    parsed = parseDatasetText(f.name, decodeDatasetBytes(new Uint8Array(await f.arrayBuffer())));
   } catch (e) {
     await refuse(f.name, e instanceof DatasetError ? e.message : 'Não foi possível ler o arquivo.');
     return false;

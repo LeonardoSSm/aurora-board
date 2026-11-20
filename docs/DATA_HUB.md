@@ -52,7 +52,8 @@ gravado como um asset local com tipo próprio. O bloco guarda só a referência 
 
 ### CSV
 
-- UTF-8 (com ou sem BOM). Arquivo binário (ex.: `.xlsx`) ou UTF-8 inválido é recusado com orientação.
+- UTF-8 (com ou sem BOM), conferido nos **bytes** (decodificação estrita): Latin-1/Windows-1252 é recusado com
+  orientação; o caractere U+FFFD em si é legítimo. Arquivo binário (ex.: `.xlsx`) também é recusado.
 - RFC 4180 (leitor próprio, `src/data/csv.ts`): aspas, aspas duplicadas (`""`), quebras de linha dentro de campos,
   CRLF/LF/CR. Linha em branco é ignorada; `""` sozinho numa linha é um registro (nulo).
 - Delimitador detectado entre `,` `;` TAB `|` pela consistência numa amostra de 64 KB (cortada no fim de uma linha — LF, CRLF ou só CR; se o corte cair dentro de um campo entre aspas, cortes menores são tentados). **Primeira linha = cabeçalho.**
@@ -157,7 +158,7 @@ estatísticas nem cria objetos novos.
 
 ## Testes
 
-- `tests/unit/data-hub.test.ts` (71): CSV (BOM, aspas, quebras, delimitadores, decimal brasileiro, zeros à
+- `tests/unit/data-hub.test.ts` (72): CSV (BOM, aspas, quebras, delimitadores, decimal brasileiro, zeros à
   esquerda, inconsistência, cabeçalhos perigosos, binário/UTF-8, limites, fórmulas importadas como texto), JSON (duas
   variantes, células aninhadas, `__proto__`/`constructor` sem poluição, profundidade/itens, backups recusados),
   validação do conteúdo guardado, codec, exportação (escape, 14 variantes de fórmula, números intactos, ida e volta
@@ -174,7 +175,7 @@ estatísticas nem cria objetos novos.
   gravação em caracteres UTF-16 × leitura em bytes UTF-8 (gravava conteúdo que não relia). 3ª rodada: exportação de
   dataset grande que não reimportava — limites alinhados, JSON compacto e ida e volta CSV exata. 4ª rodada: texto
   neutralizado que voltava número, linha nula perdida numa coluna só e delimitador alternativo dentro de valores —
-  leitor CSV próprio e teste de propriedade.
+  leitor CSV próprio e teste de propriedade. 5ª rodada: U+FFFD legítimo era recusado — UTF-8 conferido nos bytes.
 
 ## Futuro: Social Analytics Hub (fora do D2)
 

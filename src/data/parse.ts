@@ -43,12 +43,23 @@ export function checkDatasetFileSize(size: number, lim: Limits = DATASET_LIMITS)
   if (size === 0) throw new DatasetError('Arquivo vazio.');
 }
 
+/**
+ * Bytes do arquivo → texto, com decodificação UTF-8 ESTRITA: bytes inválidos (ex.: planilha salva em
+ * Latin-1/Windows-1252) são recusados aqui. O caractere U+FFFD em si é legítimo e passa (revisão do Codex, PR #27).
+ */
+export function decodeDatasetBytes(bytes: Uint8Array): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw new DatasetError('O arquivo não está em UTF-8 válido. Salve-o como “CSV UTF-8”.');
+  }
+}
+
 /** Ponto de entrada: valida e converte o texto do arquivo. Lança `DatasetError` com mensagem para o usuário. */
 export function parseDatasetText(fileName: string, text: string, lim: Limits = DATASET_LIMITS): ParsedDataset {
   if (text.length > lim.maxFileBytes) throw new DatasetError(`Arquivo grande demais (limite de ${lim.maxFileBytes / 1024 / 1024} MB).`);
   // Binário (planilha .xlsx, imagem, executável…) não é CSV/JSON: recusa antes de tentar interpretar.
   if (text.includes('\u0000')) throw new DatasetError('O arquivo não parece texto (CSV ou JSON). Planilhas do Excel precisam ser salvas como CSV.');
-  if (text.includes('�')) throw new DatasetError('O arquivo não está em UTF-8 válido. Salve-o como “CSV UTF-8”.');
   return datasetKindOf(fileName, text) === 'json' ? parseJsonDataset(text, lim) : parseCsvDataset(text, lim);
 }
 
