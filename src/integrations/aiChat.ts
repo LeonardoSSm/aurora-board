@@ -82,43 +82,66 @@ function aiElement(id: string): WidgetElement | null {
 export async function sendAIMessage(id: string, text: string, mode: QuickMode = 'structure'): Promise<boolean> {
   const content = text.trim();
   if (!content) return false;
-  if (requestState(id).status === 'sending') return false;
+  const prev = entries.get(id);
+  if (prev?.state.status === 'sending' || prev?.controller) return false;
   const el = aiElement(id);
   if (!el) return false;
   const data: AIData = sanitizeAI(el.data);
   const boardId = getState().boardId;
-  set(id, { status: 'sending', error: '' });
+  // O cancelamento existe DESDE O INÍCIO (inclusive durante a descoberta do provedor). O controlador também é a
+  // identidade do pedido: só o pedido atual pode mudar o estado; um pedido abandonado (quadro trocado, assistente
+  // excluído, cancelado) não recria a entrada, não envia e não grava nada.
+  const ctrl = new AbortController();
+  entries.set(id, { state: { ...(prev?.state ?? IDLE_REQUEST), status: 'sending', error: '' }, controller: ctrl, boardId });
+  emit();
+  const isCurrent = () => entries.get(id)?.controller === ctrl;
+  /** Ainda vale continuar: não cancelado, mesmo pedido, mesmo quadro e o assistente existe. */
+  const alive = () => !ctrl.signal.aborted && isCurrent() && getState().boardId === boardId && !!aiElement(id);
   try {
-    const status = await fetchAIStatus();
+    const status = await abortable(fetchAIStatus(), ctrl.signal);
+    if (!alive()) throw abortError();
     const configured = status.state === 'ready' ? status.providers.filter((p) => p.configured) : [];
     const provider = configured.find((p) => p.id === data.provider) ?? configured[0];
     if (!provider) {
       set(id, { status: 'error', error: status.state === 'ready' || status.state === 'offline' ? 'IA não configurada: nenhum provedor com chave no servidor local.' : status.message });
       return false;
     }
-    // Contexto calculado AGORA, com o estado atual (mesmas funções do bloco clássico).
+    // Dados e contexto lidos AGORA (após a espera), com o estado atual — mesmas funções do bloco clássico.
+    const fresh = sanitizeAI(aiElement(id)!.data);
     const elements = getState().elements;
-    const sources = contextSources(elements, id, data.authorized);
+    const sources = contextSources(elements, id, fresh.authorized);
     const contextText = buildContextText(elements, sources);
     const userMsg: AIMessage = { id: uid(), role: 'user', content, at: Date.now() };
-    const history = [...data.messages.slice(-12), userMsg].map((m) => ({ role: m.role, content: m.content }));
+    const history = [...fresh.messages.slice(-12), userMsg].map((m) => ({ role: m.role, content: m.content }));
     updateWidgetData(id, (d) => { const cur = sanitizeAI(d); return { ...cur, messages: [...cur.messages, userMsg] }; });
-    const ctrl = new AbortController();
-    entries.set(id, { state: requestState(id), controller: ctrl, boardId });
-    const res = await sendChat({ provider: provider.id as ProviderId, model: data.model || undefined, system: buildSystemPrompt(data.instruction, contextText, mode), messages: history }, ctrl.signal);
-    // O quadro mudou ou o assistente sumiu enquanto esperava: descarta (nunca grava no lugar errado).
-    if (getState().boardId !== boardId || !aiElement(id)) { set(id, { status: 'cancelled', error: 'Resposta descartada: o quadro foi trocado ou o assistente foi excluído.' }); return false; }
+    const res = await abortable(sendChat({ provider: provider.id as ProviderId, model: fresh.model || undefined, system: buildSystemPrompt(fresh.instruction, contextText, mode), messages: history }, ctrl.signal), ctrl.signal);
+    // Cancelado, quadro trocado ou assistente excluído enquanto esperava: descarta (nunca grava no lugar errado).
+    if (!alive()) throw abortError();
     updateWidgetData(id, (d) => { const cur = sanitizeAI(d); return { ...cur, messages: [...cur.messages, { id: uid(), role: 'assistant', content: res.text, at: Date.now(), provider: res.provider, model: res.model }] }; });
     set(id, { status: 'idle', error: '', repliedAt: Date.now(), unread: !viewers.has(id) });
     return true;
   } catch (e) {
-    if ((e as Error).name === 'AbortError') set(id, { status: 'cancelled', error: 'Pedido cancelado.' });
+    // Pedido abandonado pela limpeza (troca de quadro/exclusão): a entrada já foi descartada — não a recria.
+    if (!isCurrent()) return false;
+    if ((e as Error).name === 'AbortError' || ctrl.signal.aborted) set(id, { status: 'cancelled', error: 'Pedido cancelado.' });
     else set(id, { status: 'error', error: (e as Error).message || 'Falha ao falar com a IA.' });
     return false;
   } finally {
     const cur = entries.get(id);
-    if (cur) entries.set(id, { ...cur, controller: null });
+    if (cur && cur.controller === ctrl) entries.set(id, { ...cur, controller: null });
   }
+}
+
+function abortError(): Error { return Object.assign(new Error('Pedido cancelado.'), { name: 'AbortError' }); }
+
+/** Promessa que rejeita com AbortError assim que o sinal aborta (a operação de baixo é compartilhada e segue). */
+function abortable<T>(p: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(abortError());
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortError());
+    signal.addEventListener('abort', onAbort, { once: true });
+    p.then((v) => { signal.removeEventListener('abort', onAbort); resolve(v); }, (e) => { signal.removeEventListener('abort', onAbort); reject(e); });
+  });
 }
 
 /** Troca de quadro ou exclusão do assistente: aborta pendências e descarta estados órfãos. */

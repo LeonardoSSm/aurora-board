@@ -206,6 +206,47 @@ test('H — movimento reduzido no sistema: personagem estático por padrão; com
   await expect(page.locator(`[data-testid="companion-character"][data-id="${id}"]`)).toBeVisible();
 });
 
+/** Codex P2 (PR #19): a conversa completa é modal — foco dentro, contido, Esc fecha, foco volta, atalhos do quadro mudos. */
+test('J — conversa completa: foco, contenção, Esc e nenhum atalho do quadro atrás do diálogo', async ({ page }) => {
+  await mockAI(page);
+  await newBoard(page);
+  const id = await addCompanion(page, { messages: [{ id: 'm1', role: 'user', content: 'pergunta antiga', at: 1 }, { id: 'm2', role: 'assistant', content: 'resposta antiga', at: 2 }] });
+  const inFull = () => page.evaluate(() => !!document.activeElement?.closest('[data-testid="companion-full"]'));
+  const geometry = () => page.evaluate((id) => { const s = (window as any).__aurora.getState(); const e = s.elements.find((x: any) => x.id === id); return e ? { x: e.x, y: e.y, n: s.elements.length, tool: s.tool } : null; }, id);
+
+  await page.getByTestId('companion-open').click();
+  await page.getByTestId('companion-minichat').getByRole('button', { name: 'Abrir a conversa completa' }).click();
+  const full = page.getByTestId('companion-full');
+  await expect(full).toBeVisible();
+  await expect(full.getByText('resposta antiga')).toBeVisible();
+  // O assistente fica SELECIONADO atrás do diálogo (cenário do apontamento).
+  await page.evaluate((id) => (window as any).__aurora.actions.setSelection([id]), id);
+  await expect.poll(inFull).toBe(true);
+  const before = await geometry();
+
+  // Atalhos do quadro não agem: Delete/Backspace, setas, ferramentas, duplicar, selecionar tudo.
+  for (const k of ['Delete', 'Backspace', 'ArrowRight', 'ArrowDown', 'r', 'v', 'Control+d', 'Control+a']) await page.keyboard.press(k);
+  expect(await geometry()).toEqual(before);
+  await expect(full).toBeVisible();
+
+  // Tab e Shift+Tab nunca saem do diálogo.
+  for (let i = 0; i < 25; i++) { await page.keyboard.press('Tab'); expect(await inFull()).toBe(true); }
+  for (let i = 0; i < 8; i++) { await page.keyboard.press('Shift+Tab'); expect(await inFull()).toBe(true); }
+
+  // Foco perdido para o <body> volta ao diálogo; e mesmo nesse intervalo, Delete não exclui nada.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press('Delete');
+  expect(await geometry()).toEqual(before);
+  await expect.poll(inFull).toBe(true);
+
+  // Esc fecha só o diálogo (seleção e quadro intactos) e o foco volta a quem abriu.
+  await page.keyboard.press('Escape');
+  await expect(full).toHaveCount(0);
+  await expect(page.getByTestId('companion-open')).toBeFocused();
+  expect(await geometry()).toEqual(before);
+  expect((await state(page)).selectedIds).toEqual([id]);
+});
+
 test('I — inspetor: trocar visual e fixar no dock pelo painel de propriedades', async ({ page }) => {
   await mockAI(page);
   await newBoard(page);
