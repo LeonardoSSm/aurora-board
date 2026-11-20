@@ -25,6 +25,25 @@ O bind é fixo em `127.0.0.1` (não há variável para `0.0.0.0`) e o servidor a
 
 Confirmado antes da correção (ciclo 2): `POST text/plain` com `Origin` estrangeira era processado, e `Host: atacante.example` respondia 200.
 
+### Computadores pareados — IA pela rede local (`server/pairing.ts`)
+
+Para usar a IA e a prévia de links a partir de **outro computador seu** na mesma rede, com as chaves deste:
+
+1. Neste computador: `npm run dev` (API) e `npm run dev:lan` (app na rede, porta 5174, com `AURORA_LAN_PAIRING=1`).
+2. Ícone de pareamento na barra superior → **Gerar código** (8 caracteres, uso único, válido por 10 min).
+3. No outro computador: `http://<IP deste>:5174` → ícone de pareamento (ou o aviso no bloco de IA) → digitar o código.
+4. Revogar a qualquer momento na mesma janela, neste computador.
+
+| Risco | Proteção | Teste |
+|---|---|---|
+| Vizinho de rede usando a API/chaves | Sem `AURORA_LAN_PAIRING=1` no Vite a regra do S1 vale (só este computador). Com ela, toda chamada de fora exige token de dispositivo pareado (256 bits, guardado só como SHA-256 em `.aurora-local/`, ignorado pelo git) | `pairing.test.ts` |
+| Adivinhar o código | Uso único, expira em 10 min, invalidado após 5 erros; 20 falhas em 10 min bloqueiam o pareamento por 10 min; comparação em tempo constante | › adivinhação |
+| Cliente forjando a marcação de “remoto” | O proxy descarta cabeçalhos `x-aurora-remote*` do cliente e marca ele mesmo; conexão direta de fora continua recusada pelo servidor | › sem pareamento |
+| DNS rebinding / CSRF de sites visitados no outro computador | Host remoto precisa ser IP privado literal ou `.local/.lan`; Origin precisa ser a própria página; token vai em cabeçalho explícito (não em cookie) | › DNS rebinding |
+| Dispositivo pareado comprometido | Não gera códigos nem gerencia/revoga pareamentos; revogação imediata | › não gerencia |
+
+Não há limite de uso por dispositivo (decisão do proprietário: são computadores dele); os limites gerais do S1 (30 chats/min, 3 simultâneos) continuam para o servidor inteiro. O token fica no `localStorage` da origem do Aurora no outro computador. **Só em rede de confiança**; nunca exponha a porta 5174 para a internet. Os quadros e finanças continuam separados em cada computador.
+
 ### Pré-visualização de links — SSRF (`server/netSafety.ts`)
 
 | Proteção | Detalhe |
@@ -77,6 +96,14 @@ Limites honestos: depois de ativado, um widget pode exibir conteúdo enganoso (p
 - Orçamento de complexidade numa passada iterativa **antes** da validação: 500 quadros; 100 000 elementos por quadro e 300 000 no total; 50 000 pontos por elemento e 3 000 000 no total; 2 M caracteres por texto; profundidade 48 e 200 000 nós por dado de widget; 200 widgets HTML (≤ 500 000 caracteres cada); 5 000 assets de até ~25 MB. Arquivo acima do orçamento é **recusado inteiro**, com a causa — nada é truncado em silêncio.
 - Gravação **atômica** (uma transação IndexedDB para assets, quadros e workspace): ou tudo entra, ou nada.
 - Configurações e cores validadas campo a campo; versão de esquema limitada; colagem externa passa pela mesma validação.
+
+### Finanças pessoais (ciclo F1 — `src/finance/`, `src/ui/finance/`)
+
+- Banco IndexedDB próprio (`aurora-finance`), separado dos quadros; nada vai a servidores. **Sem criptografia própria em repouso** (proteção = perfil do navegador/SO/disco). Backups financeiros com cifra opcional AES-GCM 256 + PBKDF2-SHA-256 (600 mil iterações).
+- Extratos: CSV (RFC 4180) e OFX (tokenizador próprio; `DOCTYPE/ENTITY` recusados; sem rede); limites de tamanho/linhas/colunas/profundidade; valores e datas estritos; exportação CSV protegida contra injeção de fórmulas.
+- Quadros guardam só a consulta (`aurora.bank-query`); em outro navegador o bloco fica “indisponível”.
+- IA: nada é enviado sem modo escolhido e **autorização local** (por bloco + configuração + razão deste navegador; não vem do quadro); dados derivados de consultas não autorizadas também são bloqueados; descrições tratadas como dados não confiáveis.
+- Open Finance: só contrato de leitura e provedor fictício; nenhum segredo no frontend. Detalhes e riscos residuais: [`finance/F1-SECURITY-REVIEW.md`](finance/F1-SECURITY-REVIEW.md), [`finance/FINANCIAL_PRIVACY.md`](finance/FINANCIAL_PRIVACY.md).
 
 ### Conteúdo renderizado
 

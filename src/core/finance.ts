@@ -58,6 +58,12 @@ export interface Occurrence {
   index: number;
   count: number;
   amountCents: number;
+  /**
+   * Ciclo F1 (opcional): chave estável GLOBAL do lançamento (ex.: `bank:tx:<id>`), usada pelo mês para não
+   * contar a mesma movimentação bancária duas vezes vinda de conexões diferentes. Com chave, `amountCents`
+   * pode ser negativo (estorno reduz a despesa).
+   */
+  key?: string;
 }
 
 export interface FinanceReport {

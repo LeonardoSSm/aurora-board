@@ -77,6 +77,8 @@ function readInputs(inputs: Record<string, InputValue[]>) {
   const scalars: { label: string; value: Scalar }[] = [];
   for (const v of [...(inputs.value ?? []).filter((x) => typeof x.value !== 'number'), ...(inputs.series ?? [])]) {
     if (isPeriodSummary(v.value)) periods.push(v.value);
+    // Ciclo F1: série mensal (lista de meses) de uma consulta bancária.
+    else if (Array.isArray(v.value)) periods.push(...v.value.filter(isPeriodSummary));
     else {
       const s = readScalar(v.value);
       if (s) scalars.push({ label: v.sourceTitle, value: s });
@@ -141,7 +143,7 @@ export const chartPlugin: WidgetPlugin<ChartData> = {
     { id: 'ledger', label: 'Lançamentos', type: 'finance.ledger' },
     { id: 'value', label: 'Valor', type: 'number' },
     // Ciclo 4: meses, resultados de fórmula e Value Tiles. Depois das antigas: conexões legadas não mudam.
-    { id: 'series', label: 'Séries (meses e valores)', type: 'finance.period', accepts: ['money', 'number', 'percent', 'scalar'] },
+    { id: 'series', label: 'Séries (meses e valores)', type: 'finance.period', accepts: ['money', 'number', 'percent', 'scalar', 'finance.periods'] },
   ],
   outputs: [],
   createData: () => ({ mode: 'categories', chartType: 'bar' }),

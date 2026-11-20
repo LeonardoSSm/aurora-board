@@ -1,5 +1,5 @@
 /** Cálculo memoizado do fluxo de dados para o quadro ativo. */
-import { useEditor } from '../store/editor';
+import { getState, setState, useEditor } from '../store/editor';
 import type { AuroraElement } from '../core/schema';
 import { isLinear } from '../core/schema';
 import { computeDataflow, type DataflowResult } from '../core/dataflow';
@@ -24,17 +24,33 @@ let lastElements: AuroraElement[] | null = null;
  * O array de elementos é imutável: mesma referência = mesmo resultado, sem percorrer nada.
  * (Antes: O(elementos × widgets) por quadro — ~1,3 milhão de operações com 5.000 elementos.)
  */
+let lastExternal = 0;
+
+/**
+ * `dataflowVersion` (editor) muda quando dados EXTERNOS ao quadro mudam (ciclo F1: o razão financeiro local).
+ * Nesse caso o cálculo é refeito sem reaproveitar saídas: o elemento de uma consulta bancária não mudou, mas
+ * o resultado dela sim.
+ */
 export function getDataflow(elements: AuroraElement[]): DataflowResult {
-  if (elements === lastElements) return lastResult;
+  const external = getState().dataflowVersion;
+  if (elements === lastElements && external === lastExternal) return lastResult;
   lastElements = elements;
   const tokens = tokensOf(elements);
-  if (tokens.length === lastTokens.length && tokens.every((t, i) => t === lastTokens[i])) return lastResult;
+  if (external === lastExternal && tokens.length === lastTokens.length && tokens.every((t, i) => t === lastTokens[i])) return lastResult;
+  const reuse = external === lastExternal;
+  lastExternal = external;
   lastTokens = tokens;
-  lastResult = computeDataflow(elements, dataflowSpec, lastResult);
+  lastResult = computeDataflow(elements, dataflowSpec, reuse ? lastResult : undefined);
   return lastResult;
+}
+
+/** Avisa o fluxo de dados de que uma fonte externa mudou (recalcula e re-renderiza os dependentes). */
+export function bumpExternalData() {
+  setState({ dataflowVersion: getState().dataflowVersion + 1 });
 }
 
 export function useDataflow(): DataflowResult {
   const elements = useEditor((s) => s.elements);
+  useEditor((s) => s.dataflowVersion);
   return getDataflow(elements);
 }

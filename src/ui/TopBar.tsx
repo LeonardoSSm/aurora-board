@@ -11,7 +11,12 @@ import {
   Redo2,
   Undo2,
   Upload,
+  Wallet,
+  MonitorSmartphone,
 } from 'lucide-react';
+import { openPairing } from './PairingDialog';
+import { LOCAL_API_ENABLED } from '../config/runtime';
+import { openFinanceHub } from './finance/uiState';
 import { useEditor, setState } from '../store/editor';
 import { MapPin } from 'lucide-react';
 import { canRedo, canUndo, createBoard, createWorkspace, redo, switchWorkspace, undo, updateBoardMeta } from '../store/actions';
@@ -142,6 +147,9 @@ export function TopBar() {
       <SaveIndicator />
       <IconButton label="Desfazer (Ctrl+Z)" disabled={!canUndo()} onClick={undo}><Undo2 size={16} /></IconButton>
       <IconButton label="Refazer (Ctrl+Shift+Z)" disabled={!canRedo()} onClick={redo}><Redo2 size={16} /></IconButton>
+      <button data-testid="open-finance" onClick={() => openFinanceHub()} className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-line bg-panel-3 hover:bg-[#28405d] text-xs font-semibold text-fg-2" title="Minhas contas — finanças pessoais" aria-label="Minhas contas">
+        <Wallet size={14} /> <span className="hidden md:inline">Minhas contas</span>
+      </button>
       <Menu label="Importar" icon={<Upload size={14} />}>
         {(close) => (
           <>
@@ -164,6 +172,7 @@ export function TopBar() {
         )}
       </Menu>
       <IconButton label="Quadros" onClick={() => setState({ boardsPanelOpen: true })} className="md:hidden"><FolderOpen size={16} /></IconButton>
+      {LOCAL_API_ENABLED && <IconButton label="Parear outro computador (IA pela rede)" onClick={openPairing}><MonitorSmartphone size={16} /></IconButton>}
       <IconButton label="Atalhos e ajuda (?)" onClick={() => setState({ shortcutsOpen: true })}><CircleHelp size={16} /></IconButton>
       <IconButton label="Painel de propriedades" active={propertiesOpen} onClick={() => setState({ propertiesOpen: !propertiesOpen, ...(compact && !propertiesOpen ? { libraryOpen: false } : {}) })}><PanelRight size={16} /></IconButton>
     </header>

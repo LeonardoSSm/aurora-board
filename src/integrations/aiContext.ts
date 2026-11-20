@@ -10,7 +10,8 @@ import '../core/zodSetup';
 import { z } from 'zod';
 import type { AuroraElement, LinkKind } from '../core/schema';
 import { isLinear } from '../core/schema';
-import { summarizeElement } from '../widgets/registry';
+import { aiPolicyOf, summarizeElement } from '../widgets/registry';
+import { WIDGET } from '../core/widgetIds';
 import { ACTIONS_PROMPT } from './aiActions';
 
 export interface ContextSource {
@@ -21,6 +22,36 @@ export interface ContextSource {
   edgeId: string;
   includable: boolean;
   authorized: boolean;
+  /** Motivo de não ser enviável (ex.: dados financeiros sem autorização). */
+  note?: string;
+}
+
+/**
+ * Ciclo F1: um bloco cujo valor vem (por conexões de DADOS, direta ou indiretamente) de uma consulta bancária
+ * sem autorização para IA também não pode ser enviado — senão um Mês ou uma Fórmula vazaria o que o bloco
+ * bancário protege. Retorna o motivo, ou null.
+ */
+export function financialTaint(elements: AuroraElement[], id: string): string | null {
+  const byId = new Map(elements.map((e) => [e.id, e]));
+  const upstream = new Map<string, string[]>();
+  for (const e of elements) {
+    if (!isLinear(e) || e.connection.kind !== 'data' || !e.startBinding || !e.endBinding) continue;
+    upstream.set(e.endBinding.elementId, [...(upstream.get(e.endBinding.elementId) ?? []), e.startBinding.elementId]);
+  }
+  const seen = new Set<string>([id]);
+  const queue = [...(upstream.get(id) ?? [])];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    const el = byId.get(cur);
+    if (el?.type === 'widget' && el.widgetType === WIDGET.bankQuery) {
+      const pol = aiPolicyOf(el);
+      if (!pol?.allowed) return `Depende de dados bancários sem autorização para IA (“${el.title}”).`;
+    }
+    queue.push(...(upstream.get(cur) ?? []));
+  }
+  return null;
 }
 
 const MAX_SOURCE_CHARS = 6000;
@@ -42,9 +73,13 @@ export function contextSources(elements: AuroraElement[], aiId: string, authoriz
     const otherId = a === aiId ? b : a;
     const other = byId.get(otherId);
     if (!other || otherId === aiId) continue;
-    const includable = e.connection.kind === 'context' || e.connection.kind === 'data';
+    const linkOk = e.connection.kind === 'context' || e.connection.kind === 'data';
     const prev = out.get(otherId);
     if (prev && prev.includable) continue;
+    // Política do próprio bloco (ex.: consulta bancária) e dados derivados de consultas não autorizadas.
+    const policy = linkOk ? aiPolicyOf(other) : null;
+    const note = linkOk ? (policy && !policy.allowed ? policy.reason ?? 'Conteúdo protegido: não autorizado para IA.' : financialTaint(elements, otherId)) : null;
+    const includable = linkOk && !note;
     out.set(otherId, {
       id: otherId,
       title: elementTitle(other),
@@ -53,6 +88,7 @@ export function contextSources(elements: AuroraElement[], aiId: string, authoriz
       edgeId: e.id,
       includable,
       authorized: includable && authorized[otherId] !== false,
+      note: note ?? undefined,
     });
   }
   return [...out.values()];
@@ -65,7 +101,11 @@ export function buildContextText(elements: AuroraElement[], sources: ContextSour
     if (!s.authorized) continue;
     const el = byId.get(s.id);
     if (!el) continue;
-    let body = summarizeElement(el).trim();
+    // Revalida no momento do envio (a autorização pode ter caído depois de listar as fontes).
+    const policy = aiPolicyOf(el);
+    if (policy && !policy.allowed) continue;
+    if (financialTaint(elements, s.id)) continue;
+    let body = (policy ? policy.text : summarizeElement(el)).trim();
     if (body.length > MAX_SOURCE_CHARS) body = body.slice(0, MAX_SOURCE_CHARS) + '\n[…conteúdo truncado]';
     parts.push(`### ${s.title}\nid: ${s.id}\ntipo: ${s.type}\n${body || '(vazio)'}`);
   }

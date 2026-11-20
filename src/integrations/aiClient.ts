@@ -3,6 +3,7 @@
  * que guarda as credenciais em variáveis de ambiente e encaminha ao provedor.
  */
 import { LOCAL_API_ENABLED, STATIC_AI_MESSAGE } from '../config/runtime';
+import { apiFetch, postJSON } from './apiFetch';
 
 export type ProviderId = 'openai' | 'anthropic' | 'gemini';
 
@@ -17,6 +18,8 @@ export type AIStatus =
   | { state: 'offline'; message: string }
   /** Build público estático: não existe servidor de IA nesta distribuição (sem requisições a /api). */
   | { state: 'unavailable'; message: string }
+  /** Outro computador da rede ainda não pareado com o servidor principal. */
+  | { state: 'pairing'; message: string }
   | { state: 'ready'; providers: ProviderInfo[] };
 
 let statusPromise: Promise<AIStatus> | null = null;
@@ -26,7 +29,11 @@ export function fetchAIStatus(force = false): Promise<AIStatus> {
   if (statusPromise && !force) return statusPromise;
   statusPromise = (async (): Promise<AIStatus> => {
     try {
-      const res = await fetch('/api/ai/providers');
+      const res = await apiFetch('/api/ai/providers');
+      if (res.status === 401) {
+        const b = (await res.json().catch(() => ({}))) as { code?: string; error?: string };
+        if (b.code === 'pairing_required') return { state: 'pairing', message: b.error ?? 'Este computador não está pareado.' };
+      }
       if (!res.ok) return { state: 'offline', message: `Servidor de IA respondeu ${res.status}. Rode "npm run dev" (inicia web + API).` };
       const body = (await res.json()) as { providers: ProviderInfo[] };
       return { state: 'ready', providers: body.providers };
@@ -45,7 +52,7 @@ export async function sendChat(req: { provider: ProviderId; model?: string; syst
   if (!LOCAL_API_ENABLED) throw new Error(STATIC_AI_MESSAGE);
   let res: Response;
   try {
-    res = await fetch('/api/ai/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(req), signal });
+    res = await postJSON('/api/ai/chat', req, signal);
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw e;
     throw new Error('Não foi possível alcançar o servidor local de IA.');

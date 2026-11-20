@@ -76,7 +76,7 @@ export interface PeriodSummary {
 export type PeriodIssueStatus = 'currency' | 'duplicate' | 'period' | 'incompatible';
 export interface PeriodIssue { edgeId: string; status: PeriodIssueStatus; message: string }
 
-export interface PeriodEntry { key: string; label: string; role: FinancialRole; cents: number; category: string; source: string; edgeId: string }
+export interface PeriodEntry { key: string; label: string; role: FinancialRole; cents: number; category: string; source: string; edgeId: string; members?: string[] }
 
 export interface PeriodReport { summary: PeriodSummary; entries: PeriodEntry[]; issues: PeriodIssue[] }
 
@@ -95,7 +95,13 @@ export function computePeriod(data: FinancePeriodData, inputs: PeriodInput[], la
       issues.push({ edgeId: e.edgeId, status: 'duplicate', message: `“${e.label}” já foi contado neste mês (lançamento repetido ignorado).` });
       return;
     }
+    // Total composto (ciclo F1): se algum lançamento dele já entrou por outra conexão, o total inteiro é recusado.
+    if (e.members?.some((m) => seen.has(m))) {
+      issues.push({ edgeId: e.edgeId, status: 'duplicate', message: `“${e.label}” inclui lançamentos que já entraram neste mês por outra conexão (ignorado para não contar duas vezes).` });
+      return;
+    }
     seen.add(e.key);
+    for (const m of e.members ?? []) seen.add(m);
     entries.push(e);
   };
 
@@ -108,7 +114,7 @@ export function computePeriod(data: FinancePeriodData, inputs: PeriodInput[], la
       }
       for (const o of set.items) {
         if (!inPeriod(o, data.period) || !o.date) continue;
-        add({ key: `${set.sourceId}:${o.entryId}:${o.index}`, label: o.count > 1 ? `${o.description} (${o.index}/${o.count})` : o.description, role: o.kind, cents: Math.abs(Math.round(o.amountCents)), category: o.category, source: set.source, edgeId: inp.edgeId });
+        add({ key: o.key ?? `${set.sourceId}:${o.entryId}:${o.index}`, label: o.count > 1 ? `${o.description} (${o.index}/${o.count})` : o.description, role: o.kind, cents: o.key ? Math.round(o.amountCents) : Math.abs(Math.round(o.amountCents)), category: o.category, source: set.source, edgeId: inp.edgeId });
       }
       continue;
     }
@@ -126,7 +132,7 @@ export function computePeriod(data: FinancePeriodData, inputs: PeriodInput[], la
       issues.push({ edgeId: inp.edgeId, status: 'period', message: `“${inp.sourceTitle}” tem competência ${m.period}, diferente deste mês (${data.period}); não foi somado.` });
       continue;
     }
-    add({ key: m.key ?? `${inp.sourceId}:${inp.edgeId}`, label: m.label ?? inp.sourceTitle, role: m.role ?? 'neutral', cents: m.cents, category: m.category ?? '', source: inp.sourceTitle, edgeId: inp.edgeId });
+    add({ key: m.key ?? `${inp.sourceId}:${inp.edgeId}`, label: m.label ?? inp.sourceTitle, role: m.role ?? 'neutral', cents: m.cents, category: m.category ?? '', source: inp.sourceTitle, edgeId: inp.edgeId, members: Array.isArray(m.members) ? m.members.filter((x): x is string => typeof x === 'string') : undefined });
   }
 
   let income = 0, expense = 0, neutral = 0;
@@ -135,7 +141,9 @@ export function computePeriod(data: FinancePeriodData, inputs: PeriodInput[], la
     if (e.role === 'neutral') { neutral += e.cents; continue; }
     const name = e.category || 'Sem categoria';
     const c = cats.get(name) ?? { incomeCents: 0, expenseCents: 0 };
-    if (e.role === 'income') { income += e.cents; c.incomeCents += e.cents; } else { expense += Math.abs(e.cents); c.expenseCents += Math.abs(e.cents); }
+    // Lançamentos com chave global (bancários) podem vir negativos: estorno reduz a despesa.
+    const signed = e.key.startsWith('bank:');
+    if (e.role === 'income') { income += e.cents; c.incomeCents += e.cents; } else { const v = signed ? e.cents : Math.abs(e.cents); expense += v; c.expenseCents += v; }
     cats.set(name, c);
   }
   const commitment = income > 0 ? decToString(divRound(BigInt(expense) * ONE, BigInt(income))) : null;

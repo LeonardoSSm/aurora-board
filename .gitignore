@@ -2,6 +2,7 @@ node_modules
 dist
 .env
 .env.local
+.aurora-local
 test-results
 playwright-report
 *.tsbuildinfo

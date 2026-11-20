@@ -6,21 +6,28 @@
  *   GET  /api/ai/providers        → provedores e se estão configurados (sem expor chaves)
  *   POST /api/ai/chat             → { provider, model?, system, messages[] }
  *   POST /api/link-preview        → { url } → título/descrição/imagem (Open Graph)
+ *   POST /api/pairing/code | GET /api/pairing/devices | POST /api/pairing/revoke   (só este computador)
+ *   POST /api/pairing/claim | GET /api/pairing/status                          (outro computador, via proxy)
  *
  * Proteções do próprio servidor (uso local, sem autenticação):
  *   - Host precisa ser local (anti DNS rebinding);
  *   - Origin, se presente, precisa ser local (anti CSRF a partir de sites visitados);
  *   - POST exige Content-Type: application/json (força preflight CORS, que não é respondido);
  *   - corpo limitado; mensagens de erro sem segredos.
+ *
+ * Dispositivos pareados (server/pairing.ts): chamadas de outro computador da rede só chegam pelo proxy do
+ * Vite com o pareamento LIGADO (AURORA_LAN_PAIRING=1), marcadas com `x-aurora-remote: 1`, e exigem
+ * `Authorization: Bearer <token>` de um dispositivo pareado. Conexões diretas de fora continuam recusadas.
  */
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http';
 import { PROVIDERS, type ChatRequest, type Provider, type ProviderId } from './providers';
+import { isAllowedLanHost, isSameOriginForHost, PairingError, type PairingStore } from './pairing';
 import { FetchError, isAllowedHostHeader, isAllowedOrigin, isLoopbackAddress, redactSecrets, safeFetchText, UnsafeUrlError, type Resolver, type Transport } from './netSafety';
 
 const MAX_BODY = 2 * 1024 * 1024;
 
 class HttpError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(public status: number, message: string, public code?: string) { super(message); }
 }
 
 function send(res: ServerResponse, status: number, body: unknown) {
@@ -107,6 +114,8 @@ export interface AppDeps {
   now?: () => number;
   /** Decide se o par TCP é local (injetável nos testes). */
   isLocalPeer?: (addr: string | undefined) => boolean;
+  /** Dispositivos pareados. Sem isso, chamadas remotas são sempre recusadas. */
+  pairing?: PairingStore | null;
 }
 
 /** Janela deslizante de 60 s + contador de chamadas em andamento. */
@@ -152,9 +161,44 @@ export function createApp(deps: AppDeps = {}): RequestListener {
     const url = new URL(req.url ?? '/', 'http://localhost');
     try {
       if (!isLocalPeer(req.socket?.remoteAddress)) throw new HttpError(403, 'Somente conexões locais.');
-      if (!isAllowedHostHeader(req.headers.host)) throw new HttpError(403, 'Host não permitido.');
-      if (!isAllowedOrigin(req.headers.origin as string | undefined)) throw new HttpError(403, 'Origem não permitida.');
-      if (req.method === 'OPTIONS') { res.writeHead(204, { 'cache-control': 'no-store' }); res.end(); return; } // sem cabeçalhos CORS: nega origens externas
+      const pairing = deps.pairing ?? null;
+      // Marcado pelo proxy do Vite (que descarta o cabeçalho vindo do cliente). Processos desta máquina estão
+      // fora do modelo de ameaça; de todo modo, sem token válido nada é atendido.
+      const remote = req.headers['x-aurora-remote'] === '1';
+      const remoteAddr = String(req.headers['x-aurora-remote-addr'] ?? '').slice(0, 64) || undefined;
+      if (remote) {
+        if (!pairing) throw new HttpError(403, 'Pareamento de dispositivos desativado neste servidor.');
+        if (!isAllowedLanHost(req.headers.host)) throw new HttpError(403, 'Host não permitido para dispositivo pareado.');
+        if (!isSameOriginForHost(req.headers.origin as string | undefined, req.headers.host)) throw new HttpError(403, 'Origem não permitida.');
+        if (req.method === 'OPTIONS') { res.writeHead(204, { 'cache-control': 'no-store' }); res.end(); return; }
+        if (req.method === 'POST' && url.pathname === '/api/pairing/claim') {
+          const body = (await readJSON(req)) as { code?: unknown; name?: unknown };
+          const r = pairing.claim(body.code, body.name, remoteAddr);
+          log(`[api] dispositivo pareado: ${r.device.name} (${remoteAddr ?? '?'})`);
+          return send(res, 200, r);
+        }
+        const device = pairing.verify(req.headers.authorization as string | undefined, remoteAddr);
+        if (!device) throw new HttpError(401, 'Este computador não está pareado com o Aurora Board principal.', 'pairing_required');
+        if (req.method === 'GET' && url.pathname === '/api/pairing/status') return send(res, 200, { paired: true, device: { id: device.id, name: device.name } });
+        if (url.pathname.startsWith('/api/pairing/')) throw new HttpError(403, 'Pareamentos só podem ser gerenciados no computador principal.');
+      } else {
+        if (!isAllowedHostHeader(req.headers.host)) throw new HttpError(403, 'Host não permitido.');
+        if (!isAllowedOrigin(req.headers.origin as string | undefined)) throw new HttpError(403, 'Origem não permitida.');
+        if (req.method === 'OPTIONS') { res.writeHead(204, { 'cache-control': 'no-store' }); res.end(); return; } // sem cabeçalhos CORS: nega origens externas
+        if (url.pathname.startsWith('/api/pairing/')) {
+          if (!pairing) throw new HttpError(404, 'Pareamento indisponível.');
+          if (req.method === 'GET' && url.pathname === '/api/pairing/status') return send(res, 200, { paired: true, local: true });
+          if (req.method === 'GET' && url.pathname === '/api/pairing/devices') return send(res, 200, { devices: pairing.list(), pending: pairing.pendingCode() });
+          if (req.method === 'POST' && url.pathname === '/api/pairing/code') { await readJSON(req); return send(res, 200, pairing.createCode()); }
+          if (req.method === 'POST' && url.pathname === '/api/pairing/cancel') { await readJSON(req); pairing.cancelCode(); return send(res, 200, { ok: true }); }
+          if (req.method === 'POST' && url.pathname === '/api/pairing/revoke') {
+            const body = (await readJSON(req)) as { id?: unknown };
+            if (!pairing.revoke(body.id)) throw new HttpError(404, 'Dispositivo não encontrado.');
+            return send(res, 200, { ok: true });
+          }
+          throw new HttpError(404, 'Rota não encontrada.');
+        }
+      }
 
       if (req.method === 'GET' && url.pathname === '/api/health') return send(res, 200, { ok: true });
       if (req.method === 'GET' && url.pathname === '/api/ai/providers') {
@@ -183,10 +227,11 @@ export function createApp(deps: AppDeps = {}): RequestListener {
       throw new HttpError(404, 'Rota não encontrada.');
     } catch (e) {
       const err = e as Error & { status?: number };
-      const status = err instanceof HttpError || err instanceof UnsafeUrlError || err instanceof FetchError ? err.status : typeof err.status === 'number' ? err.status : 500;
+      const status = err instanceof HttpError || err instanceof UnsafeUrlError || err instanceof FetchError || err instanceof PairingError ? err.status : typeof err.status === 'number' ? err.status : 500;
       const message = redactSecrets(err.message || 'Erro interno.');
       if (status >= 500) log(`[api] ${req.method} ${url.pathname}: ${message}`);
-      send(res, status, { error: status >= 500 && !(err instanceof FetchError) && !err.status ? 'Erro interno.' : message });
+      const code = err instanceof HttpError ? err.code : undefined;
+      send(res, status, { error: status >= 500 && !(err instanceof FetchError) && !err.status ? 'Erro interno.' : message, ...(code ? { code } : {}) });
     }
   };
 }

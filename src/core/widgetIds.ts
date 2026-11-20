@@ -14,4 +14,5 @@ export const WIDGET = {
   value: 'aurora.value',
   financePeriod: 'aurora.finance-period',
   formula: 'aurora.formula',
+  bankQuery: 'aurora.bank-query',
 } as const;

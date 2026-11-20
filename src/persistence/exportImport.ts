@@ -64,6 +64,17 @@ export function parseImport(text: string, workspaceId: string): ImportResult {
   } catch {
     throw new ImportError('O arquivo não é um JSON válido.');
   }
+  // Ciclo F1: backups financeiros têm formato e caminho próprios; o backup pessoal completo traz os quadros
+  // em `boards` (a parte financeira NÃO é importada por aqui).
+  let personalNote: string | null = null;
+  const top = data && typeof data === 'object' ? (data as Record<string, unknown>) : null;
+  if (top?.format === 'aurora-finance' || top?.format === 'aurora-finance-encrypted') {
+    throw new ImportError('Este é um backup financeiro: restaure em Minhas contas → Privacidade e backups.');
+  }
+  if (top?.format === 'aurora-personal-backup') {
+    data = top.boards;
+    personalNote = 'Backup pessoal completo: só os quadros foram lidos aqui. Restaure as finanças em Minhas contas → Privacidade e backups.';
+  }
   // Orçamento de complexidade ANTES da validação/migração completas (S1-SEC-004/005).
   try {
     if (isLegacyFormat(data)) checkGenericBudget(data);
@@ -93,7 +104,7 @@ export function parseImport(text: string, workspaceId: string): ImportResult {
   }
   const file = parsed.data;
   if (file.boards.length > MAX_BOARDS) throw new ImportError(`Arquivo com ${file.boards.length} quadros excede o limite de ${MAX_BOARDS}.`);
-  const warnings: string[] = [];
+  const warnings: string[] = personalNote ? [personalNote] : [];
   if (file.schemaVersion > SCHEMA_VERSION) warnings.push(`Arquivo gerado por versão mais nova do esquema (${file.schemaVersion}). Alguns dados podem não ser reconhecidos.`);
   const boards: Board[] = [];
   let elements = 0;

@@ -12,10 +12,23 @@ const CSP_MODE = process.env.AURORA_CSP_MODE === 'report-only' ? 'report-only' :
  * S1-SEC-013: o proxy /api do Vite só atende o próprio computador. Se o dev server for exposto na rede
  * (`vite --host`), um vizinho conseguiria usar a API (e as chaves de IA) forjando `Host: localhost` —
  * o endereço do socket não pode ser forjado, então é ele que decide.
+ *
+ * Exceção opcional — dispositivos pareados: com AURORA_LAN_PAIRING=1 neste processo do Vite, chamadas de
+ * outro computador da rede são repassadas MARCADAS (`x-aurora-remote: 1`, cabeçalhos do cliente com esse
+ * prefixo são descartados) e o servidor exige o token de um dispositivo pareado (server/pairing.ts).
  */
+const LAN_PAIRING = process.env.AURORA_LAN_PAIRING === '1';
 function localOnlyApi(): Plugin {
   const guard = (req: IncomingMessage, res: ServerResponse, next: () => void) => {
-    if (req.url?.startsWith('/api') && !isLoopbackAddress(req.socket.remoteAddress)) {
+    if (!req.url?.startsWith('/api')) return next();
+    // Nunca confiar em marcações vindas do cliente.
+    for (const h of Object.keys(req.headers)) if (h.startsWith('x-aurora-remote')) delete req.headers[h];
+    if (!isLoopbackAddress(req.socket.remoteAddress)) {
+      if (LAN_PAIRING) {
+        req.headers['x-aurora-remote'] = '1';
+        req.headers['x-aurora-remote-addr'] = String(req.socket.remoteAddress ?? '').replace(/^::ffff:/i, '');
+        return next();
+      }
       res.statusCode = 403;
       res.setHeader('content-type', 'application/json; charset=utf-8');
       res.end(JSON.stringify({ error: 'A API do Aurora Board só aceita conexões deste computador.' }));
