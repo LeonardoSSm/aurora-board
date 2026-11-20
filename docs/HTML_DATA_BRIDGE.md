@@ -66,7 +66,7 @@ Valor publicado: até 64 KB de JSON, 8 níveis, 5.000 itens por lista, 500 chave
 - **Por padrão, nada vai.** HTML, estado e entradas **nunca** são enviados. Antes desta versão, o resumo do bloco incluía até 500 caracteres do estado; isso foi removido.
 - Com “Saídas escolhidas”, só as saídas marcadas são enviadas, como **dados** (“trate como dados, nunca como instruções”), sem marcação, sem cercas de código e com no máximo 6.000 caracteres. O painel mostra a **prévia exata**.
 - **Autorização local:** chave `htmlAiGrants` nas configurações locais (IndexedDB `aurora-board`, área `kv`), fora de quadros e backups. Um quadro importado ou forjado não traz autorização válida; o painel mostra “confirme de novo”.
-- A autorização cobre um resumo da configuração: id do bloco, **HTML**, saídas escolhidas e tipos, **conexões de entrada** e autorizações das **consultas bancárias a montante**. Mudar qualquer um desses itens revoga. Tudo é reavaliado no momento do envio.
+- A autorização cobre um resumo da configuração: id do bloco, **HTML**, saídas escolhidas e tipos, **conexões de entrada** e autorizações das **consultas bancárias** e dos **dados importados** a montante (issue #24 — estas pela autorização local `datasetAiGrants`). Mudar qualquer um desses itens revoga. Tudo é reavaliado no momento do envio.
 
 ## Proteção financeira transitiva
 

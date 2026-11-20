@@ -63,6 +63,7 @@ export const initialEditorState: EditorState = {
   animationPrefs: { ...DEFAULT_ANIMATION_PREFS },
   panelWidths: { ...PANEL_DEFAULTS },
   htmlAiGrants: [],
+  datasetAiGrants: [],
   toasts: [],
   dataflowVersion: 0,
 };

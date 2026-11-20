@@ -15,6 +15,8 @@ import { grantHtmlAI, revokeHtmlAI } from '../../store/actions';
 import { financialTaint } from '../../integrations/aiContext';
 import { Badge, Button, Field, Label, Segmented, Select } from '../../ui/primitives';
 import { BRIDGE_EXAMPLES } from './sandboxExamples';
+import { sanitizeDatasetData } from './dataset';
+import { datasetGrantKey } from '../../data/aiShare';
 
 /**
  * Host de widgets isolados. O conteúdo roda em <iframe sandbox="allow-scripts"> SEM allow-same-origin:
@@ -356,14 +358,26 @@ function bridgeSignature(d: SandboxData): string {
   return digest(JSON.stringify([d.html.length, digest(d.html), d.bridge ? [d.bridge.inputs, d.bridge.outputs] : null]));
 }
 
-/** Consultas bancárias a montante, com o resumo da autorização de cada uma (troca de autorização revoga). */
+/**
+ * Fontes PROTEGIDAS a montante, com o resumo da autorização de cada uma (troca de autorização revoga a do HTML):
+ * consultas bancárias e, desde a issue #24 (D2-C), dados importados — estes pela autorização LOCAL vigente
+ * (`datasetAiGrants`), não pelo que o quadro diz. Cada tipo usa a própria autorização (nada é reaproveitado).
+ */
 function financialUpstreamOf(elements: AuroraElement[], id: string): string[] {
   const byId = new Map(elements.map((e) => [e.id, e]));
   return dataUpstream(elements, id).flatMap((u) => {
     const el = byId.get(u);
-    if (el?.type !== 'widget' || el.widgetType !== WIDGET.bankQuery) return [];
-    const share = (el.data as { aiShare?: { confirmedDigest?: unknown; mode?: unknown } } | null)?.aiShare;
-    return [`${u}:${String(share?.mode ?? '')}:${String(share?.confirmedDigest ?? '')}`];
+    if (el?.type !== 'widget') return [];
+    if (el.widgetType === WIDGET.bankQuery) {
+      const share = (el.data as { aiShare?: { confirmedDigest?: unknown; mode?: unknown } } | null)?.aiShare;
+      return [`${u}:${String(share?.mode ?? '')}:${String(share?.confirmedDigest ?? '')}`];
+    }
+    if (el.widgetType === WIDGET.dataset) {
+      const d = sanitizeDatasetData(el.data);
+      const key = datasetGrantKey(el.id, d.source, d.view, d.ai.mode);
+      return [`${u}:ds:${d.ai.mode}:${d.ai.mode !== 'none' && getState().datasetAiGrants.includes(key) ? key.split(':')[1] : 'pendente'}`];
+    }
+    return [];
   });
 }
 

@@ -34,10 +34,18 @@ import { datasetToCSV, datasetToJSON } from '../../data/export';
 import { AGGREGATE_LIMITS, aggregateDataset, type DatasetGroups } from '../../data/aggregate';
 import { createConnectedDashboard } from './datasetDashboard';
 import { useDataflow } from '../dataflow';
+import { buildDatasetAIText, DATASET_AI_MODE_LABELS, datasetAIDigest, datasetGrantKey, DEFAULT_DATASET_AI, sanitizeDatasetAI, type DatasetAI, type DatasetAIMode } from '../../data/aiShare';
+import { grantDatasetAI, revokeDatasetAI } from '../../store/actions';
+import { useEditor } from '../../store/editor';
+import { Segmented } from '../../ui/primitives';
+import { invalidateDatasets } from '../../data/store';
+import { SAMPLE_DATASET_CSV, SAMPLE_DATASET_NAME } from '../../data/sample';
 
 export interface DatasetData {
   source: DatasetSource | null;
   view: DatasetView;
+  /** D2-C: o que pode ir para a IA (padrão: nada). A autorização válida é LOCAL (`datasetAiGrants`). */
+  ai: DatasetAI;
 }
 
 export const DATASET_DEFAULT_TITLE = 'Dados importados';
@@ -67,7 +75,7 @@ export function sanitizeSource(raw: unknown): DatasetSource | null {
 
 export function sanitizeDatasetData(raw: unknown): DatasetData {
   const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  return { source: sanitizeSource(o.source), view: sanitizeView(o.view) };
+  return { source: sanitizeSource(o.source), view: sanitizeView(o.view), ai: sanitizeDatasetAI(o.ai) };
 }
 
 /* ------------------------------------------------------------------ projeção memoizada */
@@ -122,6 +130,22 @@ export function computeDataset(d: DatasetData): Record<string, unknown> {
     ...(g ? { groups: g } : {}),
     [STATUS_KEY]: { status: 'ready', projection: p, groups: g } satisfies DatasetStatus,
   };
+}
+
+/* ------------------------------------------------------------------ IA (D2-C) */
+
+/**
+ * Política de IA do bloco: nada por padrão; com modo escolhido, só com autorização LOCAL válida para a configuração
+ * atual (arquivo, modo, página/colunas). Reavaliada no momento do envio (`buildContextText`).
+ */
+export function datasetAIPolicy(d: DatasetData, el: WidgetElement): { allowed: boolean; text: string; reason?: string } {
+  if (d.ai.mode === 'none') return { allowed: false, text: '', reason: 'Dados importados: compartilhamento com IA desativado neste bloco (padrão).' };
+  if (!d.source) return { allowed: false, text: '', reason: 'Dados importados: bloco vazio.' };
+  if (!getState().datasetAiGrants.includes(datasetGrantKey(el.id, d.source, d.view, d.ai.mode))) return { allowed: false, text: '', reason: 'Dados importados: autorização para IA pendente ou desatualizada (confirme no painel do bloco).' };
+  const e = datasetEntry(d.source.assetId);
+  if (e?.status !== 'ready') return { allowed: false, text: '', reason: 'Dados importados indisponíveis neste dispositivo.' };
+  const text = buildDatasetAIText(el.title, d.ai.mode, projectionOf(e.content, d.source.name, d.view));
+  return text ? { allowed: true, text } : { allowed: false, text: '', reason: 'Dados importados: nada a enviar.' };
 }
 
 /* ------------------------------------------------------------------ importação / exportação */
@@ -240,7 +264,8 @@ export async function importIntoBlock(elementId: string, api: Pick<WidgetHostApi
   const prev = sanitizeDatasetData(latest.data);
   // Colunas escolhidas que não existem mais são descartadas; a página volta ao início.
   const keys = new Set(parsed.content.columns.map((c) => c.key));
-  const data: DatasetData = { source, view: { ...prev.view, page: 0, columns: prev.view.columns.filter((k) => keys.has(k)) } };
+  // A autorização para IA fica PENDENTE: ela cobre o arquivo anterior (o resumo muda com o asset novo).
+  const data: DatasetData = { source, view: { ...prev.view, page: 0, columns: prev.view.columns.filter((k) => keys.has(k)) }, ai: prev.ai };
   const title = latest.title === DATASET_DEFAULT_TITLE || !latest.title.trim() ? name.slice(0, 80) : latest.title;
   api.updateElement(elementId, { data, title } as Partial<AuroraElement>);
   api.toast(`${fmtInt(source.rows)} linha(s) importada(s).`, 'success');
@@ -308,6 +333,62 @@ function Pager({ p, onPage }: { p: DatasetProjection; onPage: (n: number) => voi
   );
 }
 
+/** Painel de IA do bloco: escolha do que pode ir, prévia EXATA e autorização local (D2-C). */
+function DatasetAIPanel({ element, data, projection, update, api }: { element: WidgetElement; data: DatasetData; projection: DatasetProjection | null; update: WidgetProps<DatasetData>['update']; api: WidgetHostApi }) {
+  const grants = useEditor((s) => s.datasetAiGrants);
+  const mode = data.ai.mode;
+  const key = datasetGrantKey(element.id, data.source, data.view, mode);
+  const granted = mode !== 'none' && grants.includes(key);
+  const preview = mode !== 'none' && projection ? buildDatasetAIText(element.title, mode, projection) : '';
+  const setMode = (m: DatasetAIMode) => {
+    if (m === mode) return;
+    void revokeDatasetAI(element.id);
+    update((d) => ({ ...d, ai: { mode: m, confirmedDigest: '', confirmedAt: 0 } }));
+  };
+  const authorize = async () => {
+    const ok = await api.confirm('Autorizar envio à IA', `O texto da prévia (${DATASET_AI_MODE_LABELS[mode].toLowerCase()} dos dados “${element.title}”) poderá ser enviado a um Assistente IA conectado a este bloco — ou a blocos derivados que você também autorizar. A autorização fica só neste dispositivo e cai se o arquivo, o modo, a página ou as colunas mudarem.`, 'Autorizar');
+    if (!ok) return;
+    await grantDatasetAI(key);
+    update((d) => ({ ...d, ai: { ...d.ai, confirmedDigest: datasetAIDigest(element.id, d.source, d.view, d.ai.mode), confirmedAt: Date.now() } }));
+  };
+  return (
+    <div className="flex flex-col gap-1 mt-1" data-testid="dataset-ai">
+      <div className="text-[11px]">Enviar à IA</div>
+      <Segmented<DatasetAIMode>
+        label="O que pode ir para a IA"
+        value={mode}
+        onChange={setMode}
+        options={(['none', 'summary', 'page'] as const).map((m) => ({ value: m, label: DATASET_AI_MODE_LABELS[m], title: m === 'none' ? 'Nada deste bloco vai para a IA' : m === 'summary' ? 'Contagens, colunas e estatísticas — nenhuma célula' : 'Resumo + as linhas da página atual (colunas escolhidas)' }))}
+      />
+      {mode === 'none' ? (
+        <div className="text-[11px] text-soft" data-testid="dataset-ai-status">Nada deste bloco é enviado à IA, mesmo conectado a um Assistente.</div>
+      ) : (
+        <>
+          <div className="text-[11px] text-soft">Prévia exata do que será enviado:</div>
+          <pre className="text-[10px] whitespace-pre-wrap break-words max-h-40 overflow-auto rounded-md border border-line bg-panel-2 p-1.5" data-testid="dataset-ai-preview">{preview || '(dados indisponíveis)'}</pre>
+          <div className={`text-[11px] ${granted ? 'text-ok' : 'text-warn'}`} data-testid="dataset-ai-status">{granted ? 'Autorizado neste dispositivo.' : data.ai.confirmedDigest ? 'Autorização desatualizada (o arquivo, o modo ou a página mudou): confirme de novo.' : 'Autorização pendente: nada é enviado até você confirmar.'}</div>
+          <div className="flex gap-1 flex-wrap">
+            {!granted && <Button variant="primary" data-testid="dataset-ai-authorize" disabled={!preview} onClick={() => void authorize()}>Autorizar envio</Button>}
+            {granted && <Button data-testid="dataset-ai-revoke" onClick={() => void revokeDatasetAI(element.id)}>Revogar</Button>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Dados de exemplo FICTÍCIOS (para conhecer o Data Hub sem expor dados reais). */
+export async function loadSampleData(elementId: string, api: Pick<WidgetHostApi, 'getElement' | 'updateElement' | 'toast'>) {
+  const content = parseDatasetText(`${SAMPLE_DATASET_NAME}.csv`, SAMPLE_DATASET_CSV).content;
+  const assetId = await saveDataset(content, `${SAMPLE_DATASET_NAME}.csv`);
+  const el = api.getElement(elementId);
+  if (el?.type !== 'widget') return;
+  const prev = sanitizeDatasetData(el.data);
+  const source: DatasetSource = { assetId, name: SAMPLE_DATASET_NAME, kind: 'csv', rows: content.rows.length, columns: content.columns.length, bytes: SAMPLE_DATASET_CSV.length, importedAt: Date.now() };
+  api.updateElement(elementId, { data: { ...prev, source, view: { ...prev.view, page: 0, columns: [] } }, title: el.title === DATASET_DEFAULT_TITLE ? 'Vendas (exemplo fictício)' : el.title } as Partial<AuroraElement>);
+  api.toast('Dados de exemplo fictícios carregados.', 'success');
+}
+
 const TILE_ROWS = 50;
 
 function DatasetTile({ element, data, outputs, update, api }: WidgetProps<DatasetData>) {
@@ -319,6 +400,7 @@ function DatasetTile({ element, data, outputs, update, api }: WidgetProps<Datase
         <Database size={22} className="text-soft" />
         <div>Importe um arquivo CSV ou JSON para usar os dados no quadro.</div>
         <Button variant="primary" data-testid="dataset-import" onClick={doImport}><Upload size={12} /> Importar arquivo</Button>
+        <Button data-testid="dataset-sample" onClick={() => void loadSampleData(element.id, api)}>Usar dados de exemplo (fictícios)</Button>
         <div className="text-[10px] text-soft">Você confere a prévia antes de gravar. Os dados ficam neste dispositivo.</div>
       </div>
     );
@@ -328,7 +410,12 @@ function DatasetTile({ element, data, outputs, update, api }: WidgetProps<Datase
     return (
       <div className="h-full flex flex-col items-center justify-center gap-2 p-3 text-center text-[12px]" data-testid="dataset-status" data-status={st.status}>
         <div className={st.status === 'loading' ? 'text-soft' : 'text-warn'}>{msg}</div>
-        {st.status !== 'loading' && <Button data-testid="dataset-import" onClick={doImport}><Upload size={12} /> Importar arquivo</Button>}
+        {st.status !== 'loading' && (
+          <div className="flex gap-1 flex-wrap justify-center">
+            <Button data-testid="dataset-retry" onClick={() => data.source && invalidateDatasets([data.source.assetId])}>Tentar de novo</Button>
+            <Button data-testid="dataset-import" onClick={doImport}><Upload size={12} /> Importar arquivo</Button>
+          </div>
+        )}
       </div>
     );
   }
@@ -436,7 +523,8 @@ function DatasetInspector({ element, data, outputs, update, api }: WidgetProps<D
       <div className="text-[10px] text-soft">Cria um bloco HTML isolado (sem rede) com KPIs, filtro, tabela e gráfico, ligado às saídas deste bloco. Edite o HTML à vontade.</div>
 
       <Label>Privacidade</Label>
-      <div className="text-[11px] text-soft" data-testid="dataset-privacy">Os dados ficam só neste dispositivo. Não são enviados à IA — nem por blocos conectados (fórmulas, HTML) — e não aparecem em imagens exportadas. Backups de quadro perguntam se devem incluí-los.</div>
+      <div className="text-[11px] text-soft" data-testid="dataset-privacy">Os dados ficam só neste dispositivo e não aparecem em imagens exportadas. Backups de quadro perguntam se devem incluí-los. Por padrão, nada vai para a IA — nem por blocos conectados (fórmulas, HTML).</div>
+      <DatasetAIPanel element={element} data={data} projection={p} update={update} api={api} />
       {src && <div className="mt-1"><Button variant="danger" data-testid="dataset-delete" onClick={() => void deleteBlockData(element, api)}><Trash2 size={12} /> Excluir dados deste dispositivo</Button></div>}
     </div>
   );
@@ -462,12 +550,12 @@ export const datasetPlugin: WidgetPlugin<DatasetData> = {
     { id: 'count', label: 'Número de linhas', type: 'number' },
     { id: 'groups', label: 'Agrupamento (conjunto inteiro)', type: 'object' },
   ],
-  createData: () => ({ source: null, view: sanitizeView({}) }),
+  createData: () => ({ source: null, view: sanitizeView({}), ai: { ...DEFAULT_DATASET_AI } }),
   sanitize: sanitizeDatasetData,
   compute: (d) => computeDataset(d),
   // Resumo NÃO sensível (busca, exportação de imagem/texto, contexto genérico): sem valores e sem nomes de colunas.
   summarize: (d, el) => (d.source ? `${el.title}: dados importados (${fmtInt(d.source.rows)} linha(s) × ${d.source.columns} coluna(s)). Os valores ficam neste dispositivo e não entram neste resumo.` : `${el.title}: dados importados (vazio).`),
-  aiContext: () => ({ allowed: false, text: '', reason: 'Dados importados são privados: não são enviados à IA.' }),
+  aiContext: (d, el) => datasetAIPolicy(d, el),
   Component: DatasetTile,
   Inspector: DatasetInspector,
   menuItems: (el, d) => [

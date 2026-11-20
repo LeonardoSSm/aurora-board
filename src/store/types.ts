@@ -138,6 +138,8 @@ export interface EditorState {
   panelWidths: import('../core/panels').PanelWidths;
   /** Issue #11: autorizações LOCAIS de IA de blocos HTML (`<id>:<resumo>`). Nunca vêm de quadro ou backup. */
   htmlAiGrants: string[];
+  /** Issue #24 (D2-C): autorizações LOCAIS de IA de blocos “Dados importados” (`<id>:<resumo>`). Separadas das do HTML e das bancárias; nunca vêm de quadro ou backup. */
+  datasetAiGrants: string[];
   toasts: Toast[];
   /** Último snapshot de dados de fluxo calculado (cache para widgets). */
   dataflowVersion: number;

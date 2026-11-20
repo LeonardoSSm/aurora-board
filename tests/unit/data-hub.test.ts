@@ -483,7 +483,7 @@ describe('bloco aurora.dataset', () => {
     const p = plugin();
     const raw = { source: { assetId: 'ds_ok', name: '<b>Nome‮</b>', kind: 'json', rows: 3, columns: 2, bytes: 10, importedAt: 5, rowsData: [[1]] }, view: { page: -3, pageSize: 99999, columns: ['a', 'a', 7] }, extra: 'x' };
     const d = p.sanitize(raw) as DatasetData;
-    expect(d).toEqual({ source: { assetId: 'ds_ok', name: '<b>Nome</b>', kind: 'json', rows: 3, columns: 2, bytes: 10, importedAt: 5 }, view: { page: 0, pageSize: 500, columns: ['a'], groupBy: '', measure: '' } });
+    expect(d).toEqual({ source: { assetId: 'ds_ok', name: '<b>Nome</b>', kind: 'json', rows: 3, columns: 2, bytes: 10, importedAt: 5 }, view: { page: 0, pageSize: 500, columns: ['a'], groupBy: '', measure: '' }, ai: { mode: 'none', confirmedDigest: '', confirmedAt: 0 } });
     expect(p.sanitize(d)).toEqual(d);
     for (const bad of [{ assetId: '../x' }, { assetId: 'ok', rows: -1, columns: 1, bytes: 1 }, { assetId: 'ok', rows: 1, columns: 999, bytes: 1 }, { assetId: 'ok', rows: 1e9, columns: 1, bytes: 1 }]) {
       expect(sanitizeDatasetData({ source: bad }).source).toBeNull();

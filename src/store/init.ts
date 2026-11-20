@@ -4,7 +4,7 @@ import { loadedFavorites } from './radialActions';
 import { sanitizeCompanionPrefs } from '../core/companion';
 import { sanitizeAnimationPrefs } from '../core/animation';
 import { sanitizePanelWidths } from '../core/panels';
-import { sanitizeHtmlAiGrants } from './actions';
+import { sanitizeDatasetAiGrants, sanitizeHtmlAiGrants } from './actions';
 import { clearJournal, readJournals, setAdapter, startAutosave } from '../persistence/autosave';
 import { migrateBoard } from '../persistence/migrations';
 import { importLegacy, LEGACY_STORAGE_KEY } from '../persistence/legacy';
@@ -72,7 +72,7 @@ export async function initEditor(adapter: PersistenceAdapter, opts: { demo?: boo
       clearJournal(journal.boardId);
     }
 
-    setState({ zoomPrefs: sanitizeZoomPrefs(await adapter.getSetting('zoomPreferences')), navigationPrefs: sanitizeNavigationPrefs(await adapter.getSetting('navigationPreferences')), animationPrefs: sanitizeAnimationPrefs(await adapter.getSetting('animationPreferences')), panelWidths: sanitizePanelWidths(await adapter.getSetting('panelWidths')), htmlAiGrants: sanitizeHtmlAiGrants(await adapter.getSetting('htmlAiGrants')), radialFavorites: loadedFavorites(await adapter.getSetting('radialFavorites')), companionPrefs: sanitizeCompanionPrefs(await adapter.getSetting('companionPreferences')) });
+    setState({ zoomPrefs: sanitizeZoomPrefs(await adapter.getSetting('zoomPreferences')), navigationPrefs: sanitizeNavigationPrefs(await adapter.getSetting('navigationPreferences')), animationPrefs: sanitizeAnimationPrefs(await adapter.getSetting('animationPreferences')), panelWidths: sanitizePanelWidths(await adapter.getSetting('panelWidths')), htmlAiGrants: sanitizeHtmlAiGrants(await adapter.getSetting('htmlAiGrants')), datasetAiGrants: sanitizeDatasetAiGrants(await adapter.getSetting('datasetAiGrants')), radialFavorites: loadedFavorites(await adapter.getSetting('radialFavorites')), companionPrefs: sanitizeCompanionPrefs(await adapter.getSetting('companionPreferences')) });
     const last = await adapter.getSetting<string>('lastWorkspace');
     const workspaceId = workspaces.some((w) => w.id === last) ? last! : workspaces[0].id;
     setState({ workspaces, workspaceId });
