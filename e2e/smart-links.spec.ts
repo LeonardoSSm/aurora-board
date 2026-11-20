@@ -164,6 +164,17 @@ test('Propriedades: nome, URL, layout, ícone e imagem; inválido não abre; per
   await expect(sc).toHaveAttribute('data-layout', 'card');
   expect([(await byId(page, n0.id)).width, (await byId(page, n0.id)).height]).toEqual([220, 200]);
 
+  // Enter num controle das Propriedades aciona o controle — não abre o atalho selecionado (revisão do PR #23)
+  await insp.getByRole('radio', { name: 'Compacto' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(sc).toHaveAttribute('data-layout', 'compact');
+  await insp.getByRole('radio', { name: 'Ícone Link' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(sc).toHaveAttribute('data-media', 'icon:link');
+  expect(await opened(page)).toEqual([]);
+  await insp.getByRole('radio', { name: 'Ícone Vídeo' }).click();
+  await insp.getByRole('radio', { name: 'Card' }).click();
+
   // imagem enviada (PNG pelos bytes) → asset local, sem base64 no quadro
   await insp.getByRole('radio', { name: 'Imagem', exact: true }).click();
   const chooser = page.waitForEvent('filechooser');

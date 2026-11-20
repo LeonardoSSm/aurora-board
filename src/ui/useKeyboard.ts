@@ -36,6 +36,16 @@ import { openCapture, openCommandCenter } from './commandOpen';
 import { acceptsBoundText, isText } from '../core/schema';
 
 /** Alvo é um campo de digitação? Atalhos não devem interferir. */
+/**
+ * Controles que o próprio navegador ativa com Enter (botão, link, rádio, item de menu…). O Enter global do quadro
+ * (editar texto, abrir atalho) não pode roubar essa ativação — ex.: Enter num botão das Propriedades.
+ */
+export function activatesOnEnter(t: EventTarget | null): boolean {
+  const el = t as HTMLElement | null;
+  if (!el || typeof el.closest !== 'function') return false;
+  return !!el.closest('button, a[href], summary, input, select, textarea, [role="button"], [role="link"], [role="radio"], [role="checkbox"], [role="switch"], [role="tab"], [role="menuitem"], [role="option"], [contenteditable="true"]');
+}
+
 export function isTypingTarget(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;
   if (!el || !el.tagName) return false;
@@ -123,6 +133,8 @@ export function useKeyboard() {
           deleteSelected();
           return;
         case 'Enter': {
+          // Foco num controle (ex.: botão de layout nas Propriedades): o Enter é dele, não do quadro.
+          if (activatesOnEnter(e.target)) return;
           if (s.selectedIds.length === 1) {
             const el = s.elements.find((x) => x.id === s.selectedIds[0]);
             if (el && (isText(el) || acceptsBoundText(el) || el.type === 'frame')) { e.preventDefault(); startTextEdit(el.id); }
