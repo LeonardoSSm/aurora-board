@@ -4,10 +4,11 @@ import type { WidgetPlugin } from '../registry';
 import { safeHttpUrl, sanitizeLink, type LinkData } from '../../core/widgetData';
 import { WIDGET } from '../../core/widgetIds';
 import { LOCAL_API_ENABLED, STATIC_LINK_PREVIEW_MESSAGE } from '../../config/runtime';
+import { postJSON } from '../../integrations/apiFetch';
 
 export async function fetchLinkPreview(url: string) {
   if (!LOCAL_API_ENABLED) throw new Error(STATIC_LINK_PREVIEW_MESSAGE);
-  const res = await fetch('/api/link-preview', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url }) });
+  const res = await postJSON('/api/link-preview', { url });
   if (res.status === 404 || res.status === 502 || res.status === 503 || res.status === 504) throw new Error('Servidor local indisponível. Rode "npm run dev" para iniciar web + API.');
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || `Falha (${res.status})`);

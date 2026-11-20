@@ -25,6 +25,25 @@ O bind é fixo em `127.0.0.1` (não há variável para `0.0.0.0`) e o servidor a
 
 Confirmado antes da correção (ciclo 2): `POST text/plain` com `Origin` estrangeira era processado, e `Host: atacante.example` respondia 200.
 
+### Computadores pareados — IA pela rede local (`server/pairing.ts`)
+
+Para usar a IA e a prévia de links a partir de **outro computador seu** na mesma rede, com as chaves deste:
+
+1. Neste computador: `npm run dev` (API) e `npm run dev:lan` (app na rede, porta 5174, com `AURORA_LAN_PAIRING=1`).
+2. Ícone de pareamento na barra superior → **Gerar código** (8 caracteres, uso único, válido por 10 min).
+3. No outro computador: `http://<IP deste>:5174` → ícone de pareamento (ou o aviso no bloco de IA) → digitar o código.
+4. Revogar a qualquer momento na mesma janela, neste computador.
+
+| Risco | Proteção | Teste |
+|---|---|---|
+| Vizinho de rede usando a API/chaves | Sem `AURORA_LAN_PAIRING=1` no Vite a regra do S1 vale (só este computador). Com ela, toda chamada de fora exige token de dispositivo pareado (256 bits, guardado só como SHA-256 em `.aurora-local/`, ignorado pelo git) | `pairing.test.ts` |
+| Adivinhar o código | Uso único, expira em 10 min, invalidado após 5 erros; 20 falhas em 10 min bloqueiam o pareamento por 10 min; comparação em tempo constante | › adivinhação |
+| Cliente forjando a marcação de “remoto” | O proxy descarta cabeçalhos `x-aurora-remote*` do cliente e marca ele mesmo; conexão direta de fora continua recusada pelo servidor | › sem pareamento |
+| DNS rebinding / CSRF de sites visitados no outro computador | Host remoto precisa ser IP privado literal ou `.local/.lan`; Origin precisa ser a própria página; token vai em cabeçalho explícito (não em cookie) | › DNS rebinding |
+| Dispositivo pareado comprometido | Não gera códigos nem gerencia/revoga pareamentos; revogação imediata | › não gerencia |
+
+Não há limite de uso por dispositivo (decisão do proprietário: são computadores dele); os limites gerais do S1 (30 chats/min, 3 simultâneos) continuam para o servidor inteiro. O token fica no `localStorage` da origem do Aurora no outro computador. **Só em rede de confiança**; nunca exponha a porta 5174 para a internet. Os quadros e finanças continuam separados em cada computador.
+
 ### Pré-visualização de links — SSRF (`server/netSafety.ts`)
 
 | Proteção | Detalhe |

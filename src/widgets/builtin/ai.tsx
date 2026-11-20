@@ -12,6 +12,7 @@ import { interpretFinancialRequest, localMoneyAction, parseAIProposal, proposalD
 import { renderMarkdown } from './notes';
 import { ProposalCard } from './aiProposal';
 import { CategorySuggestionCard } from './aiFinanceSuggestions';
+import { openPairing } from '../../ui/PairingDialog';
 
 const QUICK: { label: string; prompt: string; mode: QuickMode }[] = [
   { label: 'Resumir', prompt: 'Resuma o contexto conectado em tópicos curtos.', mode: 'chat' },
@@ -127,6 +128,11 @@ export const aiPlugin: WidgetPlugin<AIData> = {
         ) : status.state === 'unavailable' ? (
           <div className="rounded-lg border border-line bg-panel-3/40 p-2 text-[11px] text-muted" data-testid="ai-status">
             <b>Indisponível.</b> {status.message}
+          </div>
+        ) : status.state === 'pairing' ? (
+          <div className="rounded-lg border border-warn/40 bg-warn/10 p-2 text-[11px] text-warn" data-testid="ai-status">
+            <b>Computador não pareado.</b> {status.message} A IA usa as chaves do computador principal; pareie este computador com um código gerado lá.
+            <button onClick={() => openPairing()} className="ml-1 underline">Parear este computador</button>
           </div>
         ) : status.state === 'offline' ? (
           <div className="rounded-lg border border-warn/40 bg-warn/10 p-2 text-[11px] text-warn" data-testid="ai-status">

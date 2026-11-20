@@ -5,6 +5,7 @@
 | Comando | Uso |
 |---|---|
 | `npm run dev` | App (5173) + servidor local (8787) com recarga |
+| `npm run dev:lan` | App acessível na rede local (5174) com **pareamento de computadores** ligado; requer `npm run dev` rodando (ver docs/SECURITY.md › Computadores pareados) |
 | `npm run verify` | **Antes de cada commit**: tipos + unitários + build + E2E (Chromium) |
 | `npm run typecheck` | Só TypeScript |
 | `npm test` / `npm run test:watch` | Unitários (Vitest), uma vez / modo observação |

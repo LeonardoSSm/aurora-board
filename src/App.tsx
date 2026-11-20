@@ -10,8 +10,10 @@ import { CheckpointDialog, LocationsPanel } from './ui/LocationsPanel';
 import { ContextMenu, DialogHost, ShortcutsDialog, Toasts, ZoomControls } from './ui/Overlays';
 import { BetaNotice } from './ui/BetaNotice';
 import { FinanceHub } from './ui/finance/FinanceHub';
+import { PairingDialog } from './ui/PairingDialog';
 import { setLastPointerWorld, useKeyboard } from './ui/useKeyboard';
 import { screenToWorld } from './store/actions';
+import { LOCAL_API_ENABLED } from './config/runtime';
 
 export function App() {
   const status = useEditor((s) => s.status);
@@ -92,6 +94,7 @@ export function App() {
       <LocationsPanel />
       <CheckpointDialog />
       <FinanceHub />
+      {LOCAL_API_ENABLED && <PairingDialog />}
       <DialogHost />
       <ShortcutsDialog />
       <Toasts />
