@@ -75,9 +75,11 @@ test.describe('Issue #24 — Data Hub (D2-A)', () => {
     await importFile(page, page.getByTestId('dataset-replace'), { name: 'vendas.json', mimeType: 'application/json', text: jsonText });
     await expect(page.getByRole('dialog').getByTestId('dataset-replace-note')).toBeVisible();
     await page.getByRole('dialog').getByRole('button', { name: 'Substituir', exact: true }).click();
+    // A substituição grava o asset e só então troca a referência (assíncrono); contagens e conteúdo são iguais aos
+    // do CSV, então espera a TROCA de fato antes de conferir a tela (corrida vista na CI do PR #27).
+    await expect.poll(async () => (await datasetData(page, id)).source.kind).toBe('json');
     await expect(page.getByTestId('dataset-counts')).toHaveText('3 linha(s) × 4 coluna(s)');
     await expect(page.getByTestId('dataset-table')).toContainText('=1+1');
-    expect((await datasetData(page, id)).source.kind).toBe('json');
   });
 
   test('B: arquivo malformado ou grande demais é recusado sem estado parcial', async ({ page }) => {
