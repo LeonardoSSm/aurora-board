@@ -51,6 +51,7 @@ export const initialEditorState: EditorState = {
   zoomPrefs: { ...DEFAULT_ZOOM_PREFS },
   animationPrefs: { ...DEFAULT_ANIMATION_PREFS },
   panelWidths: { ...PANEL_DEFAULTS },
+  htmlAiGrants: [],
   toasts: [],
   dataflowVersion: 0,
 };

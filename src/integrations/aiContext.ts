@@ -12,6 +12,7 @@ import type { AuroraElement, LinkKind } from '../core/schema';
 import { isLinear } from '../core/schema';
 import { aiPolicyOf, summarizeElement } from '../widgets/registry';
 import { WIDGET } from '../core/widgetIds';
+import { dataUpstream } from '../core/dataUpstream';
 import { ACTIONS_PROMPT } from './aiActions';
 
 export interface ContextSource {
@@ -27,29 +28,23 @@ export interface ContextSource {
 }
 
 /**
- * Ciclo F1: um bloco cujo valor vem (por conexões de DADOS, direta ou indiretamente) de uma consulta bancária
- * sem autorização para IA também não pode ser enviado — senão um Mês ou uma Fórmula vazaria o que o bloco
- * bancário protege. Retorna o motivo, ou null.
+ * Ciclo F1 + issue #11: um bloco cujo valor vem (por conexões de DADOS, direta ou indiretamente) de uma fonte
+ * PROTEGIDA sem autorização para IA também não pode ser enviado — senão um Mês, uma Fórmula ou um bloco HTML
+ * vazaria o que a fonte protege. Fontes protegidas: Consulta bancária e blocos HTML (saídas só com autorização
+ * local). Retorna o motivo, ou null.
  */
 export function financialTaint(elements: AuroraElement[], id: string): string | null {
   const byId = new Map(elements.map((e) => [e.id, e]));
-  const upstream = new Map<string, string[]>();
-  for (const e of elements) {
-    if (!isLinear(e) || e.connection.kind !== 'data' || !e.startBinding || !e.endBinding) continue;
-    upstream.set(e.endBinding.elementId, [...(upstream.get(e.endBinding.elementId) ?? []), e.startBinding.elementId]);
-  }
-  const seen = new Set<string>([id]);
-  const queue = [...(upstream.get(id) ?? [])];
-  while (queue.length) {
-    const cur = queue.shift()!;
-    if (seen.has(cur)) continue;
-    seen.add(cur);
+  for (const cur of dataUpstream(elements, id)) {
     const el = byId.get(cur);
-    if (el?.type === 'widget' && el.widgetType === WIDGET.bankQuery) {
+    if (el?.type !== 'widget') continue;
+    if (el.widgetType === WIDGET.bankQuery) {
       const pol = aiPolicyOf(el);
       if (!pol?.allowed) return `Depende de dados bancários sem autorização para IA (“${el.title}”).`;
+    } else if (el.widgetType === WIDGET.sandbox) {
+      const pol = aiPolicyOf(el);
+      if (!pol?.allowed) return `Depende de saídas de um bloco HTML não autorizadas para IA (“${el.title}”).`;
     }
-    queue.push(...(upstream.get(cur) ?? []));
   }
   return null;
 }

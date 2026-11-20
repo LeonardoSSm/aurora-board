@@ -341,6 +341,8 @@ function WidgetInfo({ el }: { el: WidgetElement }) {
   const p = getWidget(el.widgetType);
   const flow = useDataflow();
   const ins = flow.inputs.get(el.id) ?? {};
+  // Portas que dependem dos dados (ex.: HTML com ponte de dados) — as fixas quando o widget não declara.
+  const spec = dataflowSpec(el.widgetType, el);
   if (!p) return <div className="text-[12px] text-warn">Widget “{el.widgetType}” não instalado. Dados preservados.</div>;
   const st = STATUS_LABEL[p.status];
   return (
@@ -358,13 +360,13 @@ function WidgetInfo({ el }: { el: WidgetElement }) {
       </div>
       <div className="text-[11px] text-soft">{p.description}</div>
       {p.statusNote && <div className="text-[11px] text-warn/90">{p.statusNote}</div>}
-      {(p.inputs.length > 0 || p.outputs.length > 0) && (
+      {spec && (spec.inputs.length > 0 || spec.outputs.length > 0) && (
         <>
           <Label>Portas de dados</Label>
-          {p.inputs.map((i) => (
+          {spec.inputs.map((i) => (
             <div key={i.id} className="text-[11px] flex flex-wrap items-baseline gap-x-2" data-testid="port-row"><span className="min-w-0 flex-[1_1_7rem] break-words">⇢ {i.label}</span><span className="ml-auto flex items-baseline gap-2 shrink-0"><code className="text-soft break-all">{i.type}</code><span className="text-ok">{ins[i.id]?.length ?? 0}</span></span></div>
           ))}
-          {p.outputs.map((o) => (
+          {spec.outputs.map((o) => (
             <div key={o.id} className="text-[11px] flex flex-wrap items-baseline gap-x-2" data-testid="port-row"><span className="min-w-0 flex-[1_1_7rem] break-words">{o.label} ⇢</span><code className="ml-auto text-soft break-all">{o.type}</code></div>
           ))}
         </>
