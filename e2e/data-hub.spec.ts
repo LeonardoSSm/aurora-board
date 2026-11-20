@@ -243,6 +243,44 @@ test.describe('Issue #24 — Data Hub (D2-B): dashboard HTML conectado', () => {
     await expect(page.locator('iframe[sandbox]').first()).toHaveAttribute('data-marca', 'antes');
   });
 
+  // Revisão do Codex (PR #28): o gráfico sem agrupamento ignorava o filtro; a média antiga continuava publicada sem
+  // valores; o seletor mostrava “(todos)” com um filtro ainda valendo.
+  test('G: painel sem agrupamento — gráfico com o filtro, média sem valores = 0, filtro sempre visível ou limpo', async ({ page }) => {
+    await ready(page);
+    const id = await addDataset(page);
+    await importFile(page, page.getByTestId('dataset-import'), { name: 'vendas.csv', mimeType: 'text/csv', text: VENDAS });
+    await page.getByRole('dialog').getByRole('button', { name: 'Importar', exact: true }).click();
+    await page.evaluate((x) => (window as any).__aurora.actions.setSelection([x]), id);
+    await page.getByTestId('dataset-create-dashboard').click();
+    const htmlId = await page.evaluate(() => (window as any).__aurora.getState().elements.find((e: any) => e.widgetType === 'aurora.sandbox-html').id as string);
+    const out = (port: string) => page.evaluate(([h, p]) => { const a = (window as any).__aurora; const v = a.core.getDataflow(a.getState().elements).outputs.get(h)?.[p]; return v && typeof v === 'object' && 'v' in v ? v.v : v ?? null; }, [htmlId, port] as const);
+
+    await dash(page).locator('#sColuna').selectOption('região');
+    await expect(dash(page).locator('#grafico rect')).toHaveCount(2); // Sul e Norte
+    await dash(page).locator('#sValor').selectOption('Sul');
+    await expect(dash(page).locator('#grafico rect')).toHaveCount(1); // só o grupo filtrado
+    await expect.poll(() => out('media')).toBe('8.5');
+
+    const replace = async (name: string, text: string) => {
+      await page.evaluate((x) => (window as any).__aurora.actions.setSelection([x]), id);
+      await importFile(page, page.getByTestId('dataset-inspector-import'), { name, mimeType: 'text/csv', text });
+      await page.getByRole('dialog').getByRole('button', { name: 'Substituir', exact: true }).click();
+    };
+    // Sul sem números: a média publicada vira 0 (com “valores” = 0), não fica a antiga.
+    await replace('v2.csv', 'produto,região,valor\nCafé,Sul,\nPão,Norte,3\n');
+    await expect(dash(page).locator('#kMedia')).toHaveText('—');
+    await expect.poll(() => out('media')).toBe('0');
+    await expect.poll(() => out('valores')).toBe('0');
+    // O valor filtrado some da página: continua visível no seletor (é o filtro que vale).
+    await replace('v3.csv', 'produto,região,valor\nPão,Norte,3\n');
+    await expect(dash(page).locator('#kFiltradas')).toHaveText('0');
+    await expect(dash(page).locator('#sValor option:checked')).toHaveText('Sul (sem linhas aqui)');
+    // A coluna do filtro deixa de existir: o filtro é limpo e a tela mostra “(sem filtro)”.
+    await replace('v4.csv', 'produto,valor\nPão,3\n');
+    await expect(dash(page).locator('#kFiltradas')).toHaveText('1');
+    await expect(dash(page).locator('#sColuna option:checked')).toHaveText('(sem filtro)');
+  });
+
   test('F: isolamento — HTML conectado a dados importados não tem rede, armazenamento, acesso ao app nem pop-ups', async ({ page }) => {
     await ready(page);
     const id = await addDataset(page);

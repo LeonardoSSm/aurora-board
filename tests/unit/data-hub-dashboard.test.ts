@@ -56,6 +56,16 @@ describe('agregação nativa (conjunto inteiro)', () => {
     expect(mixed.groups.find((x) => x.group === 'Norte')).toMatchObject({ count: 2, valid: 0, sum: 0, mean: null });
   });
 
+  // Revisão do Codex (PR #28): valores longos com o mesmo prefixo viravam UM grupo (a chave era o rótulo encurtado).
+  it('agrupa pelo valor ORIGINAL; só o rótulo de saída é encurtado', () => {
+    const a = 'x'.repeat(200) + 'A', b = 'x'.repeat(200) + 'B';
+    const c = validateContent({ format: 'aurora-dataset', version: 1, columns: [{ label: 'g', type: 'text' }, { label: 'n', type: 'number' }], rows: [[a, 10], [b, 20], [a, 1]] });
+    const g = aggregateDataset(c, 'g', 'n')!;
+    expect(g.groupCount).toBe(2);
+    expect(g.groups.map((x) => [x.count, x.sum])).toEqual([[1, 20], [2, 11]]);
+    expect(g.groups.every((x) => (x.group ?? '').length <= AGGREGATE_LIMITS.maxGroupLabelChars)).toBe(true);
+  });
+
   it('sem medida ordena pela contagem; coluna inexistente → null', () => {
     const g = aggregateDataset(content(), 'região', '')!;
     expect(g.measure).toBeNull();

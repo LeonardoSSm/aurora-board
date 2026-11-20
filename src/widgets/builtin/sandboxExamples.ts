@@ -123,9 +123,14 @@ const DATASET_DASHBOARD = `<style>
     const textuais = colunas.filter((c) => c.type !== 'number');
     if (!numericas.some((c) => c.id === pref.medida)) pref.medida = numericas.length ? numericas[0].id : '';
     options($('sMedida'), numericas.map((c) => ({ value: c.id, label: c.label })), pref.medida, numericas.length ? '' : '(sem colunas numéricas)');
+    // A coluna do filtro sumiu (dados trocados): o filtro deixa de valer — e a tela mostra isso.
+    if (pref.coluna && !textuais.some((c) => c.id === pref.coluna)) { pref.coluna = ''; pref.valor = ''; }
     options($('sColuna'), textuais.map((c) => ({ value: c.id, label: c.label })), pref.coluna, '(sem filtro)');
     const valores = pref.coluna ? [...new Set(linhas.map((r) => txt(r[pref.coluna])))].slice(0, 100) : [];
-    options($('sValor'), valores.map((v) => ({ value: v, label: v || '(vazio)' })), pref.valor, '(todos)');
+    const opcoes = valores.map((v) => ({ value: v, label: v || '(vazio)' }));
+    // O valor escolhido continua visível mesmo sem linhas nesta página: o seletor mostra o filtro que está valendo.
+    if (pref.coluna && pref.valor && !valores.includes(pref.valor)) opcoes.unshift({ value: pref.valor, label: pref.valor + ' (sem linhas aqui)' });
+    options($('sValor'), opcoes, pref.valor, '(todos)');
     $('sValor').style.display = pref.coluna ? '' : 'none';
     const filtradas = linhas.filter((r) => !pref.coluna || !pref.valor || txt(r[pref.coluna]) === pref.valor);
     const nums = filtradas.map((r) => r[pref.medida]).filter((v) => typeof v === 'number' && isFinite(v));
@@ -143,9 +148,9 @@ const DATASET_DASHBOARD = `<style>
       $('legenda').textContent = (grupos.measure ? 'Soma de ' + grupos.measure.label : 'Contagem') + ' por ' + grupos.groupBy.label + ' (conjunto inteiro' + (grupos.truncated ? ', limitado' : '') + ')';
     } else if (pref.coluna) {
       const m = new Map();
-      for (const r of linhas) { const k = txt(r[pref.coluna]); const v = r[pref.medida]; m.set(k, (m.get(k) || 0) + (typeof v === 'number' ? v : 0)); }
+      for (const r of filtradas) { const k = txt(r[pref.coluna]); const v = r[pref.medida]; m.set(k, (m.get(k) || 0) + (typeof v === 'number' ? v : 0)); }
       barras = [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([label, valor]) => ({ label: label || '(vazio)', valor }));
-      $('legenda').textContent = 'Soma de ' + medidaLabel + ' por grupo (página)';
+      $('legenda').textContent = 'Soma de ' + medidaLabel + ' por grupo (página, com o filtro)';
     } else $('legenda').textContent = '';
     const svg = $('grafico'); svg.replaceChildren();
     const max = Math.max(1, ...barras.map((b) => Math.abs(b.valor)));
@@ -162,8 +167,11 @@ const DATASET_DASHBOARD = `<style>
     $('cab').replaceChildren(...cols.map((c) => el('th', c.label)));
     $('corpo').replaceChildren(...filtradas.slice(0, 20).map((r) => { const tr = el('tr'); for (const c of cols) tr.appendChild(el('td', txt(r[c.id]), typeof r[c.id] === 'number' ? 'n' : '')); return tr; }));
     // Métricas para Fórmula/Gráfico/outro HTML (validadas pelo host).
+    // Política explícita: sem valores numéricos, média = 0 e “valores” = 0. Uma saída não pode ser apagada; quem
+    // consome confere “valores”. Assim nenhum valor antigo fica valendo.
     aurora.publish('total', soma);
-    if (media !== null) aurora.publish('media', media);
+    aurora.publish('media', media === null ? 0 : media);
+    aurora.publish('valores', nums.length);
     aurora.publish('filtradas', filtradas.length);
     aurora.publish('porGrupo', barras);
     aurora.publish('resumo', fmt(filtradas.length) + ' linha(s) filtrada(s); soma de ' + medidaLabel + ': ' + fmt(soma) + '.');
@@ -189,7 +197,8 @@ export const DATASET_DASHBOARD_BRIDGE: BridgeConfig = {
   ],
   outputs: [
     { id: 'total', label: 'Soma da medida (filtrada)', type: 'number' },
-    { id: 'media', label: 'Média da medida (filtrada)', type: 'number' },
+    { id: 'media', label: 'Média da medida (filtrada; 0 sem valores)', type: 'number' },
+    { id: 'valores', label: 'Valores numéricos na média', type: 'number' },
     { id: 'filtradas', label: 'Linhas filtradas', type: 'number' },
     { id: 'porGrupo', label: 'Barras do gráfico', type: 'object' },
     { id: 'resumo', label: 'Resumo em texto', type: 'text' },

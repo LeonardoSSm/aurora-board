@@ -34,11 +34,10 @@ export interface DatasetGroups {
   notes: string[];
 }
 
-const groupLabel = (v: CellValue): string | null => {
-  if (v === null) return null;
-  const s = typeof v === 'string' ? v : String(v);
-  return s.length > AGGREGATE_LIMITS.maxGroupLabelChars ? `${s.slice(0, AGGREGATE_LIMITS.maxGroupLabelChars - 1)}…` : s;
-};
+/** Chave de agrupamento: o valor ORIGINAL inteiro (revisão do Codex, PR #28 — encurtar antes juntava grupos). */
+const groupKey = (v: CellValue): string | null => (v === null ? null : typeof v === 'string' ? v : String(v));
+/** Rótulo de SAÍDA (só ele é encurtado). */
+const shortLabel = (s: string | null): string | null => (s !== null && s.length > AGGREGATE_LIMITS.maxGroupLabelChars ? `${s.slice(0, AGGREGATE_LIMITS.maxGroupLabelChars - 1)}…` : s);
 
 /** Agrupa `content` pela coluna `groupBy` (chave técnica) resumindo `measure` (opcional). Null se a coluna não existe. */
 export function aggregateDataset(content: DatasetContent, groupBy: string, measure: string): DatasetGroups | null {
@@ -47,7 +46,7 @@ export function aggregateDataset(content: DatasetContent, groupBy: string, measu
   const mi = measure ? content.columns.findIndex((c) => c.key === measure) : -1;
   const acc = new Map<string | null, { count: number; valid: number; sum: number; min: number; max: number }>();
   for (const row of content.rows) {
-    const g = groupLabel(row[gi]);
+    const g = groupKey(row[gi]);
     let a = acc.get(g);
     if (!a) { a = { count: 0, valid: 0, sum: 0, min: Infinity, max: -Infinity }; acc.set(g, a); }
     a.count++;
@@ -61,7 +60,7 @@ export function aggregateDataset(content: DatasetContent, groupBy: string, measu
     }
   }
   const all: GroupStats[] = [...acc.entries()].map(([group, a]) => ({
-    group,
+    group: shortLabel(group),
     count: a.count,
     valid: a.valid,
     sum: a.sum,
