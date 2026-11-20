@@ -118,10 +118,16 @@ export interface WidgetPlugin<D = unknown> {
   hideInLibrary?: boolean;
   /** Duplo clique no widget (fora de modo de edição de grupo). */
   onDoubleClick?(element: WidgetElement): void;
+  /**
+   * Issue #22: ação de um clique CONSCIENTE no corpo de um widget `bare` (botão principal, sem modificadores,
+   * sem arrasto, fora da faixa da borda, antes do toque longo). O canvas decide o gesto; o plugin só diz o que
+   * fazer. `null` = clique comum (apenas seleciona). Ex.: abrir o destino de um atalho visual.
+   */
+  clickAction?(data: D, element: WidgetElement): (() => void) | null;
   /** Itens extras no menu de contexto (as ações genéricas continuam). */
   menuItems?(element: WidgetElement, data: D): WidgetMenuItem[];
   /** Conteúdo SVG fiel para exportação (coordenadas locais 0..width × 0..height). Sem isso, exporta um resumo. */
-  exportSVG?(data: D, element: WidgetElement): string | Promise<string>;
+  exportSVG?(data: D, element: WidgetElement): string | null | Promise<string | null>;
   /** Ao copiar/duplicar: troca ids de outros elementos citados nos dados (mapa antigo → novo). */
   remapIds?(data: D, idMap: ReadonlyMap<string, string>): D;
   /** Portas que dependem dos dados do elemento (ex.: tipo do valor). Sem isso, `inputs`/`outputs` fixos. */

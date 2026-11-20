@@ -54,6 +54,17 @@ function partsSVG(el: AuroraElement): string {
     .join('');
 }
 
+/** SVG próprio do widget; null = o plugin não tem (ou recusou para estes dados) → resumo genérico. */
+async function customWidgetSVG(el: Extract<AuroraElement, { type: 'widget' }>): Promise<string | null> {
+  const p = getWidget(el.widgetType);
+  if (!p?.exportSVG) return null;
+  try {
+    return await p.exportSVG(p.sanitize(el.data), el);
+  } catch {
+    return `<rect width="${el.width}" height="${el.height}" rx="12" fill="#182436" stroke="#2e405a"/>`;
+  }
+}
+
 async function elementSVG(el: AuroraElement): Promise<string> {
   const op = el.style.opacity / 100;
   if (isLinear(el)) {
@@ -71,6 +82,7 @@ async function elementSVG(el: AuroraElement): Promise<string> {
   }
   const rot = el.angle ? ` rotate(${(el.angle * 180) / Math.PI} ${el.width / 2} ${el.height / 2})` : '';
   let inner = '';
+  let custom: string | null = null;
   if (el.type === 'image') {
     const a = await getAsset(el.assetId);
     // Ciclo 6: PNG/SVG são estáticos — GIF animado sai sempre no PRIMEIRO quadro (determinístico).
@@ -78,14 +90,9 @@ async function elementSVG(el: AuroraElement): Promise<string> {
   } else if (el.type === 'text') {
     const lines = el.autoSize ? el.text.split('\n') : wrapText(el.text, el.style, el.width - 4);
     inner = textLines(lines, 2, 0, el.width - 4, el.style);
-  } else if (el.type === 'widget' && getWidget(el.widgetType)?.exportSVG) {
-    // Widget com exportação fiel (ex.: AI Tile com logo): mesmo layout da tela.
-    const p = getWidget(el.widgetType)!;
-    try {
-      inner = await p.exportSVG!(p.sanitize(el.data), el);
-    } catch {
-      inner = `<rect width="${el.width}" height="${el.height}" rx="12" fill="#182436" stroke="#2e405a"/>`;
-    }
+  } else if (el.type === 'widget' && (custom = await customWidgetSVG(el)) !== null) {
+    // Widget com exportação fiel (ex.: AI Tile com logo, atalho visual): mesmo layout da tela.
+    inner = custom;
   } else if (el.type === 'widget') {
     const p = getWidget(el.widgetType);
     const body = wrapText(summarizeElement(el).slice(0, 1200), { fontFamily: 'sans', fontSize: 12 }, el.width - 24).slice(0, Math.max(1, Math.floor((el.height - 56) / 16)));

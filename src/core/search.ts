@@ -9,6 +9,7 @@
  */
 import type { AuroraElement } from './schema';
 import { WIDGET } from './widgetIds';
+import { displayLabel, sanitizeVisual } from './smartLinks';
 
 /** Minúsculas, sem acentos, espaços colapsados. “Ação” ≡ “acao”. */
 export function normalize(s: string): string {
@@ -129,7 +130,9 @@ export function elementDocs(el: AuroraElement, boardId: string, workspaceId: str
       if (type === WIDGET.link) {
         let host = '';
         try { host = new URL(String(data.url ?? '')).hostname; } catch { /* sem URL válida */ }
-        return [{ ...base, key: key('element', el.id), kind: 'element', id: el.id, title, body: clip(`${host}\n${String(data.description ?? '')}`), typeLabel: label, filter: 'other' }];
+        // Issue #22: nome exibido do atalho como título; corpo só domínio + descrição — nunca a URL completa.
+        const shown = displayLabel(w.title, String(data.url ?? ''), sanitizeVisual(data.visual));
+        return [{ ...base, key: key('element', el.id), kind: 'element', id: el.id, title: shown, body: clip(`${host}\n${String(data.description ?? '')}`), typeLabel: label, filter: 'other' }];
       }
       // Widgets de terceiros e futuros: só o título (conteúdo desconhecido não é indexado por padrão).
       return [{ ...base, key: key('element', el.id), kind: 'element', id: el.id, title, body: '', typeLabel: label, filter: 'other', contentHidden: true }];

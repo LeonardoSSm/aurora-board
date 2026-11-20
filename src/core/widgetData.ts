@@ -2,6 +2,7 @@
 import { uid } from './elements';
 import { sanitizeCompanion } from './companion';
 import { sanitizeBridge, type BridgeConfig } from './htmlBridge';
+import { sanitizeVisual, type LinkVisual } from './smartLinks';
 
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
 const str = (v: unknown, d = '') => (typeof v === 'string' ? v : d);
@@ -90,14 +91,21 @@ export const sanitizeAI = (raw: unknown): AIData => {
 
 /* Link -------------------------------------------------------------- */
 export interface LinkPreview { title: string; description: string; image: string; siteName: string; fetchedAt: number }
-export interface LinkData { url: string; description: string; preview: LinkPreview | null }
+/**
+ * `url`, `description` e `preview` são o formato histórico (backups antigos dependem deles — nunca renomear).
+ * `visual` (issue #22) é opcional: ausente = modo Clássico idêntico ao anterior; presente = Atalho Visual ou
+ * Clássico escolhido explicitamente (a conversão preserva os três campos históricos).
+ */
+export interface LinkData { url: string; description: string; preview: LinkPreview | null; visual?: LinkVisual }
 export const sanitizeLink = (raw: unknown): LinkData => {
   const d = obj(raw);
   const p = d.preview ? obj(d.preview) : null;
+  const visual = sanitizeVisual(d.visual);
   return {
     url: str(d.url),
     description: str(d.description),
     preview: p ? { title: str(p.title), description: str(p.description), image: str(p.image), siteName: str(p.siteName), fetchedAt: Number(p.fetchedAt) || 0 } : null,
+    ...(visual ? { visual } : {}),
   };
 };
 
