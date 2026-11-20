@@ -15,6 +15,7 @@ import {
 import { safeExternalUrl } from '../core/aiTiles';
 import { MAX_ZOOM, MIN_ZOOM, nextZoomStep, sanitizeZoomPrefs, zoomAround } from '../core/camera';
 import { imageAnimationOf, sanitizeAnimationPrefs, type AnimationPrefs, type ImageAnimation } from '../core/animation';
+import { PANEL_DEFAULTS, sanitizePanelWidths, type PanelSide } from '../core/panels';
 import { cameraTarget, cancelCameraAnimation, fitCameraToBounds, panCamera, zoomToLevel } from './cameraMotion';
 import { createValueData, parseTextToValue, VALUE_SIZES } from '../core/valueTile';
 import { resolveLinear, updateBoundArrows, unbindDeleted } from '../core/bindings';
@@ -330,6 +331,20 @@ export async function setAnimationPrefs(p: Partial<AnimationPrefs>) {
   const next = sanitizeAnimationPrefs({ ...getState().animationPrefs, ...p });
   setState({ animationPrefs: next });
   await getAdapter().setSetting('animationPreferences', next);
+}
+
+/**
+ * Issue #10: largura de uma lateral. Durante o arrasto só atualiza a tela (`persist: false`); ao soltar (ou pelo
+ * teclado) grava nas configurações locais — nunca no quadro.
+ */
+export async function setPanelWidth(side: PanelSide, width: number, persist = true) {
+  const next = sanitizePanelWidths({ ...getState().panelWidths, [side]: width });
+  if (next[side] !== getState().panelWidths[side]) setState({ panelWidths: next });
+  if (persist) await getAdapter().setSetting('panelWidths', getState().panelWidths);
+}
+
+export function resetPanelWidth(side: PanelSide) {
+  return setPanelWidth(side, PANEL_DEFAULTS[side]);
 }
 
 /** Ciclo 6: reprodução/repetição das imagens selecionadas (uma entrada de histórico). */

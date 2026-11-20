@@ -3,6 +3,7 @@
  * quadro = documento espacial; checkpoint = lugar dentro dele) e formulário de criar/editar.
  */
 import { useEffect, useRef, useState } from 'react';
+import { usePanelLayout } from './PanelResizer';
 import { ArrowDown, ArrowUp, Copy, Crosshair, LocateFixed, MapPin, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useEditor, setState } from '../store/editor';
 import { confirmDialog } from '../store/ui';
@@ -19,7 +20,11 @@ export function LocationsPanel() {
   const compact = useEditor((s) => s.compact);
   const show = useEditor((s) => s.boards.find((b) => b.id === s.boardId)?.settings.showCheckpointIndicators !== false);
   const [q, setQ] = useState('');
+  // Ancorado à direita da Biblioteca, que agora tem largura variável (issue #10).
+  const lib = usePanelLayout('library');
+  const libraryOpen = useEditor((s) => s.libraryOpen);
   if (!open) return null;
+  const left = libraryOpen ? lib.width + 12 : 12;
   const needle = q.trim().toLowerCase();
   const list = cps.filter((c) => !needle || `${c.name} ${c.description}`.toLowerCase().includes(needle));
   const close = () => setState({ locationsOpen: false });
@@ -28,7 +33,8 @@ export function LocationsPanel() {
       role="dialog"
       aria-label="Locais"
       data-testid="locations-panel"
-      className={`fixed z-[60] glass rounded-2xl flex flex-col max-h-[70vh] ${compact ? 'left-2 right-2 top-14' : 'left-[268px] top-14 w-[320px]'}`}
+      style={compact ? undefined : { left: Math.min(left, Math.max(12, window.innerWidth - 332)) }}
+      className={`fixed z-[60] glass rounded-2xl flex flex-col max-h-[70vh] ${compact ? 'left-2 right-2 top-14' : 'top-14 w-[320px] max-w-[calc(100vw-24px)]'}`}
       onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape') close(); }}
     >
       <div className="flex items-center justify-between px-3 pt-3">

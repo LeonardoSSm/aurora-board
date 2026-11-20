@@ -4,6 +4,7 @@ import type { EditorState } from './types';
 import { DEFAULT_STYLE } from '../core/elements';
 import { DEFAULT_ZOOM_PREFS } from '../core/camera';
 import { DEFAULT_ANIMATION_PREFS } from '../core/animation';
+import { PANEL_DEFAULTS } from '../core/panels';
 
 export const initialEditorState: EditorState = {
   status: 'loading',
@@ -49,6 +50,7 @@ export const initialEditorState: EditorState = {
   checkpointFlash: null,
   zoomPrefs: { ...DEFAULT_ZOOM_PREFS },
   animationPrefs: { ...DEFAULT_ANIMATION_PREFS },
+  panelWidths: { ...PANEL_DEFAULTS },
   toasts: [],
   dataflowVersion: 0,
 };
