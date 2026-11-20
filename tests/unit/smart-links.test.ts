@@ -12,6 +12,7 @@ import {
   linkTargetUrl,
   redactUrl,
   referenceSize,
+  remoteImageAllowed,
   revokeRemoteImageConsent,
   sanitizeVisual,
   shortcutLayout,
@@ -61,7 +62,9 @@ describe('modelo e compatibilidade', () => {
     expect(sanitizeVisual('shortcut')).toBeUndefined();
     expect(sanitizeVisual([])).toBeUndefined();
     expect(sanitizeVisual({ assetId: 'a_abc123', iconId: 'youtube', label: 'x\u0000y' })).toMatchObject({ assetId: 'a_abc123', iconId: 'youtube', label: 'x y' });
-    expect(sanitizeVisual({ remoteImageConsent: { at: 7 } })?.remoteImageConsent).toEqual({ at: 7 });
+    expect(sanitizeVisual({ remoteImageConsent: { at: 7, src: 'https://cdn.x.com/a.png' } })?.remoteImageConsent).toEqual({ at: 7, src: 'https://cdn.x.com/a.png' });
+    // formato sem src, src http ou perigoso: nenhum opt-in
+    for (const c of [{ at: 7 }, { at: 7, src: 'http://cdn.x.com/a.png' }, { at: 7, src: 'javascript:alert(1)' }, { at: 7, src: 42 }]) expect(sanitizeVisual({ remoteImageConsent: c })?.remoteImageConsent).toBeUndefined();
   });
 
   it('conversão Clássico ⇄ Atalho preserva URL, descrição e pré-visualização (e é reversível)', () => {
@@ -153,7 +156,7 @@ describe('privacidade de imagem remota e backups', () => {
   it('importar remove o opt-in de imagem remota e conta a imagem enviada como asset do backup', () => {
     const ws = createWorkspace('W');
     const board = createBoard(ws.id, 'Q');
-    const v = { ...defaultVisual({ iconMode: 'preview', assetId: 'a_img1' }), remoteImageConsent: { at: 1 } };
+    const v = { ...defaultVisual({ iconMode: 'preview', assetId: 'a_img1' }), remoteImageConsent: { at: 1, src: LEGACY.preview.image } };
     const el = createWidget(WIDGET.link, '1.0.0', 'Ref', 0, 0, 240, 56, { ...LEGACY, visual: v });
     board.elements = [el];
     expect(assetIdsOf(board.elements).has('a_img1')).toBe(true);
@@ -175,9 +178,19 @@ describe('privacidade de imagem remota e backups', () => {
     expect(parsed.warnings.join(' ')).toContain('a_sumiu');
   });
 
+  it('opt-in vale só para a imagem exata autorizada (trocar URL/pré-visualização por qualquer caminho invalida)', () => {
+    const v = sanitizeVisual({ ...defaultVisual({ iconMode: 'preview' }), remoteImageConsent: { at: 1, src: 'https://cdn.a.com/og.png' } });
+    expect(remoteImageAllowed(v, 'https://cdn.a.com/og.png')).toBe('https://cdn.a.com/og.png');
+    expect(remoteImageAllowed(v, 'https://cdn.b.com/og.png')).toBeNull(); // outro host (ex.: URL trocada no modo Clássico)
+    expect(remoteImageAllowed(v, 'https://cdn.a.com/outra.png')).toBeNull(); // pré-visualização atualizada
+    expect(remoteImageAllowed(v, 'http://cdn.a.com/og.png')).toBeNull();
+    expect(remoteImageAllowed(defaultVisual(), 'https://cdn.a.com/og.png')).toBeNull();
+    expect(remoteImageAllowed(undefined, 'https://cdn.a.com/og.png')).toBeNull();
+  });
+
   it('revokeRemoteImageConsent só toca atalhos com opt-in', () => {
     const els = [
-      { type: 'widget', widgetType: WIDGET.link, data: { url: 'x', visual: { ...defaultVisual(), remoteImageConsent: { at: 1 } } } },
+      { type: 'widget', widgetType: WIDGET.link, data: { url: 'x', visual: { ...defaultVisual(), remoteImageConsent: { at: 1, src: 'https://a.com/i.png' } } } },
       { type: 'widget', widgetType: WIDGET.link, data: { url: 'y' } },
       { type: 'widget', widgetType: WIDGET.notes, data: { visual: { remoteImageConsent: { at: 1 } } } },
     ];
@@ -255,7 +268,7 @@ describe('layouts', () => {
 
 describe('exportação SVG', () => {
   it('atalho exporta fundo, ícone local e nome escapado; imagem remota nunca entra', async () => {
-    const el = createWidget(WIDGET.link, '1.0.0', 'Link', 0, 0, 240, 56, { ...LEGACY, visual: { ...defaultVisual({ label: '<b>A&B</b>', iconMode: 'preview' }), remoteImageConsent: { at: 1 } } }) as WidgetElement;
+    const el = createWidget(WIDGET.link, '1.0.0', 'Link', 0, 0, 240, 56, { ...LEGACY, visual: { ...defaultVisual({ label: '<b>A&B</b>', iconMode: 'preview' }), remoteImageConsent: { at: 1, src: LEGACY.preview.image } } }) as WidgetElement;
     const svg = await shortcutSVG(sanitizeLink(el.data), el);
     expect(svg).toContain('&lt;b&gt;A&amp;B&lt;/b&gt;');
     expect(svg).toContain('data:image/svg+xml');

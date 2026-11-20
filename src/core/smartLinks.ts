@@ -29,10 +29,11 @@ export interface LinkVisual {
   /** Horizontal: indicador discreto de link externo (↗). */
   showExternal: boolean;
   /**
-   * Opt-in persistente para exibir a imagem REMOTA da pré-visualização. A importação e a colagem externa
-   * removem o campo (um backup não pode se declarar “já autorizado”); duplicar no mesmo navegador mantém.
+   * Opt-in persistente para exibir a imagem REMOTA da pré-visualização, amarrado à URL EXATA autorizada (`src`):
+   * se a pré-visualização mudar de imagem/host por qualquer caminho (modo Clássico, nova pré-visualização), o
+   * opt-in deixa de valer. A importação e a colagem externa removem o campo; duplicar no mesmo navegador mantém.
    */
-  remoteImageConsent?: { at: number };
+  remoteImageConsent?: { at: number; src: string };
 }
 
 export const LINK_LIMITS = { label: 120, url: 2048, iconId: 40 } as const;
@@ -87,7 +88,9 @@ export function sanitizeVisual(raw: unknown): LinkVisual | undefined {
     showLabel: d.showLabel !== false,
     showExternal: d.showExternal !== false,
   };
-  if (typeof c.at === 'number' && Number.isFinite(c.at)) out.remoteImageConsent = { at: c.at };
+  // Sem `src` válido (inclusive formato antigo) não há opt-in: nunca autoriza imagem “qualquer”.
+  const src = typeof c.src === 'string' ? linkTargetUrl(c.src) : null;
+  if (typeof c.at === 'number' && Number.isFinite(c.at) && src && src.startsWith('https:')) out.remoteImageConsent = { at: c.at, src };
   return out;
 }
 
@@ -116,6 +119,13 @@ export function linkTargetUrl(raw: unknown): string | null {
   }
   if ((u.protocol !== 'https:' && u.protocol !== 'http:') || !u.hostname || u.username || u.password) return null;
   return u.href;
+}
+
+/** A imagem remota da pré-visualização pode ser exibida? Só a URL exata autorizada, e só https. */
+export function remoteImageAllowed(v: Pick<LinkVisual, 'remoteImageConsent'> | undefined, previewImage: unknown): string | null {
+  const img = linkTargetUrl(previewImage);
+  if (!img || !img.startsWith('https:') || !v?.remoteImageConsent) return null;
+  return v.remoteImageConsent.src === img ? img : null;
 }
 
 export function isInsecureHttp(raw: unknown): boolean {

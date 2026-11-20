@@ -26,6 +26,7 @@ import {
   linkTargetUrl,
   redactUrl,
   referenceSize,
+  remoteImageAllowed,
   shortcutLayout,
   titleFollowingLabel,
   type LinkIconMode,
@@ -164,7 +165,8 @@ function useMediaSource(data: LinkData): MediaSource {
     const img = data.preview?.image && linkTargetUrl(data.preview.image);
     if (!img) return { kind: 'icon', iconId: icon, reason: 'no-preview' };
     // Privacidade (S1-SEC-011): imagem remota só com opt-in persistente gravado neste navegador.
-    return v.remoteImageConsent ? { kind: 'image', src: img, remote: true } : { kind: 'icon', iconId: icon, reason: 'no-consent' };
+    const allowed = remoteImageAllowed(v, img);
+    return allowed ? { kind: 'image', src: allowed, remote: true } : { kind: 'icon', iconId: icon, reason: 'no-consent' };
   }
   return { kind: 'icon', iconId: icon };
 }
@@ -501,10 +503,13 @@ function Inspector({ element, data, api }: { element: WidgetElement; data: LinkD
             <div className="flex flex-col gap-1.5 mt-2 text-[11px]">
               {!data.preview?.image ? (
                 <div className="text-soft">Sem imagem de pré-visualização. Use “Pré-visualizar” (servidor local) para buscá-la — nada é buscado sozinho.</div>
-              ) : !vis.remoteImageConsent ? (
+              ) : !linkTargetUrl(data.preview.image)?.startsWith('https:') ? (
+                <div className="text-soft">A imagem da pré-visualização não usa https:// — não é exibida.</div>
+              ) : !remoteImageAllowed(vis, data.preview.image) ? (
                 <>
+                  {vis.remoteImageConsent && <div className="text-warn" data-testid="link-consent-stale">A imagem da pré-visualização mudou desde a autorização: confirme de novo.</div>}
                   <div className="text-soft leading-relaxed">A imagem fica em <b>{previewHost}</b>. Exibi-la faz o navegador contatar esse site sempre que o quadro abrir (sem enviar o endereço do Aurora).</div>
-                  <Button onClick={() => patchVisual(id, { remoteImageConsent: { at: Date.now() } })}>Exibir imagem de {previewHost}</Button>
+                  <Button onClick={() => patchVisual(id, { remoteImageConsent: { at: Date.now(), src: data.preview!.image } })}>Exibir imagem de {previewHost}</Button>
                 </>
               ) : (
                 <>

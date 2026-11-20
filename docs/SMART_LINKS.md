@@ -35,7 +35,7 @@ interface LinkData {
     fit: 'cover' | 'contain';
     showLabel: boolean;       // compacto: nome abaixo (false = só ícone)
     showExternal: boolean;    // horizontal: indicador ↗
-    remoteImageConsent?: { at: number };
+    remoteImageConsent?: { at: number; src: string };  // só a imagem https exata autorizada
   };
 }
 ```
@@ -98,6 +98,9 @@ nada quebra.
   já abriam http), com aviso no inspetor. Nunca há navegação ao montar/renderizar.
 - **Opt-in de imagem remota não atravessa backups:** a importação (`parseImport`) e a colagem externa removem
   `remoteImageConsent`, como o `blockActiveContent` faz com HTML. Duplicar no mesmo navegador mantém.
+- **O opt-in é da imagem, não do bloco:** guarda a URL exata autorizada (`src`, só https). Se a imagem da
+  pré-visualização mudar por qualquer caminho — URL trocada no modo Clássico, nova pré-visualização — o atalho
+  volta ao ícone e o inspetor pede nova confirmação (apontamento do Codex no PR #23).
 - **IA, busca e resumo:** o resumo automático (`summarize`, usado no contexto de IA e na exportação genérica)
   leva só `origem + caminho` — query, fragmento e credenciais são omitidos (`redactUrl`). A busca (#14) indexa
   nome exibido, domínio e descrição, nunca a URL. A porta de dados `url:text` continua entregando a URL

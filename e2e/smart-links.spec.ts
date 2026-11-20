@@ -304,3 +304,38 @@ test('links antigos seguem Clássicos; conversão reversível; quatro redes com 
   expect(await page.evaluate((t) => !new DOMParser().parseFromString(t, 'image/svg+xml').querySelector('parsererror'), svg)).toBe(true);
   expect(external).toEqual([]);
 });
+
+test('opt-in da imagem remota vale só para a imagem autorizada: trocar URL no modo Clássico e repré-visualizar não reaproveita', async ({ page }) => {
+  const IMG_A = 'https://cdn.site-a.test/og.png';
+  const IMG_B = 'https://cdn.site-b.test/og.png';
+  let preview = { title: 'Site A', description: 'a', image: IMG_A, siteName: 'A' };
+  await page.route('**/api/link-preview', (r) => r.fulfill({ json: preview }));
+  await page.route('https://cdn.site-*.test/**', (r) => r.fulfill({ contentType: 'image/png', body: PNG_2x2 }));
+  const external = await setup(page);
+  await page.evaluate(() => (window as any).__aurora.actions.pasteContent('https://site-a.test/', [], { x: 0, y: 0 }));
+  const [l] = await links(page);
+  const sc = page.locator(`[data-element-id="${l.id}"] [data-testid="link-shortcut"]`);
+  await page.evaluate((id) => (window as any).__aurora.actions.openWidgetInspector(id), l.id);
+  const insp = page.getByTestId('link-inspector');
+  await insp.getByRole('button', { name: 'Pré-visualizar' }).click();
+  await insp.getByRole('radio', { name: 'Do site' }).click();
+  await expect(sc).toHaveAttribute('data-media', 'icon:globe'); // sem opt-in: nada remoto
+  expect(external.filter((u) => u.includes('cdn.site-'))).toEqual([]);
+  await insp.getByRole('button', { name: 'Exibir imagem de cdn.site-a.test' }).click();
+  await expect(sc).toHaveAttribute('data-media', 'remote');
+  expect((await byId(page, l.id)).data.visual.remoteImageConsent.src).toBe(IMG_A);
+
+  // Clássico: troca a URL no próprio bloco e busca nova pré-visualização (outro host de imagem)
+  await insp.getByRole('radio', { name: 'Clássico' }).click();
+  const block = page.locator(`[data-element-id="${l.id}"]`);
+  await block.locator('input').fill('https://site-b.test/');
+  preview = { title: 'Site B', description: 'b', image: IMG_B, siteName: 'B' };
+  await block.getByRole('button', { name: /Pré-visualizar/ }).click();
+  await expect.poll(async () => (await byId(page, l.id)).data.preview?.image).toBe(IMG_B);
+  await insp.getByRole('radio', { name: 'Atalho visual' }).click();
+  await expect(sc).toHaveAttribute('data-media', 'icon:globe'); // não carrega a imagem do host novo sozinho
+  await expect(insp.getByTestId('link-consent-stale')).toBeVisible();
+  await expect(insp.getByRole('button', { name: 'Exibir imagem de cdn.site-b.test' })).toBeVisible();
+  expect(external.filter((u) => u.includes('cdn.site-b.test'))).toEqual([]);
+  expect(await opened(page)).toEqual([]);
+});
