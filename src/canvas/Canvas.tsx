@@ -15,6 +15,7 @@ import { cancelGesture, currentGesture, doubleClick, elementAt, isSpaceHeld, poi
 import { hitHandle, linearHandles, transformHandles } from './handles';
 import { handleCursor } from '../core/transform';
 import { isLinear } from '../core/schema';
+import { canStartRadialHold, cancelRadialHold, radialConsumesContextMenu, radialDown, radialMove, radialUp, setRadialBounds } from './radialGesture';
 
 export const WIDGET_DRAG_MIME = 'application/x-aurora-widget';
 
@@ -152,9 +153,19 @@ export function Canvas() {
 
   const onPointerDown = (e: RPointerEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
+    if (e.button !== 2) cancelRadialHold(); // outro botão durante a contagem cancela a roda
     if (target.closest('[data-text-editor], [data-testid="text-editor"]')) return;
     if (target.closest(INTERACTIVE) && getState().tool === 'select') return;
-    if (e.button === 2) return;
+    if (e.button === 2) {
+      // Issue #15: segurar o direito em área vazia abre a Aurora Wheel; clique curto mantém o menu tradicional.
+      if (target.closest(INTERACTIVE) || target.closest('[data-widget-root], [data-widget-body]')) return;
+      const p = info(e);
+      if (canStartRadialHold(e, !elementAt(p.world) && !isSpaceHeld())) {
+        try { ref.current!.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+        radialDown(e.pointerId, { x: e.clientX, y: e.clientY }, p.world);
+      }
+      return;
+    }
     (document.activeElement as HTMLElement | null)?.blur?.();
     ref.current!.focus({ preventScroll: true });
     try { ref.current!.setPointerCapture(e.pointerId); } catch { /* ignore */ }
@@ -167,6 +178,7 @@ export function Canvas() {
 
   const onPointerMove = (e: RPointerEvent<HTMLDivElement>) => {
     const p = info(e);
+    if (radialMove(e.pointerId, { x: e.clientX, y: e.clientY })) return;
     pointerMove(p);
     if (!currentGesture()) setCursor(computeCursor(p));
     else if (currentGesture()?.type === 'pan') setCursor('grabbing');
@@ -174,14 +186,19 @@ export function Canvas() {
 
   const onPointerUp = (e: RPointerEvent<HTMLDivElement>) => {
     try { ref.current!.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    if (radialUp(e.pointerId, { x: e.clientX, y: e.clientY })) return;
     pointerUp(info(e));
     setCursor(computeCursor(info(e)));
   };
 
   useEffect(() => {
-    const onBlur = () => cancelGesture();
+    const onBlur = () => { cancelGesture(); cancelRadialHold(); };
     window.addEventListener('blur', onBlur);
-    return () => window.removeEventListener('blur', onBlur);
+    // A roda é limitada à área visível do canvas, abaixo da barra de ferramentas (laterais redimensionáveis, #10).
+    setRadialBounds(() => { const r = getCanvasRect(); return { left: r.left, top: r.top + 56, right: r.right, bottom: r.bottom }; });
+    // Trocar de ferramenta durante a contagem cancela o gesto.
+    const unsub = useEditor.subscribe((s) => s.tool, () => cancelRadialHold());
+    return () => { window.removeEventListener('blur', onBlur); unsub(); cancelRadialHold(); };
   }, []);
 
   const grid = settings?.grid && camera.zoom > 0.3;
@@ -205,7 +222,7 @@ export function Canvas() {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={(e) => pointerCancel(info(e))}
+      onPointerCancel={(e) => { cancelRadialHold(); pointerCancel(info(e)); }}
       onPointerLeave={() => { if (!currentGesture() && getState().hoverId) setState({ hoverId: null }); }}
       onDoubleClick={(e) => {
         const target = e.target as HTMLElement;
@@ -216,6 +233,9 @@ export function Canvas() {
         const target = e.target as HTMLElement;
         if (target.closest('input, textarea, [contenteditable="true"]')) return;
         e.preventDefault();
+        // Gesto da roda rastreado: o menu tradicional sai no “up” do clique curto (o contextmenu chega no down no
+        // Linux/macOS e no up no Windows), nunca daqui — assim não abre duas vezes nem pisca antes da roda.
+        if (radialConsumesContextMenu()) return;
         const p = info(e);
         const hit = elementAt(p.world);
         if (hit && !getState().selectedIds.includes(hit.id)) setState({ selectedIds: [hit.id] });

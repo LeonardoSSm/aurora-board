@@ -98,6 +98,13 @@ export interface EditorState {
   shortcutsOpen: boolean;
   dialog: DialogState | null;
   contextMenu: ContextMenuState | null;
+  /**
+   * Issue #15 — Aurora Wheel aberta. `center`/`origin` em coordenadas da janela (o desenho pode deslocar-se para
+   * caber; o item nasce em `world`, o ponto original). `hover` = fatia ativa (ponteiro ou teclado).
+   */
+  radial: { center: { x: number; y: number }; origin: { x: number; y: number }; world: { x: number; y: number }; sub: 'shape' | 'connector' | 'more' | null; hover: number | null; source: 'pointer' | 'keyboard'; openedAt: number } | null;
+  /** Issue #15 — fatias favoritas da roda (configuração LOCAL; nunca no quadro ou backup). */
+  radialFavorites: import('../core/radial').RadialItemId[];
   /** Pedido para o painel de propriedades mostrar/focar as configurações de um widget. */
   inspectorFocus: { id: string; section?: string; nonce: number } | null;
   /** Widget em edição rápida no próprio bloco (duplo clique), ex.: valor ou fórmula. */

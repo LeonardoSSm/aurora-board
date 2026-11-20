@@ -191,6 +191,8 @@ const SHORTCUTS: [string, string][] = [
   ['Alt + arrastar', 'Duplicar arrastando'],
   ['Duplo clique', 'Escrever na forma / criar texto / entrar no grupo'],
   ['Q', 'Manter ferramenta ativa'],
+  ['Segurar botão direito (vazio)', 'Aurora Wheel: soltar na fatia cria ali (clique curto = menu de sempre)'],
+  ['W', 'Abrir a Aurora Wheel pelo teclado (setas, Enter, 1–8, Esc)'],
   ['?', 'Esta ajuda'],
 ];
 

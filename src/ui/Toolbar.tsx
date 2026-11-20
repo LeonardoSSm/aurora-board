@@ -1,4 +1,5 @@
-import { Lock, LockOpen } from 'lucide-react';
+import { Lock, LockOpen, Plus } from 'lucide-react';
+import { openRadialFromKeyboard } from './radialOpen';
 import { useEditor, setState } from '../store/editor';
 import { setConnectionKind, setTool } from '../store/actions';
 import type { LinkKind } from '../core/schema';
@@ -27,6 +28,17 @@ export function Toolbar() {
           onClick={() => setState({ toolLocked: !locked })}
         >
           {locked ? <Lock size={15} /> : <LockOpen size={15} />}
+        </button>
+        <button
+          type="button"
+          className="grid place-items-center w-9 h-9 rounded-lg text-fg-2 hover:bg-panel-3"
+          title="Aurora Wheel: criar no quadro (W ou segure o botão direito num espaço vazio)"
+          aria-label="Aurora Wheel (menu de criação)"
+          aria-haspopup="menu"
+          data-testid="radial-open-button"
+          onClick={() => openRadialFromKeyboard(null)}
+        >
+          <Plus size={17} strokeWidth={1.9} />
         </button>
         <div className="w-px h-6 bg-line mx-0.5" />
         {TOOLS.map((t, i) => (

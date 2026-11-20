@@ -1,5 +1,6 @@
 import type { PersistenceAdapter } from '../persistence/adapter';
 import { sanitizeNavigationPrefs, sanitizeZoomPrefs } from '../core/camera';
+import { loadedFavorites } from './radialActions';
 import { sanitizeAnimationPrefs } from '../core/animation';
 import { sanitizePanelWidths } from '../core/panels';
 import { sanitizeHtmlAiGrants } from './actions';
@@ -70,7 +71,7 @@ export async function initEditor(adapter: PersistenceAdapter, opts: { demo?: boo
       clearJournal(journal.boardId);
     }
 
-    setState({ zoomPrefs: sanitizeZoomPrefs(await adapter.getSetting('zoomPreferences')), navigationPrefs: sanitizeNavigationPrefs(await adapter.getSetting('navigationPreferences')), animationPrefs: sanitizeAnimationPrefs(await adapter.getSetting('animationPreferences')), panelWidths: sanitizePanelWidths(await adapter.getSetting('panelWidths')), htmlAiGrants: sanitizeHtmlAiGrants(await adapter.getSetting('htmlAiGrants')) });
+    setState({ zoomPrefs: sanitizeZoomPrefs(await adapter.getSetting('zoomPreferences')), navigationPrefs: sanitizeNavigationPrefs(await adapter.getSetting('navigationPreferences')), animationPrefs: sanitizeAnimationPrefs(await adapter.getSetting('animationPreferences')), panelWidths: sanitizePanelWidths(await adapter.getSetting('panelWidths')), htmlAiGrants: sanitizeHtmlAiGrants(await adapter.getSetting('htmlAiGrants')), radialFavorites: loadedFavorites(await adapter.getSetting('radialFavorites')) });
     const last = await adapter.getSetting<string>('lastWorkspace');
     const workspaceId = workspaces.some((w) => w.id === last) ? last! : workspaces[0].id;
     setState({ workspaces, workspaceId });

@@ -97,6 +97,29 @@ button:disabled {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 
+/* Aurora Wheel (issue #15): disco cinza neutro translúcido, borda fina, sombra suave, blur leve com fallback. */
+.radial-disc { overflow: visible; filter: drop-shadow(0 14px 30px rgba(0, 0, 0, 0.45)); cursor: default; }
+.radial-halo { fill: rgba(30, 34, 42, 0.55); stroke: rgba(200, 210, 225, 0.14); stroke-width: 1; }
+.radial-slice { fill: rgba(64, 70, 82, 0.78); stroke: rgba(210, 218, 230, 0.16); stroke-width: 1; transition: fill 90ms ease-out; }
+.radial-slice.is-active { fill: rgba(104, 118, 146, 0.92); stroke: rgba(235, 240, 250, 0.45); }
+.radial-center { fill: rgba(28, 32, 40, 0.9); stroke: rgba(210, 218, 230, 0.22); stroke-width: 1; }
+.radial-item { pointer-events: auto; border-radius: 10px; padding: 2px 0; outline: none; }
+.radial-item:focus-visible { box-shadow: 0 0 0 2px #9aa3ff; }
+.radial-panel { background: rgba(40, 45, 56, 0.94); border: 1px solid rgba(210, 218, 230, 0.18); box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45); color: #e3e8f0; }
+@supports (backdrop-filter: blur(4px)) {
+  .radial-open .radial-panel { backdrop-filter: blur(6px); }
+}
+.radial-open { animation: radial-in 120ms ease-out; transform-origin: center; }
+@keyframes radial-in { from { opacity: 0; transform: scale(0.88); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .radial-open { animation: none; }
+  .radial-slice { transition: none; }
+}
+@media (forced-colors: active) {
+  .radial-slice { fill: Canvas; stroke: CanvasText; }
+  .radial-slice.is-active { fill: Highlight; }
+}
+
 /* Markdown dentro do bloco de notas */
 .md {
   line-height: 1.55;

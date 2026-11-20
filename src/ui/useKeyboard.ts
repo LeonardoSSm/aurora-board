@@ -31,6 +31,7 @@ import {
 import { flushSave } from '../persistence/autosave';
 import { abortDraft, cancelGesture, finishDraft, isDrafting, setSpaceHeld } from '../canvas/controller';
 import { TOOL_BY_KEY } from './tools';
+import { openRadialFromKeyboard } from './radialOpen';
 import { acceptsBoundText, isText } from '../core/schema';
 
 /** Alvo é um campo de digitação? Atalhos não devem interferir. */
@@ -88,6 +89,8 @@ export function useKeyboard() {
       if (e.shiftKey && (e.code === 'Digit1' || e.key === '!')) { e.preventDefault(); zoomToFit(); return; }
       if (e.shiftKey && (e.code === 'Digit2' || e.key === '@')) { e.preventDefault(); zoomToSelection(); return; }
       if (e.key === '?') { setState({ shortcutsOpen: true }); return; }
+      // Issue #15: W abre a Aurora Wheel (alternativa de teclado ao gesto do botão direito).
+      if (key === 'w' && !e.shiftKey && !e.altKey && !s.radial) { e.preventDefault(); openRadialFromKeyboard(lastPointerWorld); return; }
 
       switch (e.key) {
         case 'Escape':
