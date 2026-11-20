@@ -113,7 +113,9 @@ export function flightPath(from: Camera, to: Camera, vp: Viewport, rho = FLIGHT_
     };
   }
   const b = (i: 0 | 1) => (w1 * w1 - w0 * w0 + (i ? -1 : 1) * rho2 * rho2 * d * d) / (2 * (i ? w1 : w0) * rho2 * d);
-  const r = (bi: number) => Math.log(Math.sqrt(bi * bi + 1) - bi);
+  // ln(√(b²+1) − b) = −asinh(b). A forma direta cancela para b grande (zoom muda muito, centro quase parado):
+  // √(b²+1) − b arredonda para 0 → comprimento infinito e quadros NaN (apontamento do PR #16).
+  const r = (bi: number) => -Math.asinh(bi);
   const r0 = r(b(0)), r1 = r(b(1));
   const S = (r1 - r0) / rho;
   const coshR0 = Math.cosh(r0), sinhR0 = Math.sinh(r0);

@@ -32,6 +32,7 @@ A máquina de estados é pura (`src/core/companion.ts`: `visualState`, prioridad
 - **Controlador único** `src/integrations/aiChat.ts`: estado de requisição por assistente (sending/error/cancelled/repliedAt/unread) num módulo, fora dos componentes. Bloco clássico, personagem, dock e conversa completa usam `sendAIMessage`/`cancelAIRequest`/`useAIRequest`. Desmontar o bloco (fora da tela), trocar o visual ou abrir/fechar o mini chat **não cancela nem duplica** a conversa; um segundo envio durante um pendente é recusado.
 - **Mesmo contexto e segurança:** cada envio recalcula `contextSources` → `buildContextText` → `buildSystemPrompt` com o estado atual — as mesmas funções, com `financialTaint` e as concessões locais de bancos/HTML. Estar no dock **não autoriza nada**: consulta bancária sem concessão continua fora do prompt (teste unitário).
 - **Lugar certo:** trocar de quadro ou excluir o assistente aborta o pedido pendente; a resposta nunca é gravada em outro quadro/assistente.
+- **Cancelamento desde o início** (apontamento P2 do PR #19): o `AbortController` nasce ANTES da descoberta do provedor (`fetchAIStatus`) e é a identidade do pedido. Descoberta e envio são abortáveis — **Parar** age na hora, mesmo que a rede ignore o sinal. Antes de enviar e antes de gravar o controlador confere: pedido atual, não cancelado, mesmo quadro, assistente existe. Um pedido abandonado (troca de quadro, exclusão, excluir + desfazer com o mesmo id) não recria estado, não chama o provedor e não grava nada; uma resposta tardia de um pedido cancelado nunca afeta o pedido seguinte.
 - **Ações propostas** nunca são aplicadas pelo mini chat nem ao clicar no balão: o mini chat mostra “N ação(ões) proposta(s): revisar e aprovar na conversa completa”.
 - **Moldura dinâmica:** `WidgetPlugin.frameFor(data)` (novo, opcional) escolhe `bare` no visual Personagem e `standard` no Clássico.
 
@@ -54,12 +55,13 @@ A máquina de estados é pura (`src/core/companion.ts`: `visualState`, prioridad
 - **Até 6 personagens animando ao mesmo tempo**; os demais ficam estáticos com chat funcional. O dock usa retratos estáticos.
 - Standby **nunca chama a API** (E2E: 8 personagens por 3 s → 0 requisições).
 - Mini chat: `role="dialog"`, foco no campo ao abrir e devolvido ao fechar, Esc fecha; `aria-live="polite"` só para resposta final/erro; botões com nome; alvos grandes no toque (testado no Pixel 7).
+- **Conversa completa é modal** (apontamento P2 do PR #19, `src/ui/useModalFocus.ts`): foco entra no diálogo ao abrir, Tab/Shift+Tab ficam contidos, foco perdido para o `<body>` volta, Esc fecha só o diálogo e o foco volta ao personagem/dock do assistente (o mini chat que abriu já não existe). Backspace fora de campo não volta a página (o WebKit navegava). O guarda de `useKeyboard` bloqueia os atalhos do quadro com a conversa completa, o Command Center, a captura, o checkpoint ou qualquer `[aria-modal="true"]` abertos — Delete nunca exclui o assistente atrás do diálogo.
 
 ## Testes
 
 - `tests/unit/companion.test.ts` — dados/compatibilidade, preferências, máquina de estados, microanimações.
-- `tests/unit/ai-chat.test.ts` — mesmo histórico, sending → idle, não lida, sem duplicidade, dois assistentes isolados, cancelar, troca de quadro, erro, contexto autorizado × não autorizado, banco bloqueado no dock.
-- `e2e/ai-companions.spec.ts` (IA simulada) — personagem/mini chat, dock, não lida, dois assistentes, erro, propostas exigem aprovação, standby sem API e limite de animação, movimento reduzido + compatibilidade + desfazer, inspetor; `e2e/mobile.spec.ts` — toque no personagem e dock.
+- `tests/unit/ai-chat.test.ts` — mesmo histórico, sending → idle, não lida, sem duplicidade, dois assistentes isolados, cancelar, troca de quadro, erro, contexto autorizado × não autorizado, banco bloqueado no dock; cancelamento e concorrência durante a descoberta do provedor (cancelar, trocar de quadro, excluir, excluir + desfazer, duplicado, resposta tardia, provedor que ignora o sinal).
+- `e2e/ai-companions.spec.ts` (IA simulada) — personagem/mini chat, dock, não lida, dois assistentes, erro, propostas exigem aprovação, standby sem API e limite de animação, movimento reduzido + compatibilidade + desfazer, inspetor; J: conversa completa modal (foco, Tab contido, Delete/setas/ferramentas/Ctrl+D/Ctrl+A sem efeito, foco perdido volta, Esc, foco devolvido); `e2e/mobile.spec.ts` — toque no personagem e dock.
 
 ## Fora desta entrega
 

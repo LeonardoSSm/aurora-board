@@ -17,6 +17,7 @@
 import { createWidget, uid } from '../core/elements';
 import type { AuroraElement, Board } from '../core/schema';
 import { WIDGET } from '../core/widgetIds';
+import { rebaseHistoryWith } from '../core/history';
 import { getWidget } from '../widgets/registry';
 import { getAdapter, hasUnsavedWork, runExclusive } from '../persistence/autosave';
 import { migrateBoard } from '../persistence/migrations';
@@ -103,8 +104,15 @@ async function appendToClosedBoard(boardId: string, input: CaptureInput): Promis
     await adapter.saveBoard(next);
     // O quadro foi aberto enquanto gravávamos? Injeta também no estado para o autosave não perder o item.
     const st = getState();
-    if (st.boardId === boardId && !st.elements.some((e) => e.id === el.id)) addElements([el], false);
-    setState({ boards: st.boards.map((b) => (b.id === boardId ? { ...b, updatedAt: next.updatedAt } : b)) });
+    const injected = st.boardId === boardId && !st.elements.some((e) => e.id === el.id);
+    if (injected) addElements([el], false); // vira uma entrada própria de desfazer
+    // Histórico de desfazer retido desse quadro (editado antes nesta sessão): os retratos ganham o item, senão
+    // desfazer/refazer uma edição antiga o apagaria e o autosave gravaria a perda (apontamento do PR #18).
+    const after = getState();
+    const kept = after.history[boardId];
+    const patch: Partial<typeof after> = { boards: after.boards.map((b) => (b.id === boardId ? { ...b, updatedAt: next.updatedAt } : b)) };
+    if (kept && !injected) patch.history = { ...after.history, [boardId]: rebaseHistoryWith(kept, [el]) };
+    setState(patch);
     lastCapture = { boardId, elementId: el.id, boardName: board.name };
     return lastCapture;
   });

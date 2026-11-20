@@ -55,3 +55,25 @@ export function redoStep(stack: HistoryStack): { stack: HistoryStack; entry: His
   if (!entry) return null;
   return { stack: { undo: [...stack.undo, entry], redo: stack.redo.slice(0, -1) }, entry };
 }
+
+/**
+ * Elementos acrescentados POR FORA do histórico (ex.: captura rápida gravada direto num quadro fechado) passam a
+ * existir em todos os retratos `before`/`after`: desfazer/refazer edições anteriores não os apaga. Retratos
+ * compartilhados entre entradas continuam compartilhados (sem duplicar memória à toa).
+ */
+export function rebaseHistoryWith(stack: HistoryStack, added: AuroraElement[]): HistoryStack {
+  if (!added.length || (!stack.undo.length && !stack.redo.length)) return stack;
+  const memo = new Map<AuroraElement[], AuroraElement[]>();
+  const fix = (snap: AuroraElement[]) => {
+    let out = memo.get(snap);
+    if (!out) {
+      const have = new Set(snap.map((e) => e.id));
+      const missing = added.filter((e) => !have.has(e.id));
+      out = missing.length ? [...snap, ...missing] : snap;
+      memo.set(snap, out);
+    }
+    return out;
+  };
+  const entry = (e: HistoryEntry): HistoryEntry => ({ ...e, before: fix(e.before), after: fix(e.after) });
+  return { undo: stack.undo.map(entry), redo: stack.redo.map(entry) };
+}

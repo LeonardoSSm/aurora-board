@@ -2,7 +2,8 @@
  * AI Companions (issue #13): conversa completa num diálogo — renderiza o MESMO componente do bloco clássico
  * (contexto, autorização, propostas com prévia e aprovação, limpar conversa). Nada é duplicado.
  */
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { useModalFocus } from '../useModalFocus';
 import { X } from 'lucide-react';
 import { useEditor, setState } from '../../store/editor';
 import { updateWidgetData } from '../../store/actions';
@@ -32,15 +33,28 @@ function Dialog({ el }: { el: WidgetElement }) {
       return typeof updater === 'function' ? (updater as (d: unknown) => unknown)(cur) : { ...(cur as object), ...(updater as object) };
     }, opts?.coalesce);
   const close = () => setState({ companionFull: null });
+  // Modal de verdade: foco entra, fica contido e volta a quem abriu (o personagem/dock). Os atalhos do quadro
+  // também param pelo guarda de `useKeyboard` (`companionFull`), mesmo se o foco escapar.
+  const ref = useRef<HTMLDivElement>(null);
+  useModalFocus(ref, undefined, () =>
+    document.querySelector<HTMLElement>(`[data-testid="companion-character"][data-id="${CSS.escape(el.id)}"] [data-testid="companion-open"]`)
+    ?? document.querySelector<HTMLElement>(`[data-testid="companion-dock-item"][data-id="${CSS.escape(el.id)}"]`)
+    ?? document.querySelector<HTMLElement>('[data-testid="canvas"]'));
   return (
     <div className="fixed inset-0 z-[80] grid place-items-center bg-[#060a12bb] p-3" onPointerDown={(e) => e.target === e.currentTarget && close()}>
       <div
+        ref={ref}
         role="dialog"
         aria-modal="true"
+        tabIndex={-1}
         aria-label={`Conversa completa com ${companionName(el)}`}
         data-testid="companion-full"
-        className="w-full max-w-[560px] h-[min(80vh,720px)] rounded-2xl border border-[#405a78] bg-[#1a293c] shadow-[0_30px_80px_#000b] flex flex-col"
-        onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape') close(); }}
+        className="w-full max-w-[560px] h-[min(80vh,720px)] rounded-2xl border border-[#405a78] bg-[#1a293c] shadow-[0_30px_80px_#000b] flex flex-col outline-none"
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          // Um diálogo aninhado (ex.: confirmação) trata o próprio Esc.
+          if (e.key === 'Escape' && !(e.target as HTMLElement).closest?.('[role="dialog"] [role="dialog"]')) { e.preventDefault(); close(); }
+        }}
       >
         <div className="flex items-center justify-between px-4 h-11 border-b border-line">
           <h2 className="text-[14px] font-bold truncate">{companionName(el)} — conversa completa</h2>

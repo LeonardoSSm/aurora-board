@@ -2,8 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sendChat = vi.fn();
+const READY = { state: 'ready', providers: [{ id: 'openai', name: 'OpenAI', configured: true, defaultModel: 'x' }] };
+const fetchAIStatus = vi.fn(async () => READY);
 vi.mock('../../src/integrations/aiClient', () => ({
-  fetchAIStatus: async () => ({ state: 'ready', providers: [{ id: 'openai', name: 'OpenAI', configured: true, defaultModel: 'x' }] }),
+  fetchAIStatus: () => fetchAIStatus(),
   sendChat: (...a: unknown[]) => sendChat(...a),
 }));
 
@@ -37,6 +39,8 @@ function deferred() {
 beforeEach(() => {
   __resetAIChat();
   sendChat.mockReset();
+  fetchAIStatus.mockReset();
+  fetchAIStatus.mockImplementation(async () => READY);
   setState({ ...initialEditorState, status: 'ready', boardId: 'B1', elements: [], history: {} });
 });
 afterEach(() => __resetAIChat());
@@ -133,6 +137,126 @@ describe('envio compartilhado', () => {
     sendChat.mockRejectedValue(new Error('Limite de uso atingido'));
     expect(await sendAIMessage(a.id, 'x')).toBe(false);
     expect(requestState(a.id)).toMatchObject({ status: 'error', error: 'Limite de uso atingido' });
+    expect(msgs(a.id).map((m) => m.role)).toEqual(['user']);
+  });
+});
+
+/** Codex P2 (PR #19): cancelamento desde a descoberta do provedor e identidade do pedido. */
+describe('cancelamento e concorrência durante a descoberta do provedor', () => {
+  const flush = async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); };
+  function pendingStatus() {
+    const d = deferred();
+    fetchAIStatus.mockImplementation(() => d.p as Promise<typeof READY>);
+    return d;
+  }
+
+  it('cancelar enquanto descobre o provedor: estado cancelado na hora, nenhum envio, nada gravado', async () => {
+    const a = ai();
+    setState({ elements: [a] });
+    const st = pendingStatus();
+    const p = sendAIMessage(a.id, 'x');
+    await flush();
+    expect(requestState(a.id).status).toBe('sending');
+    cancelAIRequest(a.id);
+    expect(await p).toBe(false);
+    expect(requestState(a.id).status).toBe('cancelled');
+    st.resolve(READY);
+    await flush();
+    expect(sendChat).not.toHaveBeenCalled();
+    expect(msgs(a.id)).toEqual([]);
+  });
+
+  it('trocar de quadro durante a descoberta: nenhum envio, estado não é recriado, outro quadro intacto', async () => {
+    const a = ai();
+    setState({ elements: [a] });
+    const st = pendingStatus();
+    const p = sendAIMessage(a.id, 'x');
+    await flush();
+    const other = ai('Outro');
+    setState({ boardId: 'B2', elements: [other] });
+    st.resolve(READY);
+    expect(await p).toBe(false);
+    expect(sendChat).not.toHaveBeenCalled();
+    expect(requestState(a.id).status).toBe('idle');
+    expect(getState().elements[0]).toBe(other);
+  });
+
+  it('excluir o assistente durante a descoberta: nenhum envio e nada é recriado', async () => {
+    const a = ai();
+    setState({ elements: [a] });
+    const st = pendingStatus();
+    const p = sendAIMessage(a.id, 'x');
+    await flush();
+    setState({ elements: [] });
+    st.resolve(READY);
+    expect(await p).toBe(false);
+    expect(sendChat).not.toHaveBeenCalled();
+    expect(requestState(a.id).status).toBe('idle');
+  });
+
+  it('excluir e desfazer (mesmo id) durante a resposta: a resposta antiga não é gravada', async () => {
+    const a = ai();
+    setState({ elements: [a] });
+    const d = deferred();
+    sendChat.mockImplementation(() => d.p); // ignora o sinal de propósito (resposta chega mesmo assim)
+    const p = sendAIMessage(a.id, 'x');
+    await flush();
+    const restored = getState().elements[0];
+    setState({ elements: [] });
+    setState({ elements: [restored] });
+    d.resolve({ text: 'tardia', provider: 'openai', model: 'x' });
+    expect(await p).toBe(false);
+    expect(msgs(a.id).map((m) => m.role)).toEqual(['user']);
+    expect(requestState(a.id).status).toBe('idle');
+  });
+
+  it('sem duplicado durante a descoberta: segundo envio recusado, um único pedido ao provedor', async () => {
+    const a = ai();
+    setState({ elements: [a] });
+    const st = pendingStatus();
+    sendChat.mockResolvedValue({ text: 'r', provider: 'openai', model: 'x' });
+    const first = sendAIMessage(a.id, 'um');
+    expect(await sendAIMessage(a.id, 'dois')).toBe(false);
+    st.resolve(READY);
+    expect(await first).toBe(true);
+    expect(sendChat).toHaveBeenCalledTimes(1);
+    expect(msgs(a.id).map((m) => m.content)).toEqual(['um', 'r']);
+  });
+
+  it('pedido cancelado que responde tarde não grava nem muda o estado do pedido seguinte', async () => {
+    const a = ai();
+    setState({ elements: [a] });
+    const late = deferred(), next = deferred();
+    sendChat.mockImplementationOnce(() => late.p).mockImplementationOnce(() => next.p);
+    const p1 = sendAIMessage(a.id, 'primeira');
+    await flush();
+    cancelAIRequest(a.id);
+    // `late` ignora o sinal: o cancelamento não espera a rede.
+    expect(await p1).toBe(false);
+    expect(requestState(a.id).status).toBe('cancelled');
+    const p2 = sendAIMessage(a.id, 'segunda');
+    await flush();
+    expect(requestState(a.id).status).toBe('sending');
+    late.resolve({ text: 'resposta da primeira (tardia)', provider: 'openai', model: 'x' });
+    await flush();
+    expect(requestState(a.id).status).toBe('sending');
+    next.resolve({ text: 'resposta da segunda', provider: 'openai', model: 'x' });
+    expect(await p2).toBe(true);
+    expect(msgs(a.id).map((m) => m.content)).toEqual(['primeira', 'segunda', 'resposta da segunda']);
+    expect(sendChat).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancelar durante a resposta mesmo que o provedor ignore o sinal: resposta descartada', async () => {
+    const a = ai();
+    setState({ elements: [a] });
+    const d = deferred();
+    sendChat.mockImplementation(() => d.p);
+    const p = sendAIMessage(a.id, 'x');
+    await flush();
+    cancelAIRequest(a.id);
+    d.resolve({ text: 'não deveria entrar', provider: 'openai', model: 'x' });
+    expect(await p).toBe(false);
+    expect(requestState(a.id).status).toBe('cancelled');
     expect(msgs(a.id).map((m) => m.role)).toEqual(['user']);
   });
 });

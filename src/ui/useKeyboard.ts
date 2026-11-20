@@ -53,7 +53,14 @@ export function setLastPointerWorld(p: { x: number; y: number } | null) { lastPo
 
 export function useKeyboard() {
   useEffect(() => {
-    const modalOpen = () => { const s = getState(); return !!s.dialog || s.shortcutsOpen || s.boardsPanelOpen; };
+    // Com qualquer diálogo modal aberto, os atalhos do quadro (Delete, setas, ferramentas, Esc…) não agem no
+    // canvas atrás dele — mesmo se o foco tiver escapado do diálogo. Estados conhecidos + qualquer
+    // `[aria-modal="true"]` no documento (pareamento, finanças e futuros diálogos).
+    const modalOpen = () => {
+      const s = getState();
+      return !!s.dialog || s.shortcutsOpen || s.boardsPanelOpen || !!s.companionFull || s.commandOpen || s.captureOpen || !!s.checkpointEditor
+        || !!document.querySelector('[role="dialog"][aria-modal="true"]');
+    };
 
     const onKeyDown = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
@@ -63,7 +70,9 @@ export function useKeyboard() {
       // (não são teclas de digitação). Com diálogo aberto, nada.
       if (mod && !e.shiftKey && !e.altKey && key === 'k') { e.preventDefault(); openCommandCenter(); return; }
       if (mod && e.shiftKey && !e.altKey && e.code === 'Space') { e.preventDefault(); openCapture(); return; }
-      if (isTypingTarget(e.target) || modalOpen()) return;
+      if (isTypingTarget(e.target)) return;
+      // Com modal aberto e foco fora de campo, Backspace não pode virar “voltar página” (WebKit).
+      if (modalOpen()) { if (e.key === 'Backspace') e.preventDefault(); return; }
       const s = getState();
       if (s.editingTextId) return;
 

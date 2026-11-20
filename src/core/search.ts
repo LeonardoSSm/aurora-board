@@ -49,7 +49,14 @@ export const FILTER_LABEL: Record<SearchFilter, string> = { all: 'Tudo', boards:
 
 const MAX_BODY = 4000;
 const clip = (s: string) => (s.length > MAX_BODY ? s.slice(0, MAX_BODY) : s);
-const stripMarkdown = (md: string) => md.replace(/```[\s\S]*?```/g, ' ').replace(/[#>*_`~\-[\]()!|]/g, ' ').replace(/https?:\/\/\S+/g, ' ');
+/**
+ * URLs saem INTEIRAS antes de qualquer troca de pontuação: trocar `-`, `_`, `#`… por espaço antes partia a URL e
+ * deixava o resto (ex.: `access_token=…`) pesquisável e visível no trecho (apontamento do PR #18). Cobre
+ * qualquer esquema (`https:`, `ftp:`, `mailto:`, `data:`…) e endereços `www.`.
+ */
+const URL_RE = /\b(?:[a-z][a-z0-9+.-]*:\/\/|mailto:|data:|www\.)[^\s<>"'`]+/gi;
+export const stripUrls = (s: string) => s.replace(URL_RE, ' ');
+const stripMarkdown = (md: string) => stripUrls(md.replace(/```[\s\S]*?```/g, ' ')).replace(/[#>*_`~\-[\]()!|]/g, ' ');
 
 /** Widgets cujo conteúdo NUNCA é indexado (privacidade): só o título. */
 export const CONTENT_EXCLUDED = new Set<string>([
