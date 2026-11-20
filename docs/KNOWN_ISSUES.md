@@ -66,6 +66,15 @@ Estado ao final do ciclo 2. Itens marcados com ⚠ afetam uso real; os demais s�
 - O tamanho mínimo de redimensionamento é o genérico do editor (4 px); abaixo de ~24 px a logo deixa de ser legível.
 - Copiar um tile vinculado para outro quadro sem o bloco de IA mantém o id antigo e mostra “Vínculo ausente” até ser religado.
 
+## Smart Links (issue #22)
+
+- Imagem enviada aceita só PNG, JPEG e WebP (até 2 MB). GIF animado e SVG ficam para um ciclo futuro (docs/SMART_LINKS.md).
+- Não há favicon: a pré-visualização do servidor local só traz a imagem Open Graph, e buscar favicons no navegador contactaria terceiros. O ícone automático por domínio cobre os sites conhecidos; os demais usam o globo.
+- A imagem remota “Do site” depende do site continuar servindo o mesmo endereço; se falhar, o atalho volta ao ícone. Ela nunca entra em PNG/SVG exportados.
+- Ícones de marca são referenciais (marcas dos titulares; vetores do Simple Icons, CC0). Antes de distribuição comercial, revisar as diretrizes de cada marca (src/assets/link-icons/README.md).
+- O nome no SVG exportado é cortado por estimativa de largura (sem medir a fonte); em nomes longos o corte pode diferir alguns caracteres do “…” da tela.
+- Abrir o atalho é bloqueado pelo navegador se o clique não for reconhecido como gesto do usuário (ex.: alguns leitores de tela que disparam cliques sintéticos); o botão “Abrir link” das Propriedades funciona nesses casos.
+
 ## Persistência
 
 - ⚠ **Diário de recuperação no `localStorage` (~5 MB)**: quadros muito grandes (> ~10.000 elementos, ~2,5 MB por 5.000) não cabem; o IndexedDB continua gravando normalmente. Se o navegador fechar no meio de uma gravação de um quadro desse tamanho, a última alteração pode se perder.

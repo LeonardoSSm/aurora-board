@@ -68,6 +68,7 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Problemas e limitações conhecidos |
 | [docs/AI_ACTIONS.md](docs/AI_ACTIONS.md) | Ações da IA (contrato v2): blocos de valor, lançamentos financeiros, validação, prévia e confirmação |
 | [docs/AI_TILES.md](docs/AI_TILES.md) | AI Tiles: decisões, modos visual/funcional, procedência e condições de uso das logos |
+| [docs/SMART_LINKS.md](docs/SMART_LINKS.md) | Smart Links (L1): atalhos visuais `[ícone] Nome`, clique × arrasto, ícones locais, imagens, privacidade, compatibilidade |
 | [docs/finance/PERSONAL_FINANCE.md](docs/finance/PERSONAL_FINANCE.md) | Minhas contas (ciclo F1): contas, cartões, extratos, conciliação, canvas, IA, backups — índice dos documentos em `docs/finance/` |
 | [docs/finance/MEU_PLUGGY.md](docs/finance/MEU_PLUGGY.md) | Meu Pluggy (uso pessoal, somente leitura): passo a passo de configuração local, arquitetura, decisões e testes |
 | [docs/HTML_DATA_BRIDGE.md](docs/HTML_DATA_BRIDGE.md) | HTML Data Bridge (protocolo 1): entradas/saídas tipadas para widgets HTML, IA só com saídas autorizadas, proteção financeira transitiva |
@@ -93,7 +94,7 @@ Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuraç
 - ✅ **AI Companions (issue #13):** o Assistente IA pode virar um **personagem** animado no quadro (Aurora, Sol, Nimbus), com mini chat, dock lateral e estados reais (aguardando, resposta, erro, nova resposta) — mesmo histórico, contexto e autorizações do bloco clássico. Ver [docs/AI_COMPANIONS.md](docs/AI_COMPANIONS.md).
 - ✅ Canvas infinito: zoom pela roda (configurável para “navegar”), pinça do touchpad, Ctrl+roda, botões, zoom focado no cursor, enquadrar tudo, zoom na seleção, pan com mão / Espaço / botão do meio / dois dedos.
 - ✅ Ferramentas: seleção, mão, retângulo, losango, elipse, seta, linha, desenho livre (pressão de caneta), texto, nota adesiva, borracha, frame, imagem, conectar.
-- ✅ Selecionar (clique, Shift+clique, área; arrastar dentro da caixa da seleção move a seleção mesmo com outro elemento por cima), arrastar, redimensionar (8 alças, Shift = proporção, Alt = do centro), rotacionar (Shift = 15°), duplicar (Ctrl+D, Alt+arrastar), copiar/recortar/colar (também imagens e texto da área de transferência; URL colada vira bloco de Link), excluir, bloquear, camadas, agrupar/desagrupar (grupos aninhados; duplo clique entra no grupo), alinhar, mover com setas do teclado, desfazer/refazer (histórico por quadro).
+- ✅ Selecionar (clique, Shift+clique, área; arrastar dentro da caixa da seleção move a seleção mesmo com outro elemento por cima), arrastar, redimensionar (8 alças, Shift = proporção, Alt = do centro), rotacionar (Shift = 15°), duplicar (Ctrl+D, Alt+arrastar), copiar/recortar/colar (também imagens e texto da área de transferência; URL colada vira atalho visual `[ícone] Nome`), excluir, bloquear, camadas, agrupar/desagrupar (grupos aninhados; duplo clique entra no grupo), alinhar, mover com setas do teclado, desfazer/refazer (histórico por quadro).
 - ✅ Texto: duplo clique (ou Enter) em forma escreve dentro dela (o texto acompanha mover/redimensionar/rotacionar; a forma cresce para caber e alarga em vez de quebrar palavras); texto independente com alças laterais para quebrar linha e cantos para escalar a fonte; S/M/L/XL + tamanho livre; fontes Manual (Kalam), Sans (Inter), Mono (JetBrains Mono), Serifada (Lora); alinhamento horizontal e vertical; cor; opacidade.
 - ✅ Fluxograma como no Excalidraw: **Ctrl+setas** cria um nó conectado (seta em cotovelo), **Alt+setas** navega entre nós conectados.
 - ✅ Encaixe em objetos com guias ao mover (bordas e centros); **Ctrl** durante o arrasto liga/desliga; opção por quadro.
@@ -112,7 +113,7 @@ Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuraç
 | Calendário | ✅ local · 🔜 Google | Mês, eventos com horário. Google Calendar exige OAuth (não implementado) |
 | Documentos | ✅ | Arquivos guardados no IndexedDB (até 25 MB cada) ou referências por URL; prévia de imagem, PDF e texto |
 | Imagem | ✅ | Inserir por botão, colar ou arrastar arquivo. **GIFs animados** repetem continuamente no canvas, com pausar/reproduzir por imagem, preferência geral e respeito ao movimento reduzido; PNG/SVG exportam o primeiro quadro e o JSON preserva o GIF (ciclo 6, [docs/ANIMATED_GIFS.md](docs/ANIMATED_GIFS.md)) |
-| Link | ✅ · 🟡 prévia | Prévia Open Graph via servidor local (bloqueia endereços de rede local) |
+| Link / Smart Link | ✅ · 🟡 prévia | **Atalho visual** `[ícone] Nome` clicável (layouts horizontal, compacto e card; ícones locais, imagem enviada ou imagem do site com permissão; configuração em Propriedades) ou modo **Clássico** com URL/descrição no bloco (padrão de links antigos). Prévia Open Graph só por ação explícita, via servidor local (bloqueia endereços de rede local). Ver [docs/SMART_LINKS.md](docs/SMART_LINKS.md) |
 | Código | ✅ | Destaque de sintaxe (10 linguagens), Tab, copiar |
 | Assistente IA | 🟡 | OpenAI, Claude e Gemini via servidor local; só envia contexto conectado e autorizado; respostas estruturadas viram blocos/tarefas/conexões **somente após confirmação** |
 | Gráfico | ✅ | Barras/rosca a partir de blocos financeiros conectados |
@@ -220,7 +221,7 @@ Pontos de extensão:
 
 `V`/`1` seleção · `H` mão · `R`/`2` retângulo · `D`/`3` losango · `O`/`4` elipse · `A`/`5` seta · `L`/`6` linha · `P`/`7` desenho · `T`/`8` texto · `I`/`9` imagem · `E`/`0` borracha · `N` nota adesiva · `F` frame · `C` conectar · `Q` manter ferramenta
 
-`Ctrl+setas` fluxograma · `Alt+setas` navegar · `Ctrl+Alt+C/V` estilo · `Ctrl+A/C/X/V/D` · `Ctrl+G` / `Ctrl+Shift+G` · `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y` · `Ctrl+Shift+L` bloquear · `Ctrl+]`/`[` camadas · `Delete` · `Esc` · `Enter` editar texto · setas movem · `Shift+1` enquadrar · `Shift+2` zoom na seleção · `Ctrl+0/+/−` zoom · `G` Locais (checkpoints) · `W` Aurora Wheel (ou segurar o botão direito) · `Ctrl+K` Command Center · `Ctrl+Shift+Espaço` captura rápida · `Esc` interrompe a navegação · `?` ajuda. Atalhos de letra são ignorados enquanto se digita em campos.
+`Ctrl+setas` fluxograma · `Alt+setas` navegar · `Ctrl+Alt+C/V` estilo · `Ctrl+A/C/X/V/D` · `Ctrl+G` / `Ctrl+Shift+G` · `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y` · `Ctrl+Shift+L` bloquear · `Ctrl+]`/`[` camadas · `Delete` · `Esc` · `Enter` editar texto (ou abrir o atalho visual selecionado) · setas movem · `Shift+1` enquadrar · `Shift+2` zoom na seleção · `Ctrl+0/+/−` zoom · `G` Locais (checkpoints) · `W` Aurora Wheel (ou segurar o botão direito) · `Ctrl+K` Command Center · `Ctrl+Shift+Espaço` captura rápida · `Esc` interrompe a navegação · `?` ajuda. Atalhos de letra são ignorados enquanto se digita em campos.
 
 ---
 
