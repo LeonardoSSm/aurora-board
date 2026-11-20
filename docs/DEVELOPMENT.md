@@ -55,6 +55,35 @@ npx playwright show-trace test-results/<pasta-do-teste>/trace.zip
 - **Instabilidade × falha real**: no CI cada E2E tem **uma nova tentativa**. “flaky” no relatório = passou na segunda (investigar tempo/condição de corrida); falhou nas duas = defeito real.
 - **Infraestrutura × incompatibilidade**: erros como `browserType.launch: spawn UNKNOWN` ou `Executable doesn't exist` são do ambiente (navegador não instalado/bloqueado), não do app. No Windows de desenvolvimento deste projeto o Firefox do Playwright não inicia (`spawn UNKNOWN`); ele roda no CI (Linux).
 
+## Navegadores na CI (ciclo CI-1, #25)
+
+Os jobs `E2E (…)` e `Build público + CSP (…)` rodam **dentro da imagem oficial do Playwright**, fixada por versão **e** digest em `.github/workflows/ci.yml`:
+
+```yaml
+container:
+  image: mcr.microsoft.com/playwright:v1.65.1-noble@sha256:1507cbfc…f525579
+  options: --user 1001
+```
+
+- A imagem já traz Chromium, Firefox, WebKit, ffmpeg e todas as dependências nativas. A CI **não** roda `playwright install --with-deps` (nem apt) por execução.
+- `--user 1001` é o uid do usuário `runner` do host: o workspace e o `HOME` montados pertencem a ele (o Firefox recusa rodar como root com `HOME` de outro dono) e os testes não rodam como root.
+- Antes dos testes, `scripts/ci/check-playwright-browsers.mjs <projeto>` confere se os diretórios de navegador que o `playwright-core` do lockfile espera (`browsers.json`) existem em `PLAYWRIGHT_BROWSERS_PATH`. Se a imagem e o lockfile divergirem, o job falha em segundos com a instrução de correção, em vez de cada teste falhar com `Executable doesn't exist`.
+- `tests/unit/ci-workflow.test.ts` protege o contrato: imagem com digest, mesma versão do `@playwright/test`/`playwright-core` do lockfile nos dois jobs, nenhum `playwright install`/`--with-deps`/apt, os 4 projetos E2E e os 3 navegadores do build público (fases report-only e enforce da CSP), demais jobs intactos e actions fixadas por SHA.
+
+**Por quê.** No ciclo L1 (#22/PR #23), 5 jobs WebKit foram cancelados por timeout no passo `playwright install --with-deps webkit`. Os logs mostraram que o `ubuntu-latest` (Ubuntu 26.04) precisa baixar 185 pacotes / 140 MB do espelho `azure.archive.ubuntu.com` para o WebKit (Chromium: 21,9 MB; Firefox: 54,4 MB) e que, em certos runners (todos os travados eram de westus2), o download caía para ~50 kB/s — o apt não tem timeout de vazão, então o job só morria no timeout. Nas reexecuções o mesmo download levava 3 s. O cache de `~/.cache/ms-playwright` não ajudava: guarda os binários, não as bibliotecas do sistema. Diagnóstico completo na issue #25.
+
+**Atualizar o Playwright** (o Dependabot abre um PR próprio para `@playwright/test`, grupo `playwright` em `.github/dependabot.yml`):
+
+1. Suba `@playwright/test` no `package.json`/lockfile (o `playwright-core` acompanha).
+2. Troque a tag nos **dois** jobs (`e2e` e `static`) para `vX.Y.Z-noble` com a mesma versão.
+3. Fixe o digest do índice multi-arquitetura da tag nova:
+   ```bash
+   curl -sI -H "Accept: application/vnd.oci.image.index.v1+json" https://mcr.microsoft.com/v2/playwright/manifests/vX.Y.Z-noble | grep -i docker-content-digest
+   ```
+4. `npx vitest run tests/unit/ci-workflow.test.ts` deve passar; a CI confirma o resto.
+
+Limitações: a imagem tem ~1 GB comprimido e é baixada do MCR a cada job (CDN da Microsoft, independente do espelho apt; tipicamente menos de 1 min). Uma degradação do MCR ainda pode atrasar um job — nesse caso o tempo aparece em "Initialize containers", não nos testes. A imagem é Ubuntu 24.04 (noble), enquanto o host é 26.04: os navegadores rodam no ambiente da imagem, que é o suportado oficialmente pelo Playwright.
+
 ## Artefatos do CI
 
 Em cada execução com falha, o job de E2E publica `playwright-<projeto>` com `playwright-report/` e `test-results/` (14 dias). Baixe na página da execução (Actions → execução → Artifacts), descompacte e rode `npx playwright show-report playwright-report`.

@@ -117,3 +117,8 @@ Estado ao final do ciclo 2. Itens marcados com ⚠ afetam uso real; os demais s�
 ## Integrações não implementadas (escopo de ciclos futuros)
 
 Google Calendar, Google Drive, GitHub, API externa, indicadores financeiros, dashboards; sincronização em nuvem; colaboração em tempo real; autenticação.
+
+## CI (ciclo CI-1, #25)
+
+- Os testes de navegador rodam na imagem `mcr.microsoft.com/playwright:v1.65.1-noble` (fixada por digest), baixada do MCR a cada job (~1 GB comprimido). Uma degradação do MCR ainda pode atrasar um job; o tempo aparece em "Initialize containers". O travamento original (apt do WebKit a ~50 kB/s) deixou de ser possível porque nada é instalado via apt.
+- Subir o `@playwright/test` exige atualizar a tag e o digest da imagem nos jobs `e2e` e `static`; `tests/unit/ci-workflow.test.ts` e o passo "Navegadores da imagem" falham enquanto divergirem (procedimento em `docs/DEVELOPMENT.md`).

@@ -108,6 +108,15 @@ jobs:
     needs: [typecheck, unit]
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # CI-1 (#25): os testes de navegador rodam na imagem oficial do Playwright, fixada por versão E digest.
+    # Navegadores e dependências nativas já vêm nela — nada de `playwright install --with-deps` (apt) por
+    # execução, que travava o WebKit (140 MB do espelho apt a ~50 kB/s → timeout). A versão TEM de ser a do
+    # @playwright/test do lockfile (conferido em tests/unit/ci-workflow.test.ts e no passo "Navegadores da imagem").
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.1-noble@sha256:1507cbfc550a63a6b7396791ca4f00df17beb56342d2447b3f106c306f525579
+      # uid do usuário 'runner' do host: workspace e HOME montados pertencem a ele (o Firefox não roda como
+      # root com HOME de outro dono) e os testes não rodam como root.
+      options: --user 1001
     strategy:
       fail-fast: false
       matrix:
@@ -118,20 +127,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
       - run: npm ci
-      - name: Versão do Playwright e navegador
-        id: pw
-        run: |
-          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-          # O projeto 'mobile' usa o Chromium: compartilha o mesmo cache de navegador.
-          B=${{ matrix.project }}; if [ "$B" = "mobile" ]; then B=chromium; fi
-          echo "browser=$B" >> "$GITHUB_OUTPUT"
-      - name: Cache dos navegadores
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ steps.pw.outputs.browser }}
-      - name: Instalar navegador
-        run: npx playwright install --with-deps ${{ steps.pw.outputs.browser }}
+      - name: Navegadores da imagem = versão do @playwright/test
+        run: node scripts/ci/check-playwright-browsers.mjs ${{ matrix.project }}
       - run: npx playwright test --project=${{ matrix.project }}
         env: { CI: 'true' }
       - name: Artefatos de falha (relatório, traces, vídeos)
@@ -149,6 +146,10 @@ jobs:
     needs: [typecheck, unit]
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # CI-1 (#25): mesma imagem fixada do job e2e (ver o comentário lá).
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.1-noble@sha256:1507cbfc550a63a6b7396791ca4f00df17beb56342d2447b3f106c306f525579
+      options: --user 1001
     strategy:
       fail-fast: false
       matrix:
@@ -159,13 +160,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
       - run: npm ci
-      - id: pw
-        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ matrix.project }}
-      - run: npx playwright install --with-deps ${{ matrix.project }}
+      - name: Navegadores da imagem = versão do @playwright/test
+        run: node scripts/ci/check-playwright-browsers.mjs ${{ matrix.project }}
       # Fase 1: CSP só como relatório (lista violações sem bloquear).
       - run: npx playwright test -c playwright.static.config.ts --project=${{ matrix.project }}
         env: { CI: 'true', AURORA_CSP_MODE: report-only }
