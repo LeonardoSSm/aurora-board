@@ -50,6 +50,7 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 - **Local-first:** os quadros ficam no IndexedDB **deste navegador**. Não há conta nem sincronização com servidores. Limpar os dados do site apaga os quadros — **exporte backups** (Exportar → Backup do workspace) regularmente.
 - **Importar arquivos de terceiros:** backups passam por validação de formato e por um orçamento de complexidade; o tipo de anexos é decidido pelo conteúdo real; HTML/JavaScript personalizado entra **desativado** até você ativá-lo. Mesmo assim, importe apenas arquivos de origem confiável.
 - **Finanças pessoais (ciclo F1):** contas e extratos ficam num banco local **separado** dos quadros (`aurora-finance`), não vão nos backups dos quadros e não são enviados à IA sem autorização confirmada em cada bloco. O armazenamento local não é cifrado (só os backups financeiros podem ser). Ver [`docs/finance/FINANCIAL_PRIVACY.md`](docs/finance/FINANCIAL_PRIVACY.md).
+- **Meu Pluggy (dados bancários reais, somente leitura):** credenciais só no `.env` do servidor local; o navegador nunca as vê. Nenhuma conta é conectada sem você autorizar no portal da Pluggy. Ver [`docs/finance/MEU_PLUGGY.md`](docs/finance/MEU_PLUGGY.md).
 - **Servidor local de IA:** só para uso no próprio computador (`127.0.0.1`, sem autenticação, usa as **suas** chaves). Não o exponha (túnel, proxy reverso, `vite --host`).
 - **Beta público:** apenas o frontend estático, em HTTPS, com CSP e cabeçalhos de segurança; sem servidor de IA (as integrações de IA não estão disponíveis nessa versão) e sem ferramentas de depuração.
 - **Limites:** nenhuma medida torna o sistema totalmente seguro; riscos conhecidos estão em [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) e [`docs/security/S1-FINAL-SECURITY-REPORT.md`](docs/security/S1-FINAL-SECURITY-REPORT.md).
@@ -68,6 +69,7 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | [docs/AI_ACTIONS.md](docs/AI_ACTIONS.md) | Ações da IA (contrato v2): blocos de valor, lançamentos financeiros, validação, prévia e confirmação |
 | [docs/AI_TILES.md](docs/AI_TILES.md) | AI Tiles: decisões, modos visual/funcional, procedência e condições de uso das logos |
 | [docs/finance/PERSONAL_FINANCE.md](docs/finance/PERSONAL_FINANCE.md) | Minhas contas (ciclo F1): contas, cartões, extratos, conciliação, canvas, IA, backups — índice dos documentos em `docs/finance/` |
+| [docs/finance/MEU_PLUGGY.md](docs/finance/MEU_PLUGGY.md) | Meu Pluggy (uso pessoal, somente leitura): passo a passo de configuração local, arquitetura, decisões e testes |
 | [docs/ANIMATED_GIFS.md](docs/ANIMATED_GIFS.md) | GIFs animados (ciclo 6): auditoria do suporte nativo, repetição, pausa, movimento reduzido, exportação, limites |
 | [docs/VISUAL_FINANCE.md](docs/VISUAL_FINANCE.md) | Finanças visuais: valores, meses, regras de cálculo, precisão, uso e desempenho |
 | [docs/FORMULA_ENGINE.md](docs/FORMULA_ENGINE.md) | Motor de fórmulas: gramática, funções, tipos, variáveis |

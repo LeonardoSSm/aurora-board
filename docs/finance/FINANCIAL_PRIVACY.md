@@ -3,6 +3,7 @@
 ## Onde ficam os dados
 
 - No IndexedDB `aurora-finance` **deste navegador/perfil**, separado do banco dos quadros (`aurora-board`). Nenhum servidor recebe os dados.
+- **Meu Pluggy (issue #9):** quando você configura e sincroniza, os dados vêm da Pluggy para o **servidor local** (no seu computador) e de lá para este navegador; o servidor local não guarda movimentações (só repassa) e descarta dados de terceiros (CPF/CNPJ de pagadores/recebedores). A Pluggy guarda os dados conforme os termos dela. Ver [MEU_PLUGGY.md](MEU_PLUGGY.md).
 - **Não há criptografia própria do armazenamento local.** A proteção efetiva é a do usuário do sistema operacional, do perfil do navegador e da criptografia de disco (BitLocker/FileVault/LUKS), se ativada. Qualquer pessoa ou programa com acesso ao seu perfil do navegador lê esses dados. Um cofre que cifre o IndexedDB foi avaliado e **não** foi implementado neste ciclo: o canvas consulta o razão de forma síncrona, o que exigiria manter a chave aberta em memória durante toda a sessão — uma proteção parcial que daria falsa segurança. Fica como evolução (ver relatório final).
 - Números de conta e cartão: só os 4 últimos dígitos (`•••• 1234`), inclusive quando vêm de OFX, provedor ou backup.
 - Senhas bancárias, códigos SMS/OTP e tokens **nunca** são pedidos nem guardados. Registros de consentimento guardam só identificadores opacos e escopos de leitura.

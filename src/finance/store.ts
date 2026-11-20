@@ -7,7 +7,7 @@
  */
 import { create } from 'zustand';
 import type { Currency } from '../core/finance';
-import type { AccountType, BankTransaction, Category, CategoryRule, ConsentRecord, FinanceSnapshot, FinancialAccount, FinancialInstitution, ImportOrigin, ImportSession, MovementKind, ReportedBalance } from './model';
+import type { AccountType, BankTransaction, Category, CategoryRule, ConsentRecord, FinanceSnapshot, FinancialAccount, FinancialInstitution, ImportOrigin, ImportSession, MovementKind, ProviderRef, ReportedBalance } from './model';
 import { DEFAULT_CATEGORIES, MAX_AI_GRANTS, UNCATEGORIZED, cleanText, isSafeCents, isValidDate, maskIdentifier, normalizeDesc } from './model';
 import type { ParsedStatement } from './drafts';
 import { materializePlan, planImport, safeImportFileName, type ImportPlan } from './importPlan';
@@ -162,6 +162,24 @@ export async function updateAccount(id: string, patch: Partial<Pick<FinancialAcc
   if (!cur) throw new Error('Conta não encontrada.');
   if (patch.currency && patch.currency !== cur.currency && getFinance().transactions.some((t) => t.accountId === id)) throw new Error('A moeda de uma conta com movimentações não pode mudar.');
   const next: FinancialAccount = { ...cur, ...patch, name: patch.name !== undefined ? cleanText(patch.name, 80) || cur.name : cur.name, card: patch.card ? sanitizeCard(patch.card) : cur.card, lastUpdatedAt: Date.now() };
+  await financeRepository().putAccount(next);
+  set({ accounts: getFinance().accounts.map((a) => (a.id === id ? next : a)) });
+}
+
+/**
+ * Vincula (ou desvincula, com `null`) uma conta local a uma conta do provedor. Não mexe em movimentações: o
+ * histórico já importado continua como está e a classificação manual nunca é tocada.
+ */
+export async function setAccountProviderRef(id: string, ref: ProviderRef | null): Promise<void> {
+  requireReady();
+  const cur = getFinance().accounts.find((a) => a.id === id);
+  if (!cur) throw new Error('Conta não encontrada.');
+  if (ref) {
+    const clash = getFinance().accounts.find((a) => a.id !== id && a.providerRef?.providerId === ref.providerId && a.providerRef.externalId === ref.externalId);
+    if (clash) throw new Error(`Essa conta do provedor já está vinculada a “${clash.name}”.`);
+    if (ref.since !== undefined && !isValidDate(ref.since)) throw new Error('Data inicial do vínculo inválida.');
+  }
+  const next: FinancialAccount = { ...cur, providerRef: ref ? { providerId: cleanText(ref.providerId, 40), externalId: cleanText(ref.externalId, 120), connectionRef: ref.connectionRef ? cleanText(ref.connectionRef, 120) : undefined, since: ref.since } : undefined, lastUpdatedAt: Date.now() };
   await financeRepository().putAccount(next);
   set({ accounts: getFinance().accounts.map((a) => (a.id === id ? next : a)) });
 }
