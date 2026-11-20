@@ -7,6 +7,9 @@ import { STATUS_LABEL } from '../widgets/WidgetFrame';
 import { WIDGET_DRAG_MIME } from '../canvas/Canvas';
 import { fetchAIStatus, type AIStatus } from '../integrations/aiClient';
 import { WIDGET } from '../core/widgetIds';
+import { PanelResizer, usePanelLayout } from './PanelResizer';
+import { PANEL_DEFAULTS } from '../core/panels';
+import { resetPanelWidth } from '../store/actions';
 
 function useAIConfigured() {
   const [s, setS] = useState<AIStatus | null>(null);
@@ -26,6 +29,7 @@ export function LibraryPanel() {
   const add = (fn: () => void) => { fn(); if (compact) setState({ libraryOpen: false }); };
   const [q, setQ] = useState('');
   const aiConfigured = useAIConfigured();
+  const layout = usePanelLayout('library');
   if (!open) return null;
   const needle = q.trim().toLowerCase();
   const all = listWidgets();
@@ -46,9 +50,13 @@ export function LibraryPanel() {
   const planned = listPlanned().filter((p) => !q || `${p.name} ${p.description}`.toLowerCase().includes(q.toLowerCase()));
 
   return (
-    <aside className={`w-64 shrink-0 bg-panel border-r border-line flex flex-col ${compact ? 'absolute inset-y-0 left-0 z-40 max-w-[85vw] shadow-[20px_0_50px_#000a]' : 'z-20'}`} aria-label="Biblioteca de componentes">
+    <aside style={{ width: layout.width }} data-testid="library-panel" className={`relative shrink-0 min-w-0 bg-panel border-r border-line flex flex-col ${compact ? 'absolute inset-y-0 left-0 z-40 max-w-[85vw] shadow-[20px_0_50px_#000a]' : 'z-20'}`} aria-label="Biblioteca de componentes">
+      {!compact && <PanelResizer side="library" width={layout.width} max={layout.max} />}
       <div className="p-3 pb-2">
-        <div className="text-[10px] font-bold tracking-widest text-soft mb-2">BIBLIOTECA</div>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="text-[10px] font-bold tracking-widest text-soft">BIBLIOTECA</div>
+          {!compact && layout.stored !== PANEL_DEFAULTS.library && <button type="button" className="text-[10px] text-soft hover:text-fg underline-offset-2 hover:underline" data-testid="reset-library-width" onClick={() => void resetPanelWidth('library')}>Restaurar largura padrão</button>}
+        </div>
         <label className="flex items-center gap-2 h-8 px-2 rounded-lg border border-line bg-[#0f1826]">
           <Search size={13} className="text-soft" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar componentes" className="bg-transparent outline-none text-[12px] flex-1 min-w-0" />
@@ -70,7 +78,7 @@ export function LibraryPanel() {
         {presetSections.map((s) => (
           <section key={s.id} className="mt-2" aria-label={s.title} data-testid={`library-section-${s.id}`}>
             <div className="text-[10px] font-bold tracking-wider text-soft px-1.5 mb-1.5 uppercase">{s.title}</div>
-            <div className="grid grid-cols-3 gap-1.5 px-0.5">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-1.5 px-0.5">
               {s.items.map(({ plugin, preset }) => <PresetItem key={`${plugin.id}#${preset.id}`} plugin={plugin} preset={preset} onAdd={() => add(() => addWidget(presetDragType(plugin.id, preset.id)))} />)}
             </div>
           </section>

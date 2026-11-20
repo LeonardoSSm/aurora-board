@@ -268,7 +268,8 @@ test('AI Tile: link https, vínculo com bloco de IA e estado honesto sem chave',
 
   // Remover vínculo volta a visual
   const claudeNow = await byProvider(page, 'claude');
-  const p2 = await toPage(page, center(claudeNow).x, center(claudeNow).y);
+  // Ponto na parte direita do tile: depois do enquadramento ele pode ficar parcialmente sob a Biblioteca.
+  const p2 = await toPage(page, claudeNow.x + claudeNow.width * 0.8, center(claudeNow).y);
   await page.mouse.click(p2.x, p2.y, { button: 'right' });
   await page.getByTestId('context-menu').getByRole('menuitem', { name: 'Remover vínculo' }).click();
   await expect(page.locator('[data-provider="claude"]')).toHaveAttribute('data-integration', 'visual');

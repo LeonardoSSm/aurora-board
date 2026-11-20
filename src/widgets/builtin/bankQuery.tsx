@@ -100,9 +100,9 @@ function Inspector({ element, data }: { element: WidgetElement; data: BankQueryD
         <div className="flex flex-col gap-0.5" data-testid="bank-accounts">
           <label className="flex items-center gap-1.5 text-[11px]"><input type="checkbox" className="accent-accent" checked={!data.accountIds.length} onChange={(e) => e.target.checked && set({ accountIds: [] })} /> Todas as contas ativas</label>
           {accounts.map((a) => (
-            <label key={a.id} className="flex items-center gap-1.5 text-[11px]">
-              <input type="checkbox" className="accent-accent" checked={data.accountIds.includes(a.id)} onChange={(e) => set({ accountIds: e.target.checked ? [...data.accountIds, a.id] : data.accountIds.filter((x) => x !== a.id) })} />
-              <span className="truncate">{a.name}</span><span className="text-soft text-[10px]">{ACCOUNT_TYPE_LABELS[a.type]}</span>
+            <label key={a.id} className="flex items-start gap-1.5 text-[11px]" data-testid="bank-account-option">
+              <input type="checkbox" className="accent-accent mt-0.5 shrink-0" checked={data.accountIds.includes(a.id)} onChange={(e) => set({ accountIds: e.target.checked ? [...data.accountIds, a.id] : data.accountIds.filter((x) => x !== a.id) })} />
+              <span className="min-w-0 flex-1"><span className="block break-words">{a.name}</span><span className="block text-soft text-[10px]">{ACCOUNT_TYPE_LABELS[a.type]}</span></span>
             </label>
           ))}
         </div>
@@ -119,17 +119,17 @@ function Inspector({ element, data }: { element: WidgetElement; data: BankQueryD
       <Label>Período</Label>
       <Segmented label="Tipo de período" value={data.periodMode} onChange={(v) => set({ periodMode: v })} options={[{ value: 'month', label: 'Mês' }, { value: 'last-n', label: 'Últimos meses' }, { value: 'range', label: 'Intervalo' }]} />
       {data.periodMode !== 'range' ? (
-        <div className="flex gap-1.5 mt-1.5">
-          <Select aria-label="Mês da consulta" value={m} onChange={(e) => set({ period: `${y}-${e.target.value}` })} className="flex-1">
+        <div className="flex flex-wrap gap-1.5 mt-1.5">
+          <Select aria-label="Mês da consulta" value={m} onChange={(e) => set({ period: `${y}-${e.target.value}` })} className="flex-1 min-w-[7.5rem]">
             {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map((mm) => <option key={mm} value={mm}>{periodLabel(`2000-${mm}`).replace(' 2000', '')}</option>)}
           </Select>
           <Field aria-label="Ano da consulta" type="number" min={1900} max={2200} value={y} onChange={(e) => /^\d{4}$/.test(e.target.value) && set({ period: `${e.target.value}-${m}` })} className="!w-20" />
           {data.periodMode === 'last-n' && <Field aria-label="Quantidade de meses" type="number" min={1} max={36} value={data.months} onChange={(e) => set({ months: Number(e.target.value) || 1 })} className="!w-16" />}
         </div>
       ) : (
-        <div className="flex gap-1.5 mt-1.5">
-          <Field aria-label="De" type="date" value={data.from} onChange={(e) => set({ from: e.target.value })} />
-          <Field aria-label="Até" type="date" value={data.to} onChange={(e) => set({ to: e.target.value })} />
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-1.5 mt-1.5" data-testid="bank-range">
+          <label className="flex flex-col gap-0.5 text-[10px] text-soft min-w-0">De<Field aria-label="De" type="date" value={data.from} onChange={(e) => set({ from: e.target.value })} /></label>
+          <label className="flex flex-col gap-0.5 text-[10px] text-soft min-w-0">Até<Field aria-label="Até" type="date" value={data.to} onChange={(e) => set({ to: e.target.value })} /></label>
         </div>
       )}
       <Label>Moeda</Label>
@@ -143,19 +143,19 @@ function Inspector({ element, data }: { element: WidgetElement; data: BankQueryD
         <Segmented label="Compartilhamento com IA" value={data.aiShare.mode} onChange={(mode) => { share({ mode, confirmedDigest: '', confirmedAt: 0 }); void revokeAI(id); }} options={[{ value: 'none', label: 'Nada' }, { value: 'aggregate', label: 'Resumo agregado' }, { value: 'detail', label: 'Movimentações' }]} />
         {data.aiShare.mode !== 'none' && (
           <>
-            <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] text-fg-2">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-x-2 gap-y-0.5 text-[11px] text-fg-2">
               {([['includeCategories', 'Categorias'], ['includeMonths', 'Totais por mês'], ['includeAccountNames', 'Nomes das contas'], ...(data.aiShare.mode === 'detail' ? [['includeDates', 'Datas'], ['includeDescriptions', 'Descrições']] : [])] as [keyof BankQueryData['aiShare'], string][]).map(([k, label]) => (
                 <label key={k} className="flex items-center gap-1.5"><input type="checkbox" className="accent-accent-2" checked={data.aiShare[k] as boolean} onChange={(e) => share({ [k]: e.target.checked })} /> {label}</label>
               ))}
             </div>
             {data.aiShare.mode === 'detail' && (
-              <label className="flex items-center gap-1.5 text-[11px]">Máximo de movimentações <Field aria-label="Máximo de movimentações" type="number" min={1} max={200} value={data.aiShare.maxItems} onChange={(e) => share({ maxItems: Number(e.target.value) || 1 })} className="!w-16" /></label>
+              <label className="flex flex-wrap items-center gap-1.5 text-[11px]">Máximo de movimentações <Field aria-label="Máximo de movimentações" type="number" min={1} max={200} value={data.aiShare.maxItems} onChange={(e) => share({ maxItems: Number(e.target.value) || 1 })} className="!w-16" /></label>
             )}
             <div className="text-[10px] text-muted">Exatamente isto será enviado ao provedor de IA quando um Assistente IA conectado a este bloco for usado:</div>
             <pre data-testid="bank-ai-preview" className="max-h-40 overflow-auto text-[10px] whitespace-pre-wrap text-muted bg-[#0a111c] p-1.5 rounded" data-scrollable>{payload.text || '(nada — consulta indisponível)'}</pre>
             {authorized ? (
-              <div className="flex items-center justify-between gap-2 text-[11px]">
-                <span className="text-ok" data-testid="bank-ai-status">✓ Autorizado em {new Date(data.aiShare.confirmedAt).toLocaleString('pt-BR')}</span>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                <span className="text-ok min-w-0" data-testid="bank-ai-status">✓ Autorizado em {new Date(data.aiShare.confirmedAt).toLocaleString('pt-BR')}</span>
                 <Button onClick={() => { share({ mode: 'none', confirmedDigest: '', confirmedAt: 0 }); void revokeAI(id); }}>Revogar</Button>
               </div>
             ) : (

@@ -1,6 +1,7 @@
 import type { PersistenceAdapter } from '../persistence/adapter';
 import { sanitizeZoomPrefs } from '../core/camera';
 import { sanitizeAnimationPrefs } from '../core/animation';
+import { sanitizePanelWidths } from '../core/panels';
 import { clearJournal, readJournals, setAdapter, startAutosave } from '../persistence/autosave';
 import { migrateBoard } from '../persistence/migrations';
 import { importLegacy, LEGACY_STORAGE_KEY } from '../persistence/legacy';
@@ -68,7 +69,7 @@ export async function initEditor(adapter: PersistenceAdapter, opts: { demo?: boo
       clearJournal(journal.boardId);
     }
 
-    setState({ zoomPrefs: sanitizeZoomPrefs(await adapter.getSetting('zoomPreferences')), animationPrefs: sanitizeAnimationPrefs(await adapter.getSetting('animationPreferences')) });
+    setState({ zoomPrefs: sanitizeZoomPrefs(await adapter.getSetting('zoomPreferences')), animationPrefs: sanitizeAnimationPrefs(await adapter.getSetting('animationPreferences')), panelWidths: sanitizePanelWidths(await adapter.getSetting('panelWidths')) });
     const last = await adapter.getSetting<string>('lastWorkspace');
     const workspaceId = workspaces.some((w) => w.id === last) ? last! : workspaces[0].id;
     setState({ workspaces, workspaceId });

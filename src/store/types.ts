@@ -114,6 +114,8 @@ export interface EditorState {
   zoomPrefs: import('../core/camera').ZoomPreferences;
   /** Preferência GERAL: animações de GIF (sistema/sempre/nunca). */
   animationPrefs: import('../core/animation').AnimationPrefs;
+  /** Preferência GERAL (issue #10): larguras das laterais (configurações locais, fora dos quadros). */
+  panelWidths: import('../core/panels').PanelWidths;
   toasts: Toast[];
   /** Último snapshot de dados de fluxo calculado (cache para widgets). */
   dataflowVersion: number;

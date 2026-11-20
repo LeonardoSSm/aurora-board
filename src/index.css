@@ -41,6 +41,33 @@ body,
 button {
   cursor: pointer;
 }
+
+/* Issue #10: arrasto da alça das laterais — cursor em todo o documento, sem seleção de texto, e iframes de
+   widgets sem capturar o ponteiro enquanto dura o arrasto. */
+html.panel-resizing,
+html.panel-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+html.panel-resizing iframe {
+  pointer-events: none !important;
+}
+.panel-resizer {
+  touch-action: none;
+}
+
+/* Formulários das laterais: nenhum controle maior que o painel (sem corte silencioso). */
+.props-form input:not([type='checkbox']):not([type='radio']):not([type='color']),
+.props-form select,
+.props-form textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+.props-form label,
+.props-form p {
+  overflow-wrap: break-word;
+}
 button:disabled {
   cursor: default;
   opacity: 0.4;

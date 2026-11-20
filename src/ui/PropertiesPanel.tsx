@@ -1,4 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
+import { PanelResizer, usePanelLayout } from './PanelResizer';
+import { PANEL_DEFAULTS } from '../core/panels';
 import {
   AlignCenter,
   AlignLeft,
@@ -31,6 +33,7 @@ import {
   updateStyle,
   updateWidgetData,
   setZoomPrefs,
+  resetPanelWidth,
 } from '../store/actions';
 import type { Arrowhead, AuroraElement, ElementStyle, LinearElement, LinkKind, WidgetElement } from '../core/schema';
 import { acceptsBoundText, isLinear, isText } from '../core/schema';
@@ -359,10 +362,10 @@ function WidgetInfo({ el }: { el: WidgetElement }) {
         <>
           <Label>Portas de dados</Label>
           {p.inputs.map((i) => (
-            <div key={i.id} className="text-[11px] flex justify-between"><span>⇢ {i.label}</span><code className="text-soft">{i.type}</code><span className="text-ok">{ins[i.id]?.length ?? 0}</span></div>
+            <div key={i.id} className="text-[11px] flex flex-wrap items-baseline gap-x-2" data-testid="port-row"><span className="min-w-0 flex-[1_1_7rem] break-words">⇢ {i.label}</span><span className="ml-auto flex items-baseline gap-2 shrink-0"><code className="text-soft break-all">{i.type}</code><span className="text-ok">{ins[i.id]?.length ?? 0}</span></span></div>
           ))}
           {p.outputs.map((o) => (
-            <div key={o.id} className="text-[11px] flex justify-between"><span>{o.label} ⇢</span><code className="text-soft">{o.type}</code></div>
+            <div key={o.id} className="text-[11px] flex flex-wrap items-baseline gap-x-2" data-testid="port-row"><span className="min-w-0 flex-[1_1_7rem] break-words">{o.label} ⇢</span><code className="ml-auto text-soft break-all">{o.type}</code></div>
           ))}
         </>
       )}
@@ -478,6 +481,7 @@ export function PropertiesPanel() {
   const selectedIds = useEditor((s) => s.selectedIds);
   const style = useEditor((s) => s.currentStyle);
   const tool = useEditor((s) => s.tool);
+  const layout = usePanelLayout('properties');
   if (!open) return null;
   const set = new Set(selectedIds);
   const els = elements.filter((e) => set.has(e.id));
@@ -488,14 +492,18 @@ export function PropertiesPanel() {
   const grouped = els.some((e) => e.groupIds.length);
 
   return (
-    <aside className={`w-72 shrink-0 bg-panel border-l border-line flex flex-col ${compact ? 'absolute inset-y-0 right-0 z-40 max-w-[85vw] shadow-[-20px_0_50px_#000a]' : 'z-20'}`} aria-label="Propriedades">
-      <div className="px-4 h-11 flex items-center justify-between border-b border-line">
-        <h2 className="text-[11px] font-bold tracking-widest text-muted">
+    <aside style={{ width: layout.width }} data-testid="properties-panel" className={`relative shrink-0 min-w-0 bg-panel border-l border-line flex flex-col ${compact ? 'absolute inset-y-0 right-0 z-40 max-w-[85vw] shadow-[-20px_0_50px_#000a]' : 'z-20'}`} aria-label="Propriedades">
+      {!compact && <PanelResizer side="properties" width={layout.width} max={layout.max} />}
+      <div className="px-4 h-11 flex items-center justify-between gap-2 border-b border-line">
+        <h2 className="text-[11px] font-bold tracking-widest text-muted truncate min-w-0">
           {els.length === 0 ? (tool === 'select' ? 'QUADRO E ESTILO PADRÃO' : 'ESTILO DA FERRAMENTA') : els.length === 1 ? 'PROPRIEDADES' : `${els.length} SELECIONADOS`}
         </h2>
-        {locked && <Lock size={13} className="text-warn" aria-label="Bloqueado" />}
+        <div className="flex items-center gap-2 shrink-0">
+          {!compact && layout.stored !== PANEL_DEFAULTS.properties && <button type="button" className="text-[10px] text-soft hover:text-fg hover:underline underline-offset-2" data-testid="reset-properties-width" onClick={() => void resetPanelWidth('properties')}>Largura padrão</button>}
+          {locked && <Lock size={13} className="text-warn" aria-label="Bloqueado" />}
+        </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-4 pb-6" data-testid="properties">
+      <div className="props-form flex-1 overflow-y-auto overflow-x-hidden px-4 pb-6 min-w-0" data-testid="properties">
         {single?.type === 'widget' && <WidgetInfo el={single} />}
         {(styleTargets.length > 0 || els.length === 0) && <StyleEditor els={styleTargets} style={style} />}
         {linears.length > 0 && linears.length === els.length && <ArrowEditor els={linears} />}
