@@ -9,10 +9,14 @@
  *   restaurado na mesma transação dos quadros. Nenhuma mudança de esquema/migração é necessária.
  * - Leitura sempre VALIDADA (`validateContent`): o asset pode vir de um backup forjado.
  * - Cache em memória limitado por células (LRU). Não usa o cache genérico de assets (evita duas cópias do texto).
+ *   Datasets usados pelo QUADRO ABERTO nunca são despejados (revisão do Codex, PR #27): despejar um dataset em uso
+ *   faria o recálculo pedi-lo de novo, num laço de leituras. Se o quadro sozinho passa do teto, o cache passa junto.
  * - Toda mudança do cache recalcula o fluxo de dados (`bumpExternalData`), sem alterar o quadro.
  */
 import { getAdapter } from '../persistence/autosave';
 import { bumpExternalData } from '../widgets/dataflow';
+import { getState } from '../store/editor';
+import { datasetAssetIdsOf } from '../persistence/exportImport';
 import { DATASET_LIMITS, DatasetError, validateContent, type DatasetContent } from './model';
 import { decodeDatasetAsset, encodeDatasetAsset } from './codec';
 
@@ -43,6 +47,13 @@ function changed() {
   bumpExternalData();
 }
 
+let cacheLimit: number = DATASET_LIMITS.maxCachedCells;
+
+/** Assets de dados referenciados pelo quadro aberto (protegidos do despejo). */
+function inUse(): Set<string> {
+  try { return datasetAssetIdsOf(getState().elements); } catch { return new Set(); }
+}
+
 function setEntry(id: string, e: DatasetEntry) {
   const prev = cache.get(id);
   if (prev?.status === 'ready') cachedCells -= prev.cells;
@@ -50,13 +61,31 @@ function setEntry(id: string, e: DatasetEntry) {
   cache.set(id, e);
   if (e.status === 'ready') {
     cachedCells += e.cells;
+    if (cachedCells <= cacheLimit) return;
+    const keep = inUse();
     for (const [k, v] of cache) {
-      if (cachedCells <= DATASET_LIMITS.maxCachedCells) break;
-      if (k === id || v.status !== 'ready') continue;
+      if (cachedCells <= cacheLimit) break;
+      if (k === id || v.status !== 'ready' || keep.has(k)) continue;
       cache.delete(k);
       cachedCells -= v.cells;
     }
   }
+}
+
+/**
+ * Esquece o que o cache sabe destes assets (ex.: “ausente” antes de um backup restaurá-los) e recalcula o fluxo
+ * de dados: a próxima leitura vai ao armazenamento (revisão do Codex, PR #27).
+ */
+export function invalidateDatasets(ids: Iterable<string>) {
+  let any = false;
+  for (const id of ids) {
+    const e = cache.get(id);
+    if (!e || e.status === 'loading') continue;
+    if (e.status === 'ready') cachedCells -= e.cells;
+    cache.delete(id);
+    any = true;
+  }
+  if (any) changed();
 }
 
 /** Estado do dataset no cache (sem disparar leitura). Marca como usado recentemente. */
@@ -122,10 +151,16 @@ export async function loadDatasetContent(assetId: string): Promise<DatasetConten
   throw new DatasetError(e?.status === 'error' ? e.message : 'Os dados deste bloco não estão disponíveis neste dispositivo.');
 }
 
-/** Testes: zera o cache. */
-export function resetDatasetCacheForTests() {
+/** Testes: zera o cache (e o teto, salvo `keepLimit`). */
+export function resetDatasetCacheForTests(opts: { keepLimit?: boolean } = {}) {
   cache.clear();
   pending.clear();
   cachedCells = 0;
   version = 0;
+  if (!opts.keepLimit) cacheLimit = DATASET_LIMITS.maxCachedCells;
+}
+
+/** Testes: teto do cache em células (`null` = padrão). */
+export function setDatasetCacheLimitForTests(n: number | null) {
+  cacheLimit = n ?? DATASET_LIMITS.maxCachedCells;
 }

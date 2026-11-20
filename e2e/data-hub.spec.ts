@@ -142,4 +142,41 @@ test.describe('Issue #24 — Data Hub (D2-A)', () => {
     const file2 = JSON.parse(await readFile((await (await dl2).path())!, 'utf8'));
     expect(file2.assets.filter((a: { mimeType: string }) => a.mimeType === 'application/vnd.aurora.dataset+json')).toHaveLength(1);
   });
+
+  // Revisão do Codex (PR #27): restaurar, na mesma sessão, um backup SEM os dados e depois outro COM os dados
+  // deixava o bloco “ausente” até recarregar a página (cache negativo).
+  test('D: outro dispositivo — backup sem os dados mostra “ausente”; o backup com os dados restaura sem recarregar', async ({ page, browser }) => {
+    await ready(page);
+    await addDataset(page);
+    await importFile(page, page.getByTestId('dataset-import'), { name: 'pais.csv', mimeType: 'text/csv', text: 'país,capital\nBrasil,Brasília\nPortugal,Lisboa\n' });
+    await page.getByRole('dialog').getByRole('button', { name: 'Importar', exact: true }).click();
+    await expect(page.getByTestId('dataset-counts')).toHaveText('2 linha(s) × 2 coluna(s)');
+    const exportBoard = async (choice: 'Sem os dados' | 'Incluir dados') => {
+      await page.getByRole('button', { name: /Exportar/ }).click();
+      await page.getByRole('menuitem', { name: /Este quadro/ }).click();
+      const dl = page.waitForEvent('download');
+      await page.getByRole('dialog').getByRole('button', { name: choice }).click();
+      return readFile((await (await dl).path())!, 'utf8');
+    };
+    const without = await exportBoard('Sem os dados');
+    const withData = await exportBoard('Incluir dados');
+
+    // “Outro dispositivo”: contexto novo, IndexedDB vazio.
+    const ctx = await browser.newContext();
+    const other = await ctx.newPage();
+    await ready(other);
+    const importBackup = async (name: string, text: string) => {
+      await other.getByRole('button', { name: 'Importar', exact: true }).click();
+      const chooser = other.waitForEvent('filechooser');
+      await other.getByRole('menuitem', { name: /Arquivo JSON/ }).click();
+      await (await chooser).setFiles({ name, mimeType: 'application/json', buffer: Buffer.from(text, 'utf8') });
+      await other.getByRole('button', { name: 'Importar como novos quadros' }).click();
+    };
+    await importBackup('sem-dados.aurora.json', without);
+    await expect(other.getByTestId('dataset-status')).toHaveAttribute('data-status', 'missing');
+    await importBackup('com-dados.aurora.json', withData);
+    await expect(other.getByTestId('dataset-counts')).toHaveText('2 linha(s) × 2 coluna(s)');
+    await expect(other.getByTestId('dataset-table')).toContainText('Brasília');
+    await ctx.close();
+  });
 });

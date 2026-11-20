@@ -54,7 +54,7 @@ gravado como um asset local com tipo próprio. O bloco guarda só a referência 
 
 - UTF-8 (com ou sem BOM). Arquivo binário (ex.: `.xlsx`) ou UTF-8 inválido é recusado com orientação.
 - RFC 4180: aspas, aspas duplicadas (`""`), quebras de linha dentro de campos, CRLF/LF/CR.
-- Delimitador detectado entre `,` `;` TAB `|` pela consistência das primeiras linhas. **Primeira linha = cabeçalho.**
+- Delimitador detectado entre `,` `;` TAB `|` pela consistência numa amostra de 64 KB (cortada no fim de uma linha; se o corte cair dentro de um campo entre aspas, cortes menores são tentados). **Primeira linha = cabeçalho.**
 - Toda linha precisa ter o número de campos do cabeçalho; separadores vazios a mais no fim são tolerados (aviso).
   Qualquer outra diferença recusa o arquivo inteiro, com o número da linha.
 - Tipos por coluna: **número** (ponto decimal; formato brasileiro `1.234,56` só quando algum valor tem vírgula
@@ -88,7 +88,7 @@ Bridge remove `key`/`members`/`$…` de valores, e as três primeiras poluiriam 
 | Texto por célula / rótulo | 10.000 / 120 caracteres |
 | JSON bruto | 32 níveis, 3 milhões de itens (antes de converter) |
 | Conteúdo guardado | 24 MB de JSON normalizado (o asset em base64 cabe no limite de 36 MB dos backups) |
-| Cache em memória | 3 milhões de células (LRU) |
+| Cache em memória | 3 milhões de células (LRU); datasets do quadro aberto nunca são despejados (o teto pode ser ultrapassado por eles) |
 
 Acima de qualquer limite o arquivo é recusado **inteiro**, com a causa, e **nada** é gravado. Cancelar a prévia
 também não grava nada.
@@ -129,7 +129,7 @@ estatísticas nem cria objetos novos.
 |---|---|
 | Exportar **este quadro** ou **backup do workspace** (JSON) | Se algum bloco usa dados importados, o app **pergunta**: “Incluir dados” ou “Sem os dados” (ou cancelar). Sem os dados, os blocos restaurados mostram “dados não disponíveis neste dispositivo”. |
 | **Backup pessoal completo** (Minhas contas → Privacidade) | Inclui os dados importados; a confirmação diz isso. Pode ser cifrado. |
-| Importar backup | Datasets do arquivo são **validados por inteiro antes de gravar**; inválidos são descartados com aviso (o bloco fica sem dados). Ausentes geram o aviso “arquivo ausente no backup”. Tudo entra numa **única transação** (falha = nada gravado). |
+| Importar backup | Datasets do arquivo são **validados por inteiro antes de gravar** e, depois de gravados, qualquer “ausente” em cache é esquecido (o bloco volta sem recarregar a página); inválidos são descartados com aviso (o bloco fica sem dados). Ausentes geram o aviso “arquivo ausente no backup”. Tudo entra numa **única transação** (falha = nada gravado). |
 | Conflito de id | Mesmo id e mesmo conteúdo: nada é duplicado. Mesmo id com conteúdo **diferente**: o do backup ganha id novo e os blocos importados passam a apontar para ele — nunca exibem o dado local no lugar do importado. |
 | Duplicar / copiar bloco | Compartilha o asset imutável; substituir os dados de uma cópia não afeta a outra. |
 | Trocar de workspace | Os assets são do dispositivo; blocos de qualquer workspace continuam lendo seus dados. |
@@ -149,7 +149,7 @@ estatísticas nem cria objetos novos.
 
 ## Testes
 
-- `tests/unit/data-hub.test.ts` (55): CSV (BOM, aspas, quebras, delimitadores, decimal brasileiro, zeros à
+- `tests/unit/data-hub.test.ts` (61): CSV (BOM, aspas, quebras, delimitadores, decimal brasileiro, zeros à
   esquerda, inconsistência, cabeçalhos perigosos, binário/UTF-8, limites, fórmulas importadas como texto), JSON (duas
   variantes, células aninhadas, `__proto__`/`constructor` sem poluição, profundidade/itens, backups recusados),
   validação do conteúdo guardado, codec, exportação (escape, 14 variantes de fórmula, números intactos, ida e volta
@@ -158,7 +158,11 @@ estatísticas nem cria objetos novos.
   transitiva) e backup (restauração atômica, adulterado descartado, sem os dados, conflito de id, falha no meio).
 - `e2e/data-hub.spec.ts` (Chromium, Firefox, WebKit): A — importar CSV com prévia, persistir após recarregar,
   exportar CSV seguro e JSON, substituir pelo JSON; B — malformado, grande demais e prévia cancelada sem estado
-  parcial; C — Dados → Fórmula e a pergunta do backup (com e sem os dados).
+  parcial; C — Dados → Fórmula e a pergunta do backup (com e sem os dados); D — em “outro dispositivo”, backup sem os dados
+  mostra “ausente” e o backup com os dados restaura sem recarregar.
+- Revisão do Codex no PR #27 (3 achados, todos com teste de regressão que falhava antes): detecção do delimitador
+  com mais de 200 registros na amostra; laço de despejo/recarga do cache com datasets em uso; “ausente” preso no
+  cache após restaurar os dados.
 
 ## Futuro: Social Analytics Hub (fora do D2)
 

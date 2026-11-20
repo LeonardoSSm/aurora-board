@@ -210,7 +210,11 @@ export async function importIntoBlock(elementId: string, api: Pick<WidgetHostApi
     return false;
   }
   const latest = api.getElement(elementId);
-  if (latest?.type !== 'widget') return false; // bloco excluído durante a prévia: o asset fica órfão, sem referência
+  if (latest?.type !== 'widget') {
+    // Bloco excluído enquanto gravava: o arquivo recém-criado não tem referência nenhuma — apaga (melhor esforço).
+    await deleteDatasetAsset(assetId).catch(() => undefined);
+    return false;
+  }
   const name = baseName(f.name);
   const source: DatasetSource = { assetId, name, kind: parsed.kind, rows: parsed.content.rows.length, columns: parsed.content.columns.length, bytes: Math.min(f.size, DATASET_LIMITS.maxFileBytes), importedAt: Date.now() };
   const prev = sanitizeDatasetData(latest.data);

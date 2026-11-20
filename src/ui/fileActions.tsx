@@ -7,6 +7,7 @@ import { flushSave, getAdapter, snapshotCurrentBoard } from '../persistence/auto
 import { applyImport, assetIdsOf, buildExport, datasetAssetIdsOf, checkImportFileSize, downloadBlob, downloadText, ImportError, parseImport, safeFileName } from '../persistence/exportImport';
 import { LEGACY_STORAGE_KEY } from '../persistence/legacy';
 import { exportPNG, exportSVG } from '../render/exportImage';
+import { invalidateDatasets } from '../data/store';
 
 /**
  * Assets referenciados pelos quadros. Issue #24: dados importados (Data Hub) só entram com decisão EXPLÍCITA
@@ -189,15 +190,17 @@ export async function importFromText(name: string, textP: Promise<string>) {
   });
   if (button !== 'ok') return;
   const ws = getState().workspaces.find((w) => w.id === getState().workspaceId)!;
-  let ids: string[], updated;
+  let ids: string[], updated, assetIds: string[];
   try {
-    ({ boardIds: ids, workspace: updated } = await applyImport(getAdapter(), r, ws, () => uid('b_')));
+    ({ boardIds: ids, workspace: updated, assetIds } = await applyImport(getAdapter(), r, ws, () => uid('b_')));
   } catch (e) {
     // A gravação é uma transação única: se falhou, nada foi gravado (S1-SEC-006).
     const msg = e instanceof ImportError ? e.message : `Falha ao gravar: ${(e as Error).message}`;
     await openDialog({ title: 'Importação interrompida', message: `“${name}”: ${msg} Nenhum quadro ou arquivo foi gravado; seus quadros existentes não foram alterados.`, buttons: [{ label: 'Ok', value: 'ok', variant: 'primary' }] });
     return;
   }
+  // Issue #24: dados importados restaurados agora existem — esquece qualquer “ausente” guardado em cache.
+  invalidateDatasets(assetIds);
   setState({ workspaces: getState().workspaces.map((w) => (w.id === ws.id ? updated : w)) });
   await refreshBoards();
   await openBoard(ids[0]);

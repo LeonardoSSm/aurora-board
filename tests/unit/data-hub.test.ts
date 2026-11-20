@@ -19,7 +19,7 @@ import { DATASET_LIMITS, DATASET_MIME, DatasetError, validateContent, type Datas
 import { parseDatasetText } from '../../src/data/parse';
 import { datasetToCSV, datasetToJSON, isFormulaLike } from '../../src/data/export';
 import { decodeDatasetAsset, encodeDatasetAsset } from '../../src/data/codec';
-import { datasetEntry, deleteDatasetAsset, loadDatasetContent, requestDataset, resetDatasetCacheForTests, saveDataset } from '../../src/data/store';
+import { datasetEntry, deleteDatasetAsset, invalidateDatasets, loadDatasetContent, requestDataset, resetDatasetCacheForTests, saveDataset, setDatasetCacheLimitForTests } from '../../src/data/store';
 import { PROJECTION_LIMITS, projectDataset } from '../../src/data/project';
 import { sanitizeDatasetData, type DatasetData } from '../../src/widgets/builtin/dataset';
 
@@ -118,6 +118,24 @@ describe('CSV', () => {
     expect(() => parseDatasetText('a.csv', Array.from({ length: 6 }, (_, i) => `c${i}`).join(',') + '\n1,2,3,4,5,6\n', small({ maxColumns: 5 }))).toThrow(/Mais de 5 colunas/);
     expect(() => parseDatasetText('a.csv', 'a,b,c\n' + '1,2,3\n'.repeat(4), small({ maxCells: 10 }))).toThrow(/Mais de 10 células/);
     expect(() => parseDatasetText('a.csv', `a\n${'x'.repeat(51)}\n`, small({ maxCellChars: 50 }))).toThrow(/50 caracteres/);
+  });
+
+  // Revisão do Codex (PR #27): com mais de 200 registros na amostra de 64 KB, o leitor estourava o limite de
+  // linhas em TODOS os candidatos e a detecção caía na vírgula — o arquivo virava uma coluna só.
+  it.each([[';', 'a;b'], ['\t', 'a\tb'], ['|', 'a|b']])('detecta %j mesmo com mais de 200 registros na amostra', (d, header) => {
+    const body = Array.from({ length: 1500 }, (_, i) => `${i}${d}${i * 2}`).join('\n');
+    const p = csv(`${header}\n${body}\n`, 'x.txt');
+    expect(p.delimiter).toBe(d);
+    expect(p.content.columns.map((c) => c.label)).toEqual(['a', 'b']);
+    expect(p.content.rows[1499]).toEqual([1499, 2998]);
+  });
+
+  it('detecta o delimitador quando a amostra corta um campo entre aspas com quebra de linha', () => {
+    const head = 'a;b\n' + '1;2\n'.repeat(15_500); // ~62 KB
+    const long = `"${'x\n'.repeat(4000)}"`; // 8 KB com quebras: o corte da amostra (64 KB) cai dentro das aspas
+    const p = csv(`${head}3;${long}\n4;5\n`);
+    expect(p.delimiter).toBe(';');
+    expect(p.content.rows).toHaveLength(15_502);
   });
 
   it('texto que parece fórmula é IMPORTADO como texto (nada é avaliado)', () => {
@@ -283,6 +301,48 @@ describe('persistência local (asset imutável) e cache', () => {
     await requestDataset(id);
     expect(datasetEntry(id)).toMatchObject({ status: 'ready' });
     expect(await loadDatasetContent(id)).toEqual(c);
+  });
+
+  // Revisão do Codex (PR #27, P1): com o quadro usando mais células que o teto do cache, carregar um dataset
+  // despejava outro EM USO; o recálculo pedia de novo o despejado — laço infinito de leituras e recálculos.
+  it('datasets usados pelo quadro aberto não são despejados do cache (sem laço de recarga)', async () => {
+    const ids = [];
+    for (let i = 0; i < 3; i++) ids.push((await stored(csv(`v\n${i}\n${i}\n`).content, `d${i}`)).assetId); // 2 células cada
+    setDatasetCacheLimitForTests(3);
+    resetDatasetCacheForTests({ keepLimit: true });
+    const els = ids.map((assetId, i) => datasetEl({ assetId, name: `d${i}`, kind: 'csv', rows: 2, columns: 1, bytes: 1, importedAt: 1 }));
+    setState({ elements: els });
+    let reads = 0;
+    const get = adapter.getAsset.bind(adapter);
+    adapter.getAsset = async (id: string) => { reads++; return get(id); };
+    for (let round = 0; round < 5; round++) {
+      getDataflow([...getState().elements]);
+      await Promise.all(ids.map((id) => requestDataset(id)));
+    }
+    expect(reads).toBe(3);
+    for (const id of ids) expect(datasetEntry(id)?.status).toBe('ready');
+    // Um dataset FORA do quadro aberto pode sair do cache.
+    const extra = (await stored(csv('v\n9\n9\n').content, 'fora')).assetId;
+    resetDatasetCacheForTests({ keepLimit: true });
+    for (const id of [extra, ...ids]) await requestDataset(id);
+    expect(datasetEntry(extra)).toBeUndefined();
+    setDatasetCacheLimitForTests(null);
+  });
+
+  // Revisão do Codex (PR #27, P2): “ausente” ficava no cache para sempre; restaurar o backup com os dados na
+  // mesma sessão não fazia o bloco voltar.
+  it('restaurar os dados invalida o “ausente” em cache (o bloco volta sem recarregar a página)', async () => {
+    const c = csv('a\n1\n').content;
+    const asset = encodeDatasetAsset(c, 'a', 'ds_volta');
+    await requestDataset('ds_volta');
+    expect(datasetEntry('ds_volta')).toEqual({ status: 'missing' });
+    const src = { assetId: 'ds_volta', name: 'a', kind: 'csv' as const, rows: 1, columns: 1, bytes: 1, importedAt: 1 };
+    const r = parseImport(buildExport([{ ...createBoard('ws1', 'B'), elements: [datasetEl(src)] }], [asset]), 'ws1');
+    const res = await applyImport(adapter, r, { id: 'ws1', name: 'W', createdAt: 1, updatedAt: 1, boardOrder: [] }, () => 'b_x');
+    expect(res.assetIds).toEqual(['ds_volta']);
+    invalidateDatasets(res.assetIds);
+    await requestDataset('ds_volta');
+    expect(datasetEntry('ds_volta')).toMatchObject({ status: 'ready' });
   });
 
   it('asset ausente, corrompido e excluído', async () => {

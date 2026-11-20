@@ -53,14 +53,16 @@ export function parseDatasetText(fileName: string, text: string, lim: Limits = D
 
 /* ------------------------------------------------------------------ CSV */
 
-function detectDelimiter(text: string, lim: Limits): string {
-  const sample = text.slice(0, 64 * 1024);
-  // Corta a última linha da amostra (pode estar incompleta) quando o texto é maior que ela.
-  const cut = text.length > sample.length ? sample.slice(0, Math.max(sample.lastIndexOf('\n'), 1)) : sample;
-  let best = ',', bestScore = -1;
+const SAMPLE_CHARS = 64 * 1024;
+
+/** Pontua os candidatos numa amostra; null quando nenhum consegue ler a amostra. */
+function scoreDelimiters(sample: string, lim: Limits): string | null {
+  let best: string | null = null, bestScore = -1;
   for (const d of DELIMS) {
     try {
-      const { rows } = parseCsv(cut, d as never, { maxBytes: lim.maxFileBytes, maxRows: 200, maxColumns: lim.maxColumns, maxFieldChars: lim.maxCellChars });
+      // Sem teto de linhas aqui: a amostra já é limitada em caracteres, e um teto faria o leitor DESISTIR da
+      // amostra inteira (revisão do Codex, PR #27) em vez de pontuá-la.
+      const { rows } = parseCsv(sample, d as never, { maxBytes: lim.maxFileBytes, maxRows: sample.length + 1, maxColumns: lim.maxColumns, maxFieldChars: lim.maxCellChars });
       if (!rows.length) continue;
       const width = rows[0].length;
       if (width < 2) continue;
@@ -71,6 +73,21 @@ function detectDelimiter(text: string, lim: Limits): string {
     } catch { /* delimitador inviável para a amostra */ }
   }
   return best;
+}
+
+function detectDelimiter(text: string, lim: Limits): string {
+  if (text.length <= SAMPLE_CHARS) return scoreDelimiters(text, lim) ?? ',';
+  // Amostra cortada no fim de uma linha. Se o corte cair dentro de um campo entre aspas (com quebras de linha),
+  // nenhum candidato lê a amostra: tenta cortes anteriores, cada vez menores.
+  let end = SAMPLE_CHARS;
+  for (let attempt = 0; attempt < 6 && end > 0; attempt++) {
+    const cut = text.lastIndexOf('\n', end - 1);
+    if (cut <= 0) break;
+    const best = scoreDelimiters(text.slice(0, cut), lim);
+    if (best) return best;
+    end = Math.floor(cut / 2);
+  }
+  return ',';
 }
 
 const NUM_DOT = /^[+-]?(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?$/;

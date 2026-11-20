@@ -182,14 +182,14 @@ export function parseImport(text: string, workspaceId: string): ImportResult {
  * Atômica quando o adaptador oferece `commitImport` (IndexedDB e memória): assets, quadros e workspace entram
  * numa única transação — ou tudo é gravado, ou nada (S1-SEC-006). Antes, cada quadro precisa ser clonável
  * (clone estruturado), então um quadro "envenenado" é recusado sem efeito colateral.
- * Retorna os ids dos quadros criados e o workspace atualizado.
+ * Retorna os ids dos quadros criados, o workspace atualizado e os ids dos assets gravados.
  */
 export async function applyImport(
   adapter: Pick<PersistenceAdapter, 'loadBoard' | 'saveBoard' | 'getAsset' | 'putAsset' | 'saveWorkspace'> & Partial<Pick<PersistenceAdapter, 'commitImport'>>,
   result: ImportResult,
   workspace: Workspace,
   newId: () => string,
-): Promise<{ boardIds: string[]; workspace: Workspace }> {
+): Promise<{ boardIds: string[]; workspace: Workspace; assetIds: string[] }> {
   const assets: Asset[] = [];
   // Issue #24: um conjunto de dados do backup com o MESMO id de um asset local DIFERENTE ganha id novo, e os
   // blocos importados passam a apontar para ele — nunca exibem silenciosamente o dado local no lugar do importado.
@@ -228,7 +228,7 @@ export async function applyImport(
     for (const b of boards) await adapter.saveBoard(b);
     await adapter.saveWorkspace(updated);
   }
-  return { boardIds: ids, workspace: updated };
+  return { boardIds: ids, workspace: updated, assetIds: assets.map((a) => a.id) };
 }
 
 export function downloadText(filename: string, text: string, mime = 'application/json') {
