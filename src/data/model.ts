@@ -38,8 +38,12 @@ export interface DatasetContent {
 export type DatasetKind = 'csv' | 'json';
 
 export const DATASET_LIMITS = {
-  /** Tamanho do arquivo importado (conferido por `File.size`, antes de ler). */
-  maxFileBytes: 10 * 1024 * 1024,
+  /**
+   * Tamanho do arquivo importado (conferido por `File.size`, antes de ler). Derivado do limite de armazenamento
+   * (24 MB) + 2 MB: tudo o que o app guarda pode ser exportado em CSV ou JSON e REIMPORTADO (revisão do Codex,
+   * PR #27). O CSV exportado tem no máximo 1 byte a mais por célula (o apóstrofo anti-fórmula) que o JSON guardado.
+   */
+  maxFileBytes: 26 * 1024 * 1024,
   maxRows: 50_000,
   maxColumns: 100,
   maxCells: 1_000_000,

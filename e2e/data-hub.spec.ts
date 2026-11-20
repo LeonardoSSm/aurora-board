@@ -90,7 +90,7 @@ test.describe('Issue #24 — Data Hub (D2-A)', () => {
     await page.getByRole('dialog').getByRole('button', { name: 'Ok' }).click();
     expect((await datasetData(page, id)).source).toBeNull();
 
-    await importFile(page, page.getByTestId('dataset-import'), { name: 'grande.json', mimeType: 'application/json', text: '[' + '{"a":1},'.repeat(1_400_000) + '{"a":1}]' });
+    await importFile(page, page.getByTestId('dataset-import'), { name: 'grande.json', mimeType: 'application/json', text: '[' + '{"a":1},'.repeat(3_500_000) + '{"a":1}]' });
     await expect(page.getByRole('dialog')).toContainText('grande demais');
     await page.getByRole('dialog').getByRole('button', { name: 'Ok' }).click();
 

@@ -5,7 +5,8 @@
  * de espaços e caracteres de controle — seja `=`, `+`, `-`, `@` (ou as variantes de largura total) ou que
  * comece com TAB/CR recebe um apóstrofo na frente e vai entre aspas. Assim Excel, LibreOffice e Google
  * Planilhas mostram o texto em vez de executar uma fórmula. Números de verdade (coluna numérica) saem como
- * números (`-5` continua número). Aspas, separadores e quebras de linha são escapados (RFC 4180); Unicode é
+ * números (`-5` continua número). Ao reimportar no Aurora Board, o apóstrofo é removido (`restoreNeutralized`).
+ * Aspas, separadores e quebras de linha são escapados (RFC 4180); Unicode é
  * preservado; o arquivo começa com BOM UTF-8 para o Excel reconhecer a codificação.
  */
 import { DATASET_FORMAT, DATASET_VERSION, type CellValue, type DatasetContent } from './model';
@@ -22,9 +23,29 @@ export function isFormulaLike(s: string): boolean {
   return rest.length > 0 && FORMULA_START.has(rest[0]);
 }
 
+/**
+ * Precisa do apóstrofo? Sim quando parece fórmula — e também quando, depois de apóstrofos iniciais, pareceria
+ * (`'=x` vira `''=x`). Assim a importação, que tira UM apóstrofo nesse caso, devolve exatamente o original.
+ */
+function needsEscape(s: string): boolean {
+  let i = 0;
+  while (s[i] === "'") i++;
+  return isFormulaLike(i ? s.slice(i) : s);
+}
+
 /** Texto neutralizado para planilhas (apóstrofo na frente quando parece fórmula). */
 export function neutralizeFormula(s: string): string {
-  return isFormulaLike(s) ? `'${s}` : s;
+  return needsEscape(s) ? `'${s}` : s;
+}
+
+/**
+ * Inverso exato de `neutralizeFormula`, aplicado na IMPORTAÇÃO de CSV: `'=…` volta a ser `=…` (e `''=…` volta a
+ * `'=…`). A ida e volta CSV fica sem perda e sem crescer — revisão do Codex, PR #27. O valor continua TEXTO no
+ * app (nada é avaliado) e toda exportação CSV neutraliza de novo. Planilhas também tratam o `'` inicial como
+ * marcador de texto, então a leitura coincide com a delas.
+ */
+export function restoreNeutralized(s: string): string {
+  return s.length > 1 && s[0] === "'" && needsEscape(s.slice(1)) ? s.slice(1) : s;
 }
 
 function csvField(v: CellValue, delimiter: string): string {
@@ -43,7 +64,8 @@ export function datasetToCSV(content: DatasetContent, delimiter = ','): string {
 }
 
 /**
- * JSON reimportável (`{ format, version, name, columns, rows }`, linhas como listas na ordem das colunas).
+ * JSON reimportável e COMPACTO (`{ format, version, name, columns, rows }`, linhas como listas na ordem das
+ * colunas): o tamanho acompanha o do conteúdo guardado e cabe no limite de importação.
  * As células são escritas como estão: o JSON não é aberto por planilhas como fórmula.
  */
 export function datasetToJSON(content: DatasetContent, name: string): string {
@@ -54,5 +76,5 @@ export function datasetToJSON(content: DatasetContent, name: string): string {
     exportedAt: new Date().toISOString(),
     columns: content.columns.map((c) => ({ label: c.label, type: c.type })),
     rows: content.rows,
-  }, null, 1);
+  });
 }

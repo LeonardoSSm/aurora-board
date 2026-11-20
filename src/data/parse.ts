@@ -13,6 +13,7 @@
  * Células: texto, número, sim/não ou nulo. Objetos/listas dentro de uma célula viram o texto JSON dela (aviso).
  */
 import { parseCsv, StatementError, stripBom } from '../finance/csv';
+import { restoreNeutralized } from './export';
 import { cleanLabel, columnKeys, DATASET_FORMAT, DATASET_LIMITS, DATASET_VERSION, DatasetError, type CellValue, type ColumnType, type DatasetColumn, type DatasetContent, type DatasetKind } from './model';
 
 export interface ParsedDataset {
@@ -62,7 +63,7 @@ function scoreDelimiters(sample: string, lim: Limits): string | null {
     try {
       // Sem teto de linhas aqui: a amostra já é limitada em caracteres, e um teto faria o leitor DESISTIR da
       // amostra inteira (revisão do Codex, PR #27) em vez de pontuá-la.
-      const { rows } = parseCsv(sample, d as never, { maxBytes: lim.maxFileBytes, maxRows: sample.length + 1, maxColumns: lim.maxColumns, maxFieldChars: lim.maxCellChars });
+      const { rows } = parseCsv(sample, d as never, { maxBytes: lim.maxFileBytes, maxRows: sample.length + 1, maxColumns: lim.maxColumns, maxFieldChars: lim.maxCellChars + 1 });
       if (!rows.length) continue;
       const width = rows[0].length;
       if (width < 2) continue;
@@ -132,13 +133,23 @@ function parseCsvDataset(input: string, lim: Limits): ParsedDataset {
   const delimiter = detectDelimiter(text, lim);
   let rows: string[][], lines: number[];
   try {
-    ({ rows, lines } = parseCsv(text, delimiter as never, { maxBytes: lim.maxFileBytes, maxRows: lim.maxRows + 1, maxColumns: lim.maxColumns, maxFieldChars: lim.maxCellChars }));
+    // +1 no campo: o apóstrofo que a exportação CSV acrescenta (removido logo abaixo, antes de conferir o limite).
+    ({ rows, lines } = parseCsv(text, delimiter as never, { maxBytes: lim.maxFileBytes, maxRows: lim.maxRows + 1, maxColumns: lim.maxColumns, maxFieldChars: lim.maxCellChars + 1 }));
   } catch (e) {
     if (!(e instanceof StatementError)) throw e;
     // O leitor conta o cabeçalho como linha: a mensagem usa o limite de linhas DE DADOS.
     throw new DatasetError(/linhas/.test(e.message) ? `Mais de ${fmt(lim.maxRows)} linhas: divida o arquivo.` : e.message);
   }
   if (!rows.length) throw new DatasetError('Arquivo vazio.');
+  // Desfaz a neutralização anti-fórmula da exportação (ida e volta exata) e confere o limite por célula.
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
+    for (let c = 0; c < row.length; c++) {
+      const v = restoreNeutralized(row[c]);
+      if (v.length > lim.maxCellChars) throw new DatasetError(`Linha ${lines[r]}: campo com mais de ${fmt(lim.maxCellChars)} caracteres.`);
+      row[c] = v;
+    }
+  }
   const header = rows[0];
   const width = header.length;
   if (header.every((h) => h === '')) throw new DatasetError('A primeira linha (cabeçalho) está vazia.');

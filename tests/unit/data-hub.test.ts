@@ -261,11 +261,38 @@ describe('exportação CSV/JSON', () => {
     for (const s of ['ok', 'a-b', 'e-mail', '5', '']) expect(isFormulaLike(s)).toBe(false);
   });
 
-  it('reimportar o CSV exportado nunca devolve uma fórmula ativa', () => {
-    const c = json([{ f: '=cmd|"/C calc"!A0' }, { f: '@SUM(1)' }]).content;
-    const back = csv(datasetToCSV(c)).content.rows.map((r) => r[0] as string);
-    expect(back).toEqual(["'=cmd|\"/C calc\"!A0", "'@SUM(1)"]);
-    for (const v of back) expect(isFormulaLike(v)).toBe(false);
+  // Revisão do Codex (PR #27, 3ª rodada): o JSON exportado de um dataset grande (mas aceito) passava do limite de
+  // importação e não podia ser restaurado pelo próprio bloco. Vale para o CSV também.
+  it('o que o app exporta (CSV e JSON) sempre cabe nos limites de reimportação — conjunto no teto de células', () => {
+    const rows = Array.from({ length: DATASET_LIMITS.maxRows }, () => Array.from({ length: 20 }, () => '=bcde'));
+    const c = validateContent({ format: 'aurora-dataset', version: 1, columns: Array.from({ length: 20 }, (_, i) => ({ label: `coluna_${i}`, type: 'text' })), rows });
+    const enc = new TextEncoder();
+    for (const [name, text] of [['x.json', datasetToJSON(c, 'x')], ['x.csv', datasetToCSV(c)]] as const) {
+      expect(enc.encode(text).length, name).toBeLessThanOrEqual(DATASET_LIMITS.maxFileBytes);
+      const back = parseDatasetText(name, text).content;
+      expect(back.rows).toHaveLength(DATASET_LIMITS.maxRows);
+      expect(back).toEqual(c); // ida e volta exata (o CSV neutraliza no arquivo e a importação desfaz)
+    }
+    expect(datasetToJSON(c, 'x')).not.toMatch(/\n/); // compacto
+  });
+
+  it('célula no limite de tamanho que recebe o apóstrofo da exportação ainda reimporta', () => {
+    const s = '=' + 'x'.repeat(DATASET_LIMITS.maxCellChars - 1);
+    const c = validateContent({ format: 'aurora-dataset', version: 1, columns: [{ label: 'f', type: 'text' }], rows: [[s]] });
+    const back = csv(datasetToCSV(c)).content;
+    expect(back.rows[0][0]).toBe(s);
+    expect(() => encodeDatasetAsset(back, 'x')).not.toThrow();
+  });
+
+  it('ida e volta CSV com textos que parecem fórmula: o ARQUIVO sempre neutralizado, o valor no app é o original (texto)', () => {
+    const c = json([{ f: '=cmd|"/C calc"!A0' }, { f: '@SUM(1)' }, { f: "'=já tinha apóstrofo" }, { f: "''=dois" }, { f: "'texto comum" }, { f: " '=espaço antes" }]).content;
+    const file = datasetToCSV(c);
+    for (const line of file.split(/\r\n/).slice(1).filter(Boolean)) expect(isFormulaLike(line.replace(/^"/, ''))).toBe(false);
+    const back = csv(file).content;
+    expect(back).toEqual(c);
+    expect(back.columns[0].type).toBe('text');
+    // Reexportar neutraliza de novo (estável).
+    expect(datasetToCSV(back)).toBe(file);
   });
 });
 

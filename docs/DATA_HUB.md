@@ -83,9 +83,9 @@ Bridge remove `key`/`members`/`$…` de valores, e as três primeiras poluiriam 
 
 | Item | Limite |
 |---|---|
-| Arquivo | 10 MB (conferido antes de ler) |
+| Arquivo | 26 MB (conferido antes de ler) — o limite de armazenamento (24 MB) + 2 MB, para que todo dado guardado possa ser exportado em CSV/JSON e reimportado |
 | Linhas / colunas / células | 50.000 / 100 / 1.000.000 |
-| Texto por célula / rótulo | 10.000 / 120 caracteres |
+| Texto por célula / rótulo | 10.000 (+1 só para o apóstrofo anti-fórmula de um CSV exportado) / 120 caracteres |
 | JSON bruto | 32 níveis, 3 milhões de itens (antes de converter) |
 | Conteúdo guardado | 24 MB (bytes UTF-8) de JSON normalizado — a mesma unidade na gravação e na leitura; o asset em base64 cabe no limite de 36 MB dos backups |
 | Cache em memória | 3 milhões de células (LRU); datasets do quadro aberto nunca são despejados (o teto pode ser ultrapassado por eles) |
@@ -116,10 +116,12 @@ estatísticas nem cria objetos novos.
 - **CSV:** BOM UTF-8, separador vírgula, CRLF, escape RFC 4180. **Proteção contra fórmulas em planilhas:** um
   texto cujo primeiro caractere significativo — depois de espaços, caracteres de controle e de largura zero — é
   `=`, `+`, `-`, `@` (ou as variantes de largura total `＝＋－＠`), ou que começa com TAB/CR, recebe `'` na frente e
-  vai entre aspas. Números de colunas numéricas saem como números (`-5` continua número). Cabeçalhos também são
-  neutralizados. Consequência documentada: ao reimportar, esses textos trazem o `'`.
-- **JSON:** `{ format: 'aurora-dataset', version: 1, name, exportedAt, columns: [{ label, type }], rows }` —
-  reimportável sem perda (Unicode, aspas e quebras de linha preservados).
+  vai entre aspas (texto que já começa com apóstrofos seguidos de algo assim também recebe um). Números de colunas
+  numéricas saem como números (`-5` continua número). Cabeçalhos também são neutralizados. **Ida e volta exata:** ao
+  importar um CSV, o app remove esse apóstrofo (como as planilhas fazem com `'` inicial) — o valor volta a ser o
+  original, continua **texto** (nada é avaliado) e é neutralizado de novo em toda exportação.
+- **JSON compacto:** `{ format: 'aurora-dataset', version: 1, name, exportedAt, columns: [{ label, type }], rows }` —
+  tamanho próximo ao do conteúdo guardado; reimportável sem perda (Unicode, aspas e quebras de linha preservados).
 - Os downloads são disparados pela interface do host (botões do bloco, painel e menu de contexto). O HTML
   isolado não exporta nem importa nada.
 
@@ -149,7 +151,7 @@ estatísticas nem cria objetos novos.
 
 ## Testes
 
-- `tests/unit/data-hub.test.ts` (63): CSV (BOM, aspas, quebras, delimitadores, decimal brasileiro, zeros à
+- `tests/unit/data-hub.test.ts` (65): CSV (BOM, aspas, quebras, delimitadores, decimal brasileiro, zeros à
   esquerda, inconsistência, cabeçalhos perigosos, binário/UTF-8, limites, fórmulas importadas como texto), JSON (duas
   variantes, células aninhadas, `__proto__`/`constructor` sem poluição, profundidade/itens, backups recusados),
   validação do conteúdo guardado, codec, exportação (escape, 14 variantes de fórmula, números intactos, ida e volta
@@ -163,7 +165,8 @@ estatísticas nem cria objetos novos.
 - Revisão do Codex no PR #27 (3 achados, todos com teste de regressão que falhava antes): detecção do delimitador
   com mais de 200 registros na amostra; laço de despejo/recarga do cache com datasets em uso; “ausente” preso no
   cache após restaurar os dados. 2ª rodada (2 achados, também com regressão): arquivo grande só com CR e limite de
-  gravação em caracteres UTF-16 × leitura em bytes UTF-8 (gravava conteúdo que não relia).
+  gravação em caracteres UTF-16 × leitura em bytes UTF-8 (gravava conteúdo que não relia). 3ª rodada: exportação de
+  dataset grande que não reimportava — limites alinhados, JSON compacto e ida e volta CSV exata.
 
 ## Futuro: Social Analytics Hub (fora do D2)
 

@@ -126,6 +126,6 @@ Google Calendar, Google Drive, GitHub, API externa, indicadores financeiros, das
 ## Data Hub (issue #24, D2-A)
 
 - Importação de planilhas `.xlsx` não é suportada: salve como “CSV UTF-8”. Outras codificações (Latin-1/Windows-1252) são recusadas com orientação.
-- Textos que parecem fórmula saem no CSV com `'` na frente (proteção para planilhas); ao reimportar esse CSV, o `'` permanece no texto.
+- Textos que parecem fórmula saem no CSV com `'` na frente (proteção para planilhas); ao importar um CSV, o app remove esse `'` (como as planilhas). Um CSV de outra origem com `'=…` intencional chega como `=…` (texto).
 - Excluir um bloco de dados não apaga o arquivo local (como imagens), para o desfazer funcionar; apagar de fato é pelo painel do bloco (“Excluir dados deste dispositivo”). Arquivos sem referência não são coletados automaticamente.
 - A IA não recebe dados importados nem derivados deles neste estágio; o consentimento granular é do D2-C.
