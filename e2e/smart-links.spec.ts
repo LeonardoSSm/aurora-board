@@ -226,16 +226,22 @@ test('Propriedades: nome, URL, layout, ícone e imagem; inválido não abre; per
   const fc = page.waitForEvent('filechooser');
   await page.getByRole('menuitem', { name: /Arquivo JSON/ }).click();
   await (await fc).setFiles(file);
+  const boardBefore = (await state(page)).boardId;
   await page.getByRole('button', { name: 'Importar como novos quadros' }).click();
   await expect.poll(async () => (await state(page)).boards.length).toBeGreaterThan(1);
+  // a troca para o quadro importado é assíncrona: só segue com ele aberto (senão o próximo bloco cai no antigo)
+  await expect.poll(async () => { const s = await state(page); return s.boardId !== boardBefore && s.elements.some((e) => e.widgetType === LINK); }).toBe(true);
+  await page.waitForFunction(() => (window as any).__aurora.getState().status === 'ready');
   await expect(page.getByTestId('link-shortcut-image')).toBeVisible();
 
   // referência sem asset: cai no ícone, sem quebrar
-  await page.evaluate(() => {
+  const missingId = await page.evaluate(() => {
     const a = (window as any).__aurora;
-    a.actions.addWidget('aurora.link', { x: 400, y: 0 }, { url: 'https://example.com/', visual: { displayMode: 'shortcut', layout: 'horizontal', iconMode: 'uploaded', assetId: 'a_naoexiste' } });
+    const el = a.actions.addWidget('aurora.link', { x: 400, y: 0 }, { url: 'https://example.com/', visual: { displayMode: 'shortcut', layout: 'horizontal', iconMode: 'uploaded', assetId: 'a_naoexiste' } });
+    a.actions.focusElement(el.id); // o canvas desmonta blocos fora da vista: enquadra antes de verificar
+    return el.id as string;
   });
-  await expect(page.locator('[data-testid="link-shortcut"][data-media="icon:globe"]')).toBeVisible();
+  await expect(page.locator(`[data-element-id="${missingId}"] [data-testid="link-shortcut"]`)).toHaveAttribute('data-media', 'icon:globe');
   expect(external).toEqual([]);
 });
 
@@ -263,6 +269,13 @@ test('links antigos seguem Clássicos; conversão reversível; quatro redes com 
   await expect(legacy.getByTestId('link-shortcut')).toContainText('exemplo-antigo.org');
   const insp = page.getByTestId('link-inspector');
   await page.evaluate((id) => (window as any).__aurora.actions.openWidgetInspector(id), legacyId);
+  // título personalizado do bloco é independente do nome exibido (revisão do PR #23)
+  await page.getByLabel('Título do bloco').fill('Referências do projeto');
+  await expect(legacy.getByTestId('link-shortcut')).toContainText('Referências do projeto');
+  await insp.getByLabel('Nome exibido').fill('Docs');
+  await expect(legacy.getByTestId('link-shortcut')).toContainText('Docs');
+  await insp.getByLabel('Nome exibido').fill('');
+  expect((await byId(page, legacyId)).title).toBe('Referências do projeto');
   await insp.getByRole('radio', { name: 'Clássico' }).click();
   await expect(legacy.locator('textarea')).toHaveValue('Referência antiga');
   expect((await byId(page, legacyId)).data).toMatchObject({ url: 'https://exemplo-antigo.org/doc', description: 'Referência antiga', preview: null });

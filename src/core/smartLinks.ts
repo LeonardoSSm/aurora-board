@@ -211,6 +211,14 @@ export function displayLabel(title: string | undefined, url: string, v: Pick<Lin
  * nome exibido anterior). Limpar o nome devolve o título padrão, para o nome automático (site/domínio) voltar;
  * um título personalizado à parte nunca é tocado. null = manter o título.
  */
+/**
+ * Nome que o título do bloco pode estar acompanhando: o nome explícito ou, sem ele, o automático (site/domínio).
+ * Nunca o próprio título — senão um título personalizado à parte pareceria “sincronizado” e seria sobrescrito.
+ */
+export function followedName(url: string, v: Pick<LinkVisual, 'label'> | undefined): string {
+  return v?.label.trim() || initialLabel(url);
+}
+
 export const TITLE_MAX = 80;
 const asTitle = (s: string) => s.trim().slice(0, TITLE_MAX).trim();
 

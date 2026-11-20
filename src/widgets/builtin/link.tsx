@@ -19,6 +19,7 @@ import {
   defaultVisual,
   displayLabel,
   fitLabel,
+  followedName,
   initialLabel,
   isInsecureHttp,
   isShortcut,
@@ -369,7 +370,7 @@ function Inspector({ element, data, api }: { element: WidgetElement; data: LinkD
       id,
       (d) => ({ visual: { ...(d.visual ?? defaultVisual({ displayMode: 'classic' })), label } }),
       (el, _n, prev) => {
-        const t = titleFollowingLabel(el.title, displayLabel(el.title, prev.url, prev.visual), label);
+        const t = titleFollowingLabel(el.title, followedName(prev.url, prev.visual), label);
         return t ? { title: t } : {};
       },
       `link:label:${id}`,

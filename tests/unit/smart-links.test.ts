@@ -18,6 +18,7 @@ import {
   shortcutLayout,
   titleFollowingLabel,
   fitLabel,
+  followedName,
 } from '../../src/core/smartLinks';
 import { sanitizeLink } from '../../src/core/widgetData';
 import { WIDGET } from '../../src/core/widgetIds';
@@ -159,6 +160,11 @@ describe('nome e site conhecidos (sem rede)', () => {
     expect(t1.length).toBeLessThanOrEqual(80);
     expect(titleFollowingLabel(t1, longo, 'Curto')).toBe('Curto');
     expect(titleFollowingLabel(t1, longo, '')).toBe('Link');
+    // título personalizado com nome vazio (ex.: link clássico convertido) não é sobrescrito ao dar um nome
+    expect(followedName('https://exemplo.org/', { label: '' })).toBe('exemplo.org');
+    expect(titleFollowingLabel('Referências do projeto', followedName('https://exemplo.org/', { label: '' }), 'Docs')).toBeNull();
+    expect(titleFollowingLabel('exemplo.org', followedName('https://exemplo.org/', { label: '' }), 'Docs')).toBe('Docs');
+    expect(titleFollowingLabel('YouTube Studio', followedName('https://studio.youtube.com/', { label: 'YouTube Studio' }), '')).toBe('Link');
   });
 });
 
