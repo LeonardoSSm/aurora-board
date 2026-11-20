@@ -27,6 +27,9 @@ export interface DatasetView {
   pageSize: number;
   /** Chaves das colunas projetadas em `rows`; vazio = todas (até o limite). */
   columns: string[];
+  /** D2-B: agrupamento nativo (saída `groups`) — chave da coluna de grupo e da coluna numérica; '' = desligado. */
+  groupBy: string;
+  measure: string;
 }
 
 export interface ColumnStats { count: number; sum: number; min: number | null; max: number | null; mean: number | null }
@@ -63,10 +66,13 @@ const clampInt = (v: unknown, min: number, max: number, dflt: number) => (typeof
 export function sanitizeView(raw: unknown): DatasetView {
   const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const columns = Array.isArray(o.columns) ? [...new Set(o.columns.filter((c): c is string => typeof c === 'string' && c.length > 0 && c.length <= 200))].slice(0, PROJECTION_LIMITS.maxProjectedColumns) : [];
+  const key = (v: unknown) => (typeof v === 'string' && v.length <= 200 ? v : '');
   return {
     page: clampInt(o.page, 0, 1_000_000, 0),
     pageSize: clampInt(o.pageSize, 1, PROJECTION_LIMITS.maxPageSize, PROJECTION_LIMITS.defaultPageSize),
     columns,
+    groupBy: key(o.groupBy),
+    measure: key(o.measure),
   };
 }
 

@@ -14,7 +14,7 @@
  * esse resumo.
  */
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Database, Download, Trash2, Upload } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, Download, LayoutDashboard, Trash2, Upload } from 'lucide-react';
 import type { AuroraElement, WidgetElement } from '../../core/schema';
 import type { WidgetHostApi, WidgetPlugin, WidgetProps } from '../registry';
 import { WIDGET } from '../../core/widgetIds';
@@ -22,7 +22,7 @@ import { decFromNumber } from '../../core/decimal';
 import { numberValue } from '../../core/scalar';
 import { Badge, Button, Field, Label } from '../../ui/primitives';
 import { openDialog, toast } from '../../store/ui';
-import { updateElement as updateEl } from '../../store/actions';
+import { addElements as addEls, updateElement as updateEl } from '../../store/actions';
 import { getState } from '../../store/editor';
 import { getAdapter } from '../../persistence/autosave';
 import { assetIdsOf, downloadText, safeFileName } from '../../persistence/exportImport';
@@ -31,6 +31,9 @@ import { checkDatasetFileSize, decodeDatasetBytes, parseDatasetText, type Parsed
 import { datasetEntry, deleteDatasetAsset, loadDatasetContent, requestDataset, saveDataset } from '../../data/store';
 import { PROJECTION_LIMITS, projectDataset, sanitizeView, type DatasetProjection, type DatasetView } from '../../data/project';
 import { datasetToCSV, datasetToJSON } from '../../data/export';
+import { AGGREGATE_LIMITS, aggregateDataset, type DatasetGroups } from '../../data/aggregate';
+import { createConnectedDashboard } from './datasetDashboard';
+import { useDataflow } from '../dataflow';
 
 export interface DatasetData {
   source: DatasetSource | null;
@@ -45,7 +48,7 @@ type DatasetStatus =
   | { status: 'loading' }
   | { status: 'missing' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; projection: DatasetProjection };
+  | { status: 'ready'; projection: DatasetProjection; groups: DatasetGroups | null };
 
 const ASSET_ID = /^[A-Za-z0-9_-]{1,80}$/;
 const safeInt = (v: unknown, max: number) => (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 && v <= max ? v : null);
@@ -75,7 +78,8 @@ const projections = new WeakMap<DatasetContent, Map<string, DatasetProjection>>(
 function projectionOf(content: DatasetContent, name: string, view: DatasetView): DatasetProjection {
   let m = projections.get(content);
   if (!m) { m = new Map(); projections.set(content, m); }
-  const key = JSON.stringify([name, view]);
+  // Só o que muda a projeção (o agrupamento tem memo próprio).
+  const key = JSON.stringify([name, view.page, view.pageSize, view.columns]);
   let p = m.get(key);
   if (!p) {
     if (m.size > 20) m.clear();
@@ -83,6 +87,20 @@ function projectionOf(content: DatasetContent, name: string, view: DatasetView):
     m.set(key, p);
   }
   return p;
+}
+
+const groupings = new WeakMap<DatasetContent, Map<string, DatasetGroups | null>>();
+/** D2-B: agrupamento nativo memoizado (conjunto inteiro). Null sem coluna de grupo válida. */
+function groupsOf(content: DatasetContent, view: DatasetView): DatasetGroups | null {
+  if (!view.groupBy) return null;
+  let m = groupings.get(content);
+  if (!m) { m = new Map(); groupings.set(content, m); }
+  const key = JSON.stringify([view.groupBy, view.measure]);
+  if (!m.has(key)) {
+    if (m.size > 20) m.clear();
+    m.set(key, aggregateDataset(content, view.groupBy, view.measure));
+  }
+  return m.get(key)!;
 }
 
 export function computeDataset(d: DatasetData): Record<string, unknown> {
@@ -95,12 +113,14 @@ export function computeDataset(d: DatasetData): Record<string, unknown> {
   if (e.status === 'missing') return { [STATUS_KEY]: { status: 'missing' } satisfies DatasetStatus };
   if (e.status === 'error') return { [STATUS_KEY]: { status: 'error', message: e.message } satisfies DatasetStatus };
   const p = projectionOf(e.content, d.source.name, d.view);
+  const g = groupsOf(e.content, d.view);
   return {
     rows: p.rows,
     columns: p.columns,
     summary: p.summary,
     count: numberValue(decFromNumber(p.summary.rowCount) ?? 0n),
-    [STATUS_KEY]: { status: 'ready', projection: p } satisfies DatasetStatus,
+    ...(g ? { groups: g } : {}),
+    [STATUS_KEY]: { status: 'ready', projection: p, groups: g } satisfies DatasetStatus,
   };
 }
 
@@ -337,7 +357,9 @@ function DatasetTile({ element, data, outputs, update, api }: WidgetProps<Datase
 }
 
 function DatasetInspector({ element, data, outputs, update, api }: WidgetProps<DatasetData>) {
-  const st = statusOf(outputs, data);
+  // O painel não recebe as saídas calculadas: lê o fluxo de dados (como o bloco HTML).
+  const flow = useDataflow();
+  const st = statusOf(flow.outputs.get(element.id) ?? outputs, data);
   const p = st.status === 'ready' ? st.projection : null;
   const [size, setSize] = useState(String(data.view.pageSize));
   const chosen = useMemo(() => new Set(data.view.columns), [data.view.columns]);
@@ -389,6 +411,30 @@ function DatasetInspector({ element, data, outputs, update, api }: WidgetProps<D
       )}
       {p?.summary.truncated && <div className="text-[11px] text-warn" data-testid="dataset-truncation">{p.summary.notes.map((n) => <div key={n}>⚠ {n}</div>)}</div>}
 
+      <Label>Agrupamento (conjunto inteiro)</Label>
+      <div className="text-[11px] text-soft">Saída <code>groups</code>: contagem, soma, média, mínimo e máximo por grupo, calculados aqui sobre TODAS as linhas (até {AGGREGATE_LIMITS.maxGroups} grupos).</div>
+      {p && (
+        <div className="flex flex-col gap-1">
+          <label className="flex items-center gap-2 text-[11px]">Agrupar por
+            <select aria-label="Agrupar por" data-testid="dataset-group-by" className="h-7 rounded-md border border-line bg-panel-3 px-1 text-[11px] min-w-0 flex-1" value={data.view.groupBy} onChange={(e) => update((d) => ({ ...d, view: { ...d.view, groupBy: e.target.value } }))}>
+              <option value="">(nenhum)</option>
+              {p.columns.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-[11px]">Medida
+            <select aria-label="Medida do agrupamento" data-testid="dataset-measure" className="h-7 rounded-md border border-line bg-panel-3 px-1 text-[11px] min-w-0 flex-1" value={data.view.measure} onChange={(e) => update((d) => ({ ...d, view: { ...d.view, measure: e.target.value } }))}>
+              <option value="">(só contagem)</option>
+              {p.columns.filter((c) => c.type === 'number').map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+          </label>
+          {st.status === 'ready' && st.groups && <div className="text-[11px] text-soft" data-testid="dataset-groups-info">{st.groups.groupCount} grupo(s){st.groups.truncated ? ' — limitado: ' + st.groups.notes.join(' ') : ''}</div>}
+        </div>
+      )}
+
+      <Label>Dashboard</Label>
+      <div><Button data-testid="dataset-create-dashboard" onClick={() => createConnectedDashboard(element, api)}><LayoutDashboard size={12} /> Criar painel HTML conectado</Button></div>
+      <div className="text-[10px] text-soft">Cria um bloco HTML isolado (sem rede) com KPIs, filtro, tabela e gráfico, ligado às saídas deste bloco. Edite o HTML à vontade.</div>
+
       <Label>Privacidade</Label>
       <div className="text-[11px] text-soft" data-testid="dataset-privacy">Os dados ficam só neste dispositivo. Não são enviados à IA — nem por blocos conectados (fórmulas, HTML) — e não aparecem em imagens exportadas. Backups de quadro perguntam se devem incluí-los.</div>
       {src && <div className="mt-1"><Button variant="danger" data-testid="dataset-delete" onClick={() => void deleteBlockData(element, api)}><Trash2 size={12} /> Excluir dados deste dispositivo</Button></div>}
@@ -414,6 +460,7 @@ export const datasetPlugin: WidgetPlugin<DatasetData> = {
     { id: 'columns', label: 'Colunas', type: 'object' },
     { id: 'summary', label: 'Resumo', type: 'object' },
     { id: 'count', label: 'Número de linhas', type: 'number' },
+    { id: 'groups', label: 'Agrupamento (conjunto inteiro)', type: 'object' },
   ],
   createData: () => ({ source: null, view: sanitizeView({}) }),
   sanitize: sanitizeDatasetData,
@@ -427,6 +474,7 @@ export const datasetPlugin: WidgetPlugin<DatasetData> = {
     { id: 'import', label: d.source ? 'Substituir dados…' : 'Importar dados…', run: () => void importIntoBlock(el.id, hostLite()) },
     { id: 'csv', label: 'Exportar dados (CSV)', disabled: !d.source, run: () => d.source && void exportDataset(d.source, 'csv', hostLite().toast) },
     { id: 'json', label: 'Exportar dados (JSON)', disabled: !d.source, run: () => d.source && void exportDataset(d.source, 'json', hostLite().toast) },
+    { id: 'dashboard', label: 'Criar painel HTML conectado', run: () => createConnectedDashboard(el, { addElements: addEls }) },
   ],
 };
 
