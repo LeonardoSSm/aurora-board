@@ -29,7 +29,7 @@ import {
   zoomToSelection,
 } from '../store/actions';
 import { flushSave } from '../persistence/autosave';
-import { abortDraft, cancelGesture, finishDraft, isDrafting, setSpaceHeld } from '../canvas/controller';
+import { abortDraft, cancelGesture, finishDraft, isDrafting, runWidgetClick, setSpaceHeld } from '../canvas/controller';
 import { TOOL_BY_KEY } from './tools';
 import { openRadialFromKeyboard } from './radialOpen';
 import { openCapture, openCommandCenter } from './commandOpen';
@@ -126,6 +126,8 @@ export function useKeyboard() {
           if (s.selectedIds.length === 1) {
             const el = s.elements.find((x) => x.id === s.selectedIds[0]);
             if (el && (isText(el) || acceptsBoundText(el) || el.type === 'frame')) { e.preventDefault(); startTextEdit(el.id); }
+            // Issue #22: Enter num atalho visual selecionado abre o destino (mesma ação do clique).
+            else if (el?.type === 'widget' && !e.repeat && runWidgetClick(el.id)) e.preventDefault();
           }
           return;
         }

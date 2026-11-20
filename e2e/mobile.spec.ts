@@ -213,3 +213,39 @@ test('AI Companion no celular (#13): tocar no personagem abre o mini chat dentro
   await chat.getByRole('button', { name: 'Fechar conversa' }).tap();
   await expect(page.locator(`[data-testid="companion-dock-item"][data-id="${id}"]`)).toBeVisible();
 });
+
+test('Smart Links no celular (#22): toque abre uma aba; toque longo e arrasto com o dedo não abrem', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).__opened = [];
+    window.open = ((...a: unknown[]) => { (window as any).__opened.push(a); return null; }) as typeof window.open;
+  });
+  await ready(page);
+  const id = await page.evaluate(async () => {
+    await (window as any).__aurora.actions.pasteContent('https://www.tiktok.com/', [], null);
+    const s = (window as any).__aurora.getState();
+    (window as any).__aurora.store.setState({ selectedIds: [] });
+    return s.elements.find((e: any) => e.widgetType === 'aurora.link').id as string;
+  });
+  const el = () => state(page).then((s) => s.elements.find((e) => e.id === id)!);
+  const e0 = await el();
+  const c = await toPage(page, e0.x + e0.width / 2, e0.y + e0.height / 2);
+  const opened = () => page.evaluate(() => (window as any).__opened.length as number);
+  // toque curto
+  await touch(page, 'pointerdown', 1, c.x, c.y);
+  await touch(page, 'pointerup', 1, c.x, c.y);
+  expect(await opened()).toBe(1);
+  await page.waitForTimeout(750);
+  // toque longo: seleciona, não abre
+  await touch(page, 'pointerdown', 1, c.x, c.y);
+  await page.waitForTimeout(700);
+  await touch(page, 'pointerup', 1, c.x, c.y);
+  expect(await opened()).toBe(1);
+  expect((await state(page)).selectedIds).toEqual([id]);
+  // arrastar com o dedo move, não abre
+  await touch(page, 'pointerdown', 1, c.x, c.y);
+  for (let i = 1; i <= 5; i++) await touch(page, 'pointermove', 1, c.x + i * 8, c.y + i * 6);
+  await touch(page, 'pointerup', 1, c.x + 40, c.y + 30);
+  expect((await el()).x - e0.x).toBeGreaterThan(20);
+  expect(await opened()).toBe(1);
+  await expect(page.getByTestId('link-shortcut')).toHaveAttribute('data-media', 'icon:tiktok');
+});

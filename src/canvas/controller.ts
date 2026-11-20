@@ -19,6 +19,7 @@ import {
   linearSegmentMidpoint,
   nearestConnectionPoint,
   snap,
+  toLocal,
   type Box,
   type Vec,
 } from '../core/geometry';
@@ -30,6 +31,7 @@ import { resizeMultiple, resizeSingle, rotateElements, type Handle } from '../co
 import { fitShapeToText, fitTextElement } from '../core/text';
 import { snapBox } from '../core/snapping';
 import { connectionStyle } from '../core/connectionStyle';
+import { insideClickZone } from '../core/smartLinks';
 import { getState, setState, selectedSet, useEditor } from '../store/editor';
 import {
   abandonGesture,
@@ -62,7 +64,7 @@ export interface PointerInfo {
 type Gesture =
   | { type: 'pan'; start: Vec; camera: { x: number; y: number } }
   | { type: 'marquee'; start: Vec; base: string[] }
-  | { type: 'move'; start: Vec; ids: Set<string>; started: boolean; alt: boolean; hitId: string; wasSelected: boolean; shift: boolean; targets?: Box[]; clickSelect?: string | null }
+  | { type: 'move'; start: Vec; ids: Set<string>; started: boolean; alt: boolean; hitId: string; wasSelected: boolean; shift: boolean; targets?: Box[]; clickSelect?: string | null; click?: { id: string; at: number } | null }
   | { type: 'resize'; handle: Handle; initials: AuroraElement[]; box: Box }
   | { type: 'rotate'; center: Vec; startAngle: number; initials: AuroraElement[] }
   | { type: 'create-shape'; id: string; start: Vec; moved: boolean }
@@ -82,6 +84,39 @@ export function isSpaceHeld() { return spaceHeld; }
 export function currentGesture() { return gesture; }
 
 const tolerance = () => 6 / getState().camera.zoom;
+
+/* ------------------------------------------------------------------ */
+/* Clique consciente em widgets (issue #22: atalhos visuais)            */
+/* ------------------------------------------------------------------ */
+
+/** Segurar além disso é “toque longo”: só seleciona (útil no touch). */
+export const LONG_PRESS_MS = 600;
+
+/**
+ * Widget cujo clique executa uma ação (`WidgetPlugin.clickAction`) e ponto/condições que contam como clique
+ * consciente: ferramenta Selecionar, botão principal, sem Shift/Ctrl/Alt/Espaço e fora da faixa da borda
+ * (a borda só seleciona). Retorna o id ou null.
+ */
+export function clickableWidgetAt(hit: AuroraElement | null, p: Pick<PointerInfo, 'world' | 'button' | 'shift' | 'ctrl' | 'alt'>): string | null {
+  if (!hit || hit.type !== 'widget' || p.button !== 0 || p.shift || p.ctrl || p.alt || spaceHeld) return null;
+  const s = getState();
+  if (s.tool !== 'select') return null;
+  const plugin = getWidget(hit.widgetType);
+  if (!plugin?.clickAction || !plugin.clickAction(plugin.sanitize(hit.data), hit)) return null;
+  const local = toLocal(hit, p.world);
+  return insideClickZone({ x: local.x - hit.x, y: local.y - hit.y }, hit.width, hit.height, s.camera.zoom) ? hit.id : null;
+}
+
+/** Executa a ação de clique de um widget (pelo estado ATUAL do elemento). Também usado pelo Enter. */
+export function runWidgetClick(id: string): boolean {
+  const el = getState().elements.find((e) => e.id === id);
+  if (!el || el.type !== 'widget') return false;
+  const plugin = getWidget(el.widgetType);
+  const action = plugin?.clickAction?.(plugin.sanitize(el.data), el);
+  if (!action) return false;
+  action();
+  return true;
+}
 
 export { connectionStyle };
 const CONNECTION_COLORS = { visual: connectionStyle('visual'), context: connectionStyle('context'), data: connectionStyle('data'), execution: connectionStyle('execution') };
@@ -238,7 +273,8 @@ function selectDown(p: PointerInfo) {
   const hit = elementAt(p.world);
   if (!p.shift && !p.ctrl && selected.length && !selected.every((e) => e.type === 'frame') && insideSelection(selected, p.world) && (!hit || !s.selectedIds.includes(hit.id))) {
     const ids = withFrameChildren(s.elements, new Set(s.selectedIds));
-    gesture = { type: 'move', start: p.world, ids, started: false, alt: p.alt, hitId: selected[0].id, wasSelected: true, shift: false, clickSelect: hit?.id ?? null };
+    const click = clickableWidgetAt(hit, p);
+    gesture = { type: 'move', start: p.world, ids, started: false, alt: p.alt, hitId: selected[0].id, wasSelected: true, shift: false, clickSelect: hit?.id ?? null, click: click ? { id: click, at: performance.now() } : null };
     return;
   }
   // 4) Elementos
@@ -256,7 +292,8 @@ function selectDown(p: PointerInfo) {
       setSelection([hit.id]);
     }
     const ids = withFrameChildren(getState().elements, new Set(getState().selectedIds));
-    gesture = { type: 'move', start: p.world, ids, started: false, alt: p.alt, hitId: hit.id, wasSelected: already, shift: p.shift || p.ctrl };
+    const click = clickableWidgetAt(hit, p);
+    gesture = { type: 'move', start: p.world, ids, started: false, alt: p.alt, hitId: hit.id, wasSelected: already, shift: p.shift || p.ctrl, click: click ? { id: click, at: performance.now() } : null };
     return;
   }
   // 5) Fundo: seleção por área
@@ -646,6 +683,8 @@ export function pointerUp(p: PointerInfo) {
       return;
     case 'move': {
       if (!g.started) {
+        // Issue #22: clique consciente (sem arrasto além do limiar, antes do toque longo) executa a ação do widget.
+        if (g.click && performance.now() - g.click.at < LONG_PRESS_MS) runWidgetClick(g.click.id);
         // Clique sem arrastar dentro da caixa da seleção: seleciona o elemento de cima (ou limpa, no vazio).
         if (g.clickSelect !== undefined) {
           if (g.clickSelect) setSelection([g.clickSelect]);
