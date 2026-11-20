@@ -19,10 +19,12 @@ async function board(page: Page) {
 
 /** Insere pelo seletor de arquivos (ferramenta Imagem). */
 async function pickGif(page: Page, name: string, bytes: Uint8Array) {
+  // Espera ESTA imagem entrar (não “pelo menos uma”): senão a 2ª inserção corre solta e o teste age antes dela.
+  const before = (await state(page)).elements.filter((e) => e.type === 'image').length;
   const chooser = page.waitForEvent('filechooser');
   await page.evaluate(() => (window as any).__aurora.actions.setTool('image'));
   await (await chooser).setFiles({ name, mimeType: 'image/gif', buffer: Buffer.from(bytes) });
-  await expect.poll(async () => (await state(page)).elements.filter((e) => e.type === 'image').length).toBeGreaterThan(0);
+  await expect.poll(async () => (await state(page)).elements.filter((e) => e.type === 'image').length).toBe(before + 1);
 }
 
 /** Arrastar e soltar um arquivo sobre o canvas (evento real com DataTransfer). */
@@ -43,15 +45,35 @@ async function dropGif(page: Page, name: string, bytes: Uint8Array) {
 
 const img = (page: Page, id: string) => page.locator(`[data-element-id="${id}"] img`);
 
-/** Animado = capturas do elemento mudam ao longo de ~1 s (quadros de 200 ms). */
-async function isAnimating(page: Page, id: string, windowMs = 1000): Promise<boolean> {
+/**
+ * Animado = duas capturas do elemento diferem dentro da janela (quadros de 200 ms, ciclo de 400 ms).
+ *
+ * As esperas entre capturas são IRREGULARES: com intervalo fixo, um navegador em que cada captura leva perto de um
+ * múltiplo do ciclo (WebKit headless) fotografa sempre a mesma fase e “vê” um GIF parado (aliasing). Para provar
+ * que ANIMA, encerra na primeira diferença (janela padrão de 6 s: o WebKit avança os quadros de forma irregular,
+ * com trechos de ~1 s sem mudança sob carga). Para provar
+ * que está PARADO, passe a janela explícita: todas as capturas nela precisam ser iguais.
+ */
+/** Espera aleatória entre 40 e 200 ms: sem período fixo, não há fase que se repita em relação ao ciclo do GIF. */
+const jitter = () => 40 + Math.floor(Math.random() * 160);
+async function isAnimating(page: Page, id: string, windowMs = 6000): Promise<boolean> {
   await expect(img(page, id)).toBeVisible();
-  const shots: string[] = [];
-  for (let t = 0; t < windowMs; t += 150) {
-    shots.push((await img(page, id).screenshot()).toString('base64'));
-    await page.waitForTimeout(150);
+  const first = (await img(page, id).screenshot()).toString('base64');
+  const end = Date.now() + windowMs;
+  while (Date.now() < end) {
+    await page.waitForTimeout(jitter());
+    if ((await img(page, id).screenshot()).toString('base64') !== first) return true;
   }
-  return new Set(shots).size > 1;
+  return false;
+}
+
+/** Espera uma configuração local chegar ao IndexedDB (recarregar antes disso perderia a gravação em curso). */
+async function waitSetting(page: Page, key: string, value: unknown) {
+  await expect.poll(() => page.evaluate((key) => new Promise((res) => {
+    const req = indexedDB.open('aurora-board');
+    req.onsuccess = () => { const g = req.result.transaction('kv').objectStore('kv').get(key); g.onsuccess = () => { res(g.result?.value ?? null); req.result.close(); }; g.onerror = () => res(null); };
+    req.onerror = () => res(null);
+  }), key)).toEqual(value);
 }
 
 /** Chama uma ação de arquivo do app (mesma instância de módulo servida pelo Vite). */
@@ -115,7 +137,8 @@ test.describe('movimento reduzido', () => {
     expect(await isAnimating(page, el.id)).toBe(true);
     await page.getByTestId('animation-prefs').getByRole('radio', { name: 'Nunca' }).click();
     await expect(img(page, el.id)).toHaveAttribute('data-gif', 'static');
-    // A preferência é geral e persiste.
+    // A preferência é geral e persiste (espera a gravação terminar antes de recarregar).
+    await waitSetting(page, 'animationPreferences', { mode: 'never' });
     await page.reload();
     await ready(page);
     await expect(page.locator('[data-gif]').first()).toHaveAttribute('data-gif', 'static');

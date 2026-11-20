@@ -61,6 +61,7 @@ Ver a tabela em [PERFORMANCE.md](PERFORMANCE.md#gifs-animados-ciclo-6) (`e2e/per
 
 - `tests/unit/gif.test.ts` — leitura, duração, repetição, primeiro quadro, robustez, decisão de exibição, normalização na importação, preservação no backup.
 - `e2e/gifs.spec.ts` — seletor de arquivos, arrastar-e-soltar e colar (colar no Chromium e WebKit; o Firefox não entrega arquivos em eventos de colar sintéticos), animação por capturas sucessivas, repetição contínua × “como no arquivo”, pausar/desfazer, movimento reduzido, preferência geral persistente, duplicar/redimensionar/agrupar/recarregar, exportação SVG determinística + PNG + JSON, 24 GIFs com pan/zoom e saída/volta da tela, arquivo inválido.
+- Detecção de animação nos E2E: capturas do elemento com esperas **aleatórias** (40–200 ms) até a primeira diferença, janela de 6 s. Intervalos fixos davam falso “parado” no WebKit (cada captura caía na mesma fase do ciclo de 400 ms, e o WebKit avança quadros de forma irregular sob carga). Para provar que está parado, a janela é explícita e todas as capturas precisam ser iguais. Antes de recarregar, o teste da preferência geral espera a gravação chegar ao IndexedDB.
 - GIFs de teste gerados por `tests/fixtures/gifEncoder.ts` (código e conteúdo do projeto; sem imagens de terceiros).
 
 ## Limitações
