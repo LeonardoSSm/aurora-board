@@ -48,18 +48,23 @@ export function restoreNeutralized(s: string): string {
   return s.length > 1 && s[0] === "'" && needsEscape(s.slice(1)) ? s.slice(1) : s;
 }
 
-function csvField(v: CellValue, delimiter: string): string {
-  if (v === null) return '';
+/** Separadores que o importador reconhece: um texto com qualquer um deles vai entre aspas (a estrutura não muda). */
+const ANY_DELIMITER = /[,;\t|]/;
+
+function csvField(v: CellValue, delimiter: string, single = false): string {
+  // Numa coluna só, campo vazio vira `""`: uma linha em branco seria ignorada na volta (a linha sumiria).
+  if (v === null || v === '') return single ? '""' : '';
   if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '';
   if (typeof v === 'boolean') return v ? 'true' : 'false';
   const s = neutralizeFormula(v);
-  const needsQuotes = s !== v || s.includes('"') || s.includes(delimiter) || /[\r\n]/.test(s) || s !== s.trim();
+  const needsQuotes = s !== v || s.includes('"') || s.includes(delimiter) || ANY_DELIMITER.test(s) || /[\r\n]/.test(s) || s !== s.trim();
   return needsQuotes ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 export function datasetToCSV(content: DatasetContent, delimiter = ','): string {
-  const lines = [content.columns.map((c) => csvField(c.label, delimiter)).join(delimiter)];
-  for (const row of content.rows) lines.push(row.map((v) => csvField(v, delimiter)).join(delimiter));
+  const single = content.columns.length === 1;
+  const lines = [content.columns.map((c) => csvField(c.label, delimiter, single)).join(delimiter)];
+  for (const row of content.rows) lines.push(row.map((v) => csvField(v, delimiter, single)).join(delimiter));
   return '﻿' + lines.join('\r\n') + '\r\n';
 }
 

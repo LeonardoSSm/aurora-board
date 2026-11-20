@@ -53,7 +53,8 @@ gravado como um asset local com tipo próprio. O bloco guarda só a referência 
 ### CSV
 
 - UTF-8 (com ou sem BOM). Arquivo binário (ex.: `.xlsx`) ou UTF-8 inválido é recusado com orientação.
-- RFC 4180: aspas, aspas duplicadas (`""`), quebras de linha dentro de campos, CRLF/LF/CR.
+- RFC 4180 (leitor próprio, `src/data/csv.ts`): aspas, aspas duplicadas (`""`), quebras de linha dentro de campos,
+  CRLF/LF/CR. Linha em branco é ignorada; `""` sozinho numa linha é um registro (nulo).
 - Delimitador detectado entre `,` `;` TAB `|` pela consistência numa amostra de 64 KB (cortada no fim de uma linha — LF, CRLF ou só CR; se o corte cair dentro de um campo entre aspas, cortes menores são tentados). **Primeira linha = cabeçalho.**
 - Toda linha precisa ter o número de campos do cabeçalho; separadores vazios a mais no fim são tolerados (aviso).
   Qualquer outra diferença recusa o arquivo inteiro, com o número da linha.
@@ -119,7 +120,12 @@ estatísticas nem cria objetos novos.
   vai entre aspas (texto que já começa com apóstrofos seguidos de algo assim também recebe um). Números de colunas
   numéricas saem como números (`-5` continua número). Cabeçalhos também são neutralizados. **Ida e volta exata:** ao
   importar um CSV, o app remove esse apóstrofo (como as planilhas fazem com `'` inicial) — o valor volta a ser o
-  original, continua **texto** (nada é avaliado) e é neutralizado de novo em toda exportação.
+  original, continua **texto** (nada é avaliado; a coluna não vira número) e é neutralizado de novo em toda exportação.
+- **O que a ida e volta CSV garante:** estrutura (linhas, colunas, nulos — inclusive numa coluna só), rótulos e
+  **textos** idênticos, com aspas, separadores (`,` `;` TAB `|` dentro de valores vão entre aspas), quebras de linha,
+  apóstrofos e fórmulas neutralizadas — conferido por um teste de propriedade com 400 conjuntos aleatórios. CSV não
+  carrega tipos: eles são **reinferidos** (um texto `"123"` de um JSON volta número; uma coluna mista volta texto).
+  Para tipos exatos, use a exportação **JSON**, que volta idêntica.
 - **JSON compacto:** `{ format: 'aurora-dataset', version: 1, name, exportedAt, columns: [{ label, type }], rows }` —
   tamanho próximo ao do conteúdo guardado; reimportável sem perda (Unicode, aspas e quebras de linha preservados).
 - Os downloads são disparados pela interface do host (botões do bloco, painel e menu de contexto). O HTML
@@ -151,7 +157,7 @@ estatísticas nem cria objetos novos.
 
 ## Testes
 
-- `tests/unit/data-hub.test.ts` (65): CSV (BOM, aspas, quebras, delimitadores, decimal brasileiro, zeros à
+- `tests/unit/data-hub.test.ts` (71): CSV (BOM, aspas, quebras, delimitadores, decimal brasileiro, zeros à
   esquerda, inconsistência, cabeçalhos perigosos, binário/UTF-8, limites, fórmulas importadas como texto), JSON (duas
   variantes, células aninhadas, `__proto__`/`constructor` sem poluição, profundidade/itens, backups recusados),
   validação do conteúdo guardado, codec, exportação (escape, 14 variantes de fórmula, números intactos, ida e volta
@@ -166,7 +172,9 @@ estatísticas nem cria objetos novos.
   com mais de 200 registros na amostra; laço de despejo/recarga do cache com datasets em uso; “ausente” preso no
   cache após restaurar os dados. 2ª rodada (2 achados, também com regressão): arquivo grande só com CR e limite de
   gravação em caracteres UTF-16 × leitura em bytes UTF-8 (gravava conteúdo que não relia). 3ª rodada: exportação de
-  dataset grande que não reimportava — limites alinhados, JSON compacto e ida e volta CSV exata.
+  dataset grande que não reimportava — limites alinhados, JSON compacto e ida e volta CSV exata. 4ª rodada: texto
+  neutralizado que voltava número, linha nula perdida numa coluna só e delimitador alternativo dentro de valores —
+  leitor CSV próprio e teste de propriedade.
 
 ## Futuro: Social Analytics Hub (fora do D2)
 

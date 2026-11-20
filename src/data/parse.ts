@@ -12,7 +12,7 @@
  *    exportação JSON gera, com `format: "aurora-dataset"`); `rows` com listas (na ordem das colunas) ou objetos.
  * Células: texto, número, sim/não ou nulo. Objetos/listas dentro de uma célula viram o texto JSON dela (aviso).
  */
-import { parseCsv, StatementError, stripBom } from '../finance/csv';
+import { readCsv, stripBom } from './csv';
 import { restoreNeutralized } from './export';
 import { cleanLabel, columnKeys, DATASET_FORMAT, DATASET_LIMITS, DATASET_VERSION, DatasetError, type CellValue, type ColumnType, type DatasetColumn, type DatasetContent, type DatasetKind } from './model';
 
@@ -63,7 +63,7 @@ function scoreDelimiters(sample: string, lim: Limits): string | null {
     try {
       // Sem teto de linhas aqui: a amostra já é limitada em caracteres, e um teto faria o leitor DESISTIR da
       // amostra inteira (revisão do Codex, PR #27) em vez de pontuá-la.
-      const { rows } = parseCsv(sample, d as never, { maxBytes: lim.maxFileBytes, maxRows: sample.length + 1, maxColumns: lim.maxColumns, maxFieldChars: lim.maxCellChars + 1 });
+      const { rows } = readCsv(sample, d, { maxRows: sample.length + 1, maxColumns: lim.maxColumns, maxFieldChars: lim.maxCellChars + 1 });
       if (!rows.length) continue;
       const width = rows[0].length;
       if (width < 2) continue;
@@ -111,9 +111,11 @@ function parseNumber(s: string, br: boolean): number | null {
 }
 
 /** Tipo de uma coluna CSV a partir dos textos não vazios; converte os valores quando o tipo é número/sim-não. */
-function typeCsvColumn(values: string[]): { type: ColumnType; convert: (s: string) => CellValue } {
+function typeCsvColumn(values: string[], forceText: boolean): { type: ColumnType; convert: (s: string) => CellValue } {
   const filled = values.filter((v) => v !== '');
   if (!filled.length) return { type: 'empty', convert: () => null };
+  // Coluna com texto que veio neutralizado da exportação (`'+123`) é TEXTO: não vira número na volta.
+  if (forceText) return { type: 'text', convert: (s) => (s === '' ? null : s) };
   const lower = filled.map((v) => v.toLowerCase());
   if (lower.every((v) => v === 'true' || v === 'false')) return { type: 'boolean', convert: (s) => (s === '' ? null : s.toLowerCase() === 'true') };
   for (const br of [false, true]) {
@@ -134,19 +136,22 @@ function parseCsvDataset(input: string, lim: Limits): ParsedDataset {
   let rows: string[][], lines: number[];
   try {
     // +1 no campo: o apóstrofo que a exportação CSV acrescenta (removido logo abaixo, antes de conferir o limite).
-    ({ rows, lines } = parseCsv(text, delimiter as never, { maxBytes: lim.maxFileBytes, maxRows: lim.maxRows + 1, maxColumns: lim.maxColumns, maxFieldChars: lim.maxCellChars + 1 }));
+    ({ rows, lines } = readCsv(text, delimiter, { maxRows: lim.maxRows + 1, maxColumns: lim.maxColumns, maxFieldChars: lim.maxCellChars + 1 }));
   } catch (e) {
-    if (!(e instanceof StatementError)) throw e;
     // O leitor conta o cabeçalho como linha: a mensagem usa o limite de linhas DE DADOS.
-    throw new DatasetError(/linhas/.test(e.message) ? `Mais de ${fmt(lim.maxRows)} linhas: divida o arquivo.` : e.message);
+    if (e instanceof DatasetError && /linhas.$/.test(e.message)) throw new DatasetError(`Mais de ${fmt(lim.maxRows)} linhas: divida o arquivo.`);
+    throw e;
   }
   if (!rows.length) throw new DatasetError('Arquivo vazio.');
-  // Desfaz a neutralização anti-fórmula da exportação (ida e volta exata) e confere o limite por célula.
+  // Desfaz a neutralização anti-fórmula da exportação e confere o limite por célula. Colunas com algum valor
+  // neutralizado ficam como texto (`forceText`).
+  const forceText: boolean[] = [];
   for (let r = 0; r < rows.length; r++) {
     const row = rows[r];
     for (let c = 0; c < row.length; c++) {
       const v = restoreNeutralized(row[c]);
       if (v.length > lim.maxCellChars) throw new DatasetError(`Linha ${lines[r]}: campo com mais de ${fmt(lim.maxCellChars)} caracteres.`);
+      if (r > 0 && v !== row[c]) forceText[c] = true;
       row[c] = v;
     }
   }
@@ -171,7 +176,7 @@ function parseCsvDataset(input: string, lim: Limits): ParsedDataset {
   const columns: DatasetColumn[] = [];
   const converters: ((s: string) => CellValue)[] = [];
   for (let c = 0; c < width; c++) {
-    const t = typeCsvColumn(body.map((r) => r[c]));
+    const t = typeCsvColumn(body.map((r) => r[c]), !!forceText[c]);
     columns.push({ key: keys[c], label: labels[c], type: t.type });
     converters.push(t.convert);
   }

@@ -276,6 +276,49 @@ describe('exportação CSV/JSON', () => {
     expect(datasetToJSON(c, 'x')).not.toMatch(/\n/); // compacto
   });
 
+  // Revisão do Codex (PR #27, 4ª rodada): três casos em que a ida e volta CSV mudava estrutura ou valores.
+  it('texto neutralizado continua texto na volta (não vira número)', () => {
+    const c = json([{ f: '+123' }, { f: '-4' }]).content;
+    const back = csv(datasetToCSV(c)).content;
+    expect(back.rows).toEqual([['+123'], ['-4']]);
+    expect(back.columns[0].type).toBe('text');
+    expect(datasetToCSV(back)).toBe(datasetToCSV(c));
+  });
+
+  it('linhas nulas de um conjunto de UMA coluna são preservadas', () => {
+    const c = json([{ f: null }, { f: 'x' }, { f: null }]).content;
+    const back = csv(datasetToCSV(c)).content;
+    expect(back.rows).toEqual([[null], ['x'], [null]]);
+    // Linhas realmente em branco (sem aspas) num CSV de fora continuam ignoradas.
+    expect(csv('f\nx\n\n\ny\n').content.rows).toEqual([['x'], ['y']]);
+  });
+
+  it.each([';', '\t', '|'])('valores e rótulos com outro delimitador (%j) não mudam a estrutura na volta', (d) => {
+    const c = json([{ [`a${d}b`]: `1${d}2` }, { [`a${d}b`]: 'ok' }]).content;
+    const back = csv(datasetToCSV(c)).content;
+    expect(back.columns).toEqual(c.columns); // rótulos já normalizados na importação (TAB vira espaço)
+    expect(back.rows).toEqual([[`1${d}2`], ['ok']]);
+  });
+
+  // Propriedade da ida e volta CSV (escopo documentado em docs/DATA_HUB.md): estrutura (linhas, colunas, nulos),
+  // rótulos e TEXTOS voltam idênticos; tipos são reinferidos (para tipos exatos, JSON). Gerador com semente fixa.
+  it('propriedade: 400 conjuntos aleatórios de texto com aspas, separadores, quebras, apóstrofos e fórmulas voltam idênticos pelo CSV', () => {
+    let seed = 0x2468ace;
+    const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 2 ** 32);
+    const ALPHA = ['x', 'y', ' ', '"', ',', ';', '\t', '|', '\n', '\r\n', "'", '=', '+', '-', '@', 'ç', '漢', '☕', '0', '1', ' ', '＝'];
+    const text = () => { let s = 'x'; for (let n = Math.floor(rnd() * 8); n > 0; n--) s = rnd() < 0.5 ? ALPHA[Math.floor(rnd() * ALPHA.length)] + s : s + ALPHA[Math.floor(rnd() * ALPHA.length)]; return s; };
+    for (let it = 0; it < 400; it++) {
+      const cols = 1 + Math.floor(rnd() * 3);
+      const rows = Array.from({ length: Math.floor(rnd() * 5) }, () => Array.from({ length: cols }, () => (rnd() < 0.2 ? null : text())));
+      const labels = Array.from({ length: cols }, (_, i) => `c${i}${rnd() < 0.3 ? ';=' : ''}`);
+      const c = validateContent({ format: 'aurora-dataset', version: 1, columns: labels.map((label) => ({ label, type: 'text' })), rows });
+      const back = csv(datasetToCSV(c)).content;
+      expect(back.columns.map((x) => x.label), `iteração ${it}`).toEqual(c.columns.map((x) => x.label));
+      // Textos aparados nas pontas por planilhas não acontecem aqui: a exportação põe entre aspas.
+      expect(back.rows, `iteração ${it}`).toEqual(c.rows);
+    }
+  });
+
   it('célula no limite de tamanho que recebe o apóstrofo da exportação ainda reimporta', () => {
     const s = '=' + 'x'.repeat(DATASET_LIMITS.maxCellChars - 1);
     const c = validateContent({ format: 'aurora-dataset', version: 1, columns: [{ label: 'f', type: 'text' }], rows: [[s]] });
