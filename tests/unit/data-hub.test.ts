@@ -380,6 +380,19 @@ describe('projeção para o fluxo de dados', () => {
     expect(snap.json.length).toBeLessThan(BRIDGE_LIMITS.maxInputChars);
   });
 
+  // Revisão do Codex (PR #27, 6ª rodada): o Bridge remove propriedades `key`; o iframe recebia colunas sem o
+  // identificador usado nas linhas.
+  it('colunas chegam ao HTML com o identificador técnico (`id`) que indexa as linhas, inclusive reservadas/repetidas', () => {
+    const p = projectDataset(csv('constructor,nome,nome,key\n1,a,b,c\n').content, 'x', {});
+    const snap = buildInputSnapshot([{ id: 'cols', label: 'c', type: 'object' }, { id: 'linhas', label: 'l', type: 'object' }], {
+      cols: [{ value: p.columns, sourceTitle: 'x' }], linhas: [{ value: p.rows, sourceTitle: 'x' }],
+    });
+    const cols = snap.inputs.cols as { id: string; label: string }[];
+    const row = (snap.inputs.linhas as Record<string, unknown>[])[0];
+    expect(cols.map((c) => [c.id, c.label])).toEqual([['constructor_', 'constructor'], ['nome', 'nome'], ['nome_2', 'nome'], ['key_', 'key']]);
+    expect(cols.map((c) => row[c.id])).toEqual([1, 'a', 'b', 'c']);
+  });
+
   it('células longas são encurtadas só na projeção; colunas acima do limite ficam fora das linhas', () => {
     const c = big(2, 60, (r, col) => (col === 0 ? 'y'.repeat(5000) : r));
     const p = projectDataset(c, 'x', {});

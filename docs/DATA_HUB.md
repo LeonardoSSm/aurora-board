@@ -100,7 +100,7 @@ também não grava nada.
 | Porta | Tipo | Conteúdo |
 |---|---|---|
 | `rows` | `object` | Página atual: lista de objetos `{ chave: valor }` com as colunas escolhidas |
-| `columns` | `object` | `[{ key, label, type }]` de todas as colunas |
+| `columns` | `object` | `[{ id, label, type }]` de todas as colunas — `id` é a chave usada em `rows` (não se chama `key` porque o Bridge remove essa propriedade) |
 | `summary` | `object` | `name`, `rowCount`, `columnCount`, `page`, `pageSize`, `pageCount`, `offset`, `rowsInPage`, `projectedColumns`, `truncated`, `notes`, `stats` (por coluna numérica: `count`, `sum`, `min`, `max`, `mean`) |
 | `count` | `number` | Número de linhas (decimal exato) — serve direto a Fórmulas |
 
@@ -158,7 +158,7 @@ estatísticas nem cria objetos novos.
 
 ## Testes
 
-- `tests/unit/data-hub.test.ts` (72): CSV (BOM, aspas, quebras, delimitadores, decimal brasileiro, zeros à
+- `tests/unit/data-hub.test.ts` (73): CSV (BOM, aspas, quebras, delimitadores, decimal brasileiro, zeros à
   esquerda, inconsistência, cabeçalhos perigosos, binário/UTF-8, limites, fórmulas importadas como texto), JSON (duas
   variantes, células aninhadas, `__proto__`/`constructor` sem poluição, profundidade/itens, backups recusados),
   validação do conteúdo guardado, codec, exportação (escape, 14 variantes de fórmula, números intactos, ida e volta
@@ -175,7 +175,8 @@ estatísticas nem cria objetos novos.
   gravação em caracteres UTF-16 × leitura em bytes UTF-8 (gravava conteúdo que não relia). 3ª rodada: exportação de
   dataset grande que não reimportava — limites alinhados, JSON compacto e ida e volta CSV exata. 4ª rodada: texto
   neutralizado que voltava número, linha nula perdida numa coluna só e delimitador alternativo dentro de valores —
-  leitor CSV próprio e teste de propriedade. 5ª rodada: U+FFFD legítimo era recusado — UTF-8 conferido nos bytes.
+  leitor CSV próprio e teste de propriedade. 5ª rodada: U+FFFD legítimo era recusado — UTF-8 conferido nos bytes. 6ª rodada: `columns` com `key` perdia o
+  identificador no Bridge — agora `id`.
 
 ## Futuro: Social Analytics Hub (fora do D2)
 

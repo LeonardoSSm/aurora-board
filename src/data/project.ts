@@ -50,7 +50,11 @@ export interface DatasetSummary {
 
 export interface DatasetProjection {
   rows: Record<string, CellValue>[];
-  columns: { key: string; label: string; type: ColumnType }[];
+  /**
+   * `id` = chave técnica usada nas linhas (`rows[i][id]`). Não se chama `key` porque o HTML Data Bridge remove
+   * propriedades `key` de valores do fluxo de dados (revisão do Codex, PR #27).
+   */
+  columns: { id: string; label: string; type: ColumnType }[];
   summary: DatasetSummary;
 }
 
@@ -133,7 +137,7 @@ export function projectDataset(content: DatasetContent, name: string, viewRaw: u
 
   return {
     rows,
-    columns: content.columns.map((c) => ({ key: c.key, label: c.label, type: c.type })),
+    columns: content.columns.map((c) => ({ id: c.key, label: c.label, type: c.type })),
     summary: {
       name,
       rowCount: total,

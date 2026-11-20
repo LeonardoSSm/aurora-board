@@ -117,12 +117,12 @@ function formatCell(v: CellValue): string {
 }
 
 /** Tabela de leitura: texto puro em nós React (nunca HTML interpretado). */
-function DataTable({ columns, rows, testid }: { columns: { key: string; label: string }[]; rows: CellValue[][]; testid: string }) {
+function DataTable({ columns, rows, testid }: { columns: { id: string; label: string }[]; rows: CellValue[][]; testid: string }) {
   return (
     <div className="overflow-auto border border-line rounded-md" data-testid={testid}>
       <table className="text-[11px] border-collapse min-w-full">
         <thead>
-          <tr>{columns.map((c) => <th key={c.key} className="text-left font-semibold px-2 py-1 border-b border-line bg-panel-2 whitespace-nowrap" title={c.key !== c.label ? `nome técnico: ${c.key}` : undefined}>{c.label}</th>)}</tr>
+          <tr>{columns.map((c) => <th key={c.id} className="text-left font-semibold px-2 py-1 border-b border-line bg-panel-2 whitespace-nowrap" title={c.id !== c.label ? `nome técnico: ${c.id}` : undefined}>{c.label}</th>)}</tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
@@ -141,7 +141,7 @@ const PREVIEW_COLS = 12;
 
 function Preview({ parsed, fileName, replacing }: { parsed: ParsedDataset; fileName: string; replacing: DatasetSource | null }) {
   const { content } = parsed;
-  const cols = content.columns.slice(0, PREVIEW_COLS);
+  const cols = content.columns.slice(0, PREVIEW_COLS).map((c) => ({ id: c.key, label: c.label }));
   return (
     <div className="flex flex-col gap-2 text-[12px]" data-testid="dataset-preview">
       <div>
@@ -314,7 +314,7 @@ function DatasetTile({ element, data, outputs, update, api }: WidgetProps<Datase
   }
   const p = st.projection;
   const shown = p.rows.slice(0, TILE_ROWS);
-  const cols = p.columns.filter((c) => p.summary.projectedColumns.includes(c.key));
+  const cols = p.columns.filter((c) => p.summary.projectedColumns.includes(c.id));
   return (
     <div className="h-full flex flex-col gap-1 p-2 text-[12px] min-h-0" data-testid="dataset-tile">
       <div className="flex items-center gap-2 flex-wrap">
@@ -324,7 +324,7 @@ function DatasetTile({ element, data, outputs, update, api }: WidgetProps<Datase
         <Pager p={p} onPage={(page) => update((d) => ({ ...d, view: { ...d.view, page } }))} />
       </div>
       <div className="flex-1 min-h-0 overflow-auto">
-        <DataTable testid="dataset-table" columns={cols} rows={shown.map((r) => cols.map((c) => r[c.key] ?? null))} />
+        <DataTable testid="dataset-table" columns={cols} rows={shown.map((r) => cols.map((c) => r[c.id] ?? null))} />
         {p.rows.length > shown.length && <div className="text-[10px] text-soft mt-1">Mostrando {shown.length} de {p.rows.length} linhas desta página.</div>}
       </div>
       <div className="flex gap-1 flex-wrap">
@@ -380,9 +380,9 @@ function DatasetInspector({ element, data, outputs, update, api }: WidgetProps<D
         <div className="flex flex-col gap-0.5 max-h-48 overflow-auto" data-testid="dataset-columns">
           <div className="text-[11px] text-soft">Colunas nas linhas ({chosen.size ? `${chosen.size} escolhida(s)` : 'todas'}):</div>
           {p.columns.map((c) => (
-            <label key={c.key} className="flex items-center gap-1 text-[11px]">
-              <input type="checkbox" checked={chosen.has(c.key)} onChange={() => toggleCol(c.key)} aria-label={`Coluna ${c.label}`} />
-              <span className="truncate">{c.label}</span> <span className="text-soft">({COLUMN_TYPE_LABELS[c.type]}{c.key !== c.label ? ` · ${c.key}` : ''})</span>
+            <label key={c.id} className="flex items-center gap-1 text-[11px]">
+              <input type="checkbox" checked={chosen.has(c.id)} onChange={() => toggleCol(c.id)} aria-label={`Coluna ${c.label}`} />
+              <span className="truncate">{c.label}</span> <span className="text-soft">({COLUMN_TYPE_LABELS[c.type]}{c.id !== c.label ? ` · ${c.id}` : ''})</span>
             </label>
           ))}
         </div>
