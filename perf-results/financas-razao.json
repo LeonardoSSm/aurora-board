@@ -1,0 +1,70 @@
+{
+  "at": "2026-11-20T00:33:34.227Z",
+  "cpu": "11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz",
+  "results": [
+    {
+      "n": 100,
+      "imported": 100,
+      "dupOnReimport": 100,
+      "parseMs": 5.099999964237213,
+      "planMs": 1.100000023841858,
+      "commitMs": 13,
+      "dedupeMs": 0.5999999642372131,
+      "queryMs": 2.300000011920929,
+      "summaryMs": 0.19999998807907104,
+      "reactMs": 34.09999996423721,
+      "queryTx": 0,
+      "heapMB": 8,
+      "openMs": 104,
+      "filterMs": 35
+    },
+    {
+      "n": 1000,
+      "imported": 1000,
+      "dupOnReimport": 1000,
+      "parseMs": 10.300000011920929,
+      "planMs": 3.400000035762787,
+      "commitMs": 109.89999997615814,
+      "dedupeMs": 1.899999976158142,
+      "queryMs": 0.40000003576278687,
+      "summaryMs": 0.30000001192092896,
+      "reactMs": 13.699999988079071,
+      "queryTx": 25,
+      "heapMB": 15,
+      "openMs": 37,
+      "filterMs": 137
+    },
+    {
+      "n": 10000,
+      "imported": 10000,
+      "dupOnReimport": 10000,
+      "parseMs": 54,
+      "planMs": 21.100000023841858,
+      "commitMs": 1209.6000000238419,
+      "dedupeMs": 20.899999976158142,
+      "queryMs": 1.300000011920929,
+      "summaryMs": 2.399999976158142,
+      "reactMs": 37.10000002384186,
+      "queryTx": 150,
+      "heapMB": 38,
+      "openMs": 69,
+      "filterMs": 189
+    },
+    {
+      "n": 50000,
+      "imported": 50000,
+      "dupOnReimport": 50000,
+      "parseMs": 309.0999999642372,
+      "planMs": 163.69999998807907,
+      "commitMs": 6267.900000035763,
+      "dedupeMs": 139.30000001192093,
+      "queryMs": 19.099999964237213,
+      "summaryMs": 38.60000002384186,
+      "reactMs": 49.69999998807907,
+      "queryTx": 750,
+      "heapMB": 92,
+      "openMs": 105,
+      "filterMs": 180
+    }
+  ]
+}
