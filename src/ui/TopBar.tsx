@@ -15,7 +15,7 @@ import {
   MonitorSmartphone,
 } from 'lucide-react';
 import { openPairing } from './PairingDialog';
-import { LOCAL_API_ENABLED } from '../config/runtime';
+import { LAN_PAIRING_UI } from '../config/runtime';
 import { openFinanceHub } from './finance/uiState';
 import { useEditor, setState } from '../store/editor';
 import { Inbox, MapPin, Search } from 'lucide-react';
@@ -175,7 +175,7 @@ export function TopBar() {
         )}
       </Menu>
       <IconButton label="Quadros" onClick={() => setState({ boardsPanelOpen: true })} className="md:hidden"><FolderOpen size={16} /></IconButton>
-      {LOCAL_API_ENABLED && <IconButton label="Parear outro computador (IA pela rede)" onClick={openPairing}><MonitorSmartphone size={16} /></IconButton>}
+      {LAN_PAIRING_UI && <IconButton label="Parear outro computador (IA pela rede)" onClick={openPairing}><MonitorSmartphone size={16} /></IconButton>}
       <IconButton label="Atalhos e ajuda (?)" onClick={() => setState({ shortcutsOpen: true })}><CircleHelp size={16} /></IconButton>
       <IconButton label="Painel de propriedades" active={propertiesOpen} onClick={() => setState({ propertiesOpen: !propertiesOpen, ...(compact && !propertiesOpen ? { libraryOpen: false } : {}) })}><PanelRight size={16} /></IconButton>
     </header>

@@ -14,6 +14,10 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { headersForPath } from '../hosting/headers';
 import { APP_ENTRY, APP_HOST, APP_SCHEME, externalOpenTarget, isAppUrl, isPermissionAllowed, mimeOf, resolveAppFile } from './security';
+import { createApiService } from '../server/apiService';
+import { PROVIDERS } from '../server/providers';
+import { PluggyClient, readPluggyConfig } from '../server/pluggy';
+import { registerIpc } from './ipc';
 
 // Testes e uso portátil: perfil em outra pasta (antes de qualquer acesso ao perfil).
 if (process.env.AURORA_USER_DATA_DIR) app.setPath('userData', process.env.AURORA_USER_DATA_DIR);
@@ -60,6 +64,27 @@ function harden(contents: WebContents) {
   });
 }
 
+let mainWindow: BrowserWindow | null = null;
+
+/**
+ * Integrações no processo principal (D1-B): o mesmo serviço da API local da web, sem servidor HTTP.
+ * Chaves de IA e credenciais do Meu Pluggy vêm do ambiente do processo (D1-C: cofre do sistema operacional).
+ */
+let pluggyCache: { key: string; deps: { client: PluggyClient | null; problems: string[] } } | null = null;
+function pluggyDeps() {
+  const cfg = readPluggyConfig(process.env);
+  const key = JSON.stringify([process.env.PLUGGY_CLIENT_ID ?? '', process.env.PLUGGY_CLIENT_SECRET ? 'x' : '', process.env.PLUGGY_ITEM_IDS ?? '']);
+  if (!pluggyCache || pluggyCache.key !== key) pluggyCache = { key, deps: { client: cfg.config ? new PluggyClient(cfg.config) : null, problems: cfg.problems } };
+  return pluggyCache.deps;
+}
+const service = createApiService({
+  providers: PROVIDERS,
+  pluggy: pluggyDeps,
+  missingKeyHint: (p) => `configure a chave em Configurações do aplicativo (ou a variável de ambiente ${p.envKey})`,
+  // Sem conteúdo de usuário nos logs: só a operação e mensagens já sem segredos.
+  log: (m) => console.error(m),
+});
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
@@ -85,6 +110,8 @@ function createWindow() {
     },
   });
   win.once('ready-to-show', () => win.show());
+  win.on('closed', () => { if (mainWindow === win) mainWindow = null; });
+  mainWindow = win;
   void win.loadURL(APP_ENTRY);
   return win;
 }
@@ -109,6 +136,7 @@ if (!single) {
       { label: 'Exibir', submenu: [{ role: 'togglefullscreen', label: 'Tela cheia' }, ...(DEV_TOOLS ? [{ role: 'toggleDevTools' as const, label: 'Ferramentas de desenvolvimento' }] : [])] },
       { label: 'Ajuda', submenu: [{ label: 'Documentação', click: () => void shell.openExternal('https://github.com/LeonardoSSm/aurora-board/tree/main/docs/desktop') }, { label: `Aurora Board ${app.getVersion()}`, enabled: false }] },
     ]));
+    registerIpc(service, () => mainWindow);
     createWindow();
   });
   app.on('window-all-closed', () => app.quit());
