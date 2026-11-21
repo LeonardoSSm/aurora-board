@@ -15,7 +15,7 @@ const BACKUP = {
     elements: [
       w('n1', 'aurora.notes', 0, 0, { mode: 'preview', markdown: '# Nota\n[link](https://example.invalid/pagina)\n\n![remota](https://example.invalid/rastreio.png)\n\n![local](data:image/png;base64,' + PNG_1x1 + ')' }, 'Nota'),
       w('d1', 'aurora.documents', 340, 0, { selected: 'doc1', docs: [{ id: 'doc1', name: 'foto.png', mimeType: 'image/png', size: 68, assetId: 'a_png', url: '', description: '', tags: [], addedAt: 1 }, { id: 'doc2', name: 'leia.txt', mimeType: 'text/plain', size: 5, assetId: 'a_txt', url: '', description: '', tags: [], addedAt: 1 }] }, 'Docs'),
-      w('s1', 'aurora.sandbox-html', 680, 0, { html: '<p id="v">inativo</p><script>document.getElementById("v").textContent="ativo"; aurora.setState({ ok: 1 })</script>', state: null }, 'HTML'),
+      w('s1', 'aurora.sandbox-html', 680, 0, { html: '<p id="v">inativo</p><p id="n">-</p><script>document.getElementById("v").textContent="ativo"; aurora.setState({ ok: 1 }); aurora.request({ url: "https://api.github.com/repos/LeonardoSSm/aurora-board" }).then(() => { document.getElementById("n").textContent = "VAZOU"; }, (e) => { document.getElementById("n").textContent = e.code + ":" + aurora.network.available; })</script>', state: null }, 'HTML'),
       w('ai1', 'aurora.ai', 0, 280, { provider: '', model: '', instruction: 'x', messages: [], authorized: {} }, 'IA'),
       w('l1', 'aurora.link', 340, 280, { url: 'https://example.invalid/', description: '', preview: { title: 'Exemplo', description: 'd', image: 'https://example.invalid/og.png', siteName: 'ex', fetchedAt: 1 } }, 'Link'),
       { id: 'img1', type: 'image', assetId: 'a_png', x: 680, y: 280, width: 64, height: 64 },
@@ -96,6 +96,9 @@ test('build público: cabeçalhos, sem depuração, sem /api, sem rede externa, 
   await page.getByTestId('sandbox-activate').click();
   await page.getByRole('dialog').getByRole('button', { name: 'Ativar este widget' }).click();
   await expect(page.frameLocator('iframe[sandbox]').locator('#v')).toHaveText('ativo');
+  // H2: sem servidor local, aurora.request() é recusado com “indisponível”, sem confirmação e sem rede.
+  await expect(page.frameLocator('iframe[sandbox]').locator('#n')).toHaveText('unavailable:false');
+  await expect(page.getByTestId('net-consent')).toHaveCount(0);
 
   // Exportações.
   for (const item of [/Imagem do quadro/, /Vetor do quadro/, /Backup do workspace/]) {

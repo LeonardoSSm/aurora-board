@@ -17,17 +17,22 @@ import { LOCAL_API_ENABLED } from '../config/runtime';
 import { checkResult, NET_LIMITS, netError, netOrigin, parseAbortMessage, parseRequestMessage, responseMessage, type NetError, type NetErrorCode, type NetOutcome, type NetRequest } from './protocol';
 import { activationStamp, evaluateNet, mergeSources, sensitiveUpstream, sourcesFromIds, type NetContext, type NetDecision, type NetGrant, type SensitiveSource } from './policy';
 import { addNetGrants, removeNetGrants } from './grants';
+import { localNetTransport, STATIC_NET_MESSAGE } from './transport';
 
 /* ------------------------------------------------------------------ transporte */
 
 export type NetTransport = (req: NetRequest, signal: AbortSignal) => Promise<NetOutcome>;
 export interface NetAvailability { available: boolean; message: string }
 
-export const STATIC_NET_MESSAGE = 'O acesso à rede dos blocos HTML não está disponível nesta versão pública do Aurora Board (não há servidor local).';
-const INACTIVE_NET_MESSAGE = 'O transporte de rede dos blocos HTML ainda não está habilitado nesta versão.';
+export { STATIC_NET_MESSAGE };
+const INACTIVE_NET_MESSAGE = 'O acesso à rede dos blocos HTML está desligado nesta sessão.';
 
-let transport: NetTransport | null = null;
-let availability: NetAvailability = LOCAL_API_ENABLED ? { available: false, message: INACTIVE_NET_MESSAGE } : { available: false, message: STATIC_NET_MESSAGE };
+// H2-B: com servidor local (dev ou VITE_AURORA_LOCAL_API=1), o transporte é a rota /api/net/fetch.
+// No build público a constante elimina a rota do pacote e nenhum transporte é aceito.
+const defaultTransport = (): NetTransport | null => (LOCAL_API_ENABLED ? localNetTransport : null);
+const defaultAvailability = (): NetAvailability => (LOCAL_API_ENABLED ? { available: true, message: '' } : { available: false, message: STATIC_NET_MESSAGE });
+let transport: NetTransport | null = defaultTransport();
+let availability: NetAvailability = defaultAvailability();
 
 /** Transporte padrão do app (registrado na inicialização) ou simulado (testes). `null` = indisponível. */
 export function setNetTransport(t: NetTransport | null, message = INACTIVE_NET_MESSAGE) {
@@ -471,7 +476,7 @@ export function resetNetForTests() {
   consentBusy = false;
   activity.clear();
   remembered.clear();
-  transport = null;
-  availability = LOCAL_API_ENABLED ? { available: false, message: INACTIVE_NET_MESSAGE } : { available: false, message: STATIC_NET_MESSAGE };
+  transport = defaultTransport();
+  availability = defaultAvailability();
   prompter = async () => 'deny';
 }

@@ -11,6 +11,8 @@
  *   GET  /api/pluggy/status | /api/pluggy/accounts?itemId | /api/pluggy/transactions?itemId&accountId&from&to
  *        → Meu Pluggy, somente leitura (server/pluggy.ts). Só no computador principal, salvo
  *          AURORA_PLUGGY_PAIRED_READ=1 (leitura também por dispositivos pareados).
+ *   GET  /api/net/status | POST /api/net/fetch { url, method:'GET', responseType, timeoutMs }
+ *        → H2: consulta GET autorizada de widgets HTML (server/netBridge.ts). Só no computador principal.
  *
  * Proteções do próprio servidor (uso local, sem autenticação):
  *   - Host precisa ser local (anti DNS rebinding);
@@ -26,6 +28,8 @@ import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http
 import { PROVIDERS, type ChatRequest, type Provider, type ProviderId } from './providers';
 import { isAllowedLanHost, isSameOriginForHost, PairingError, type PairingStore } from './pairing';
 import { PluggyError, type PluggyClient } from './pluggy';
+import { createHostLimiter, NET_SERVER_LIMITS, netFetch, parseNetBody, type NetFetchDeps } from './netBridge';
+import { netOrigin } from '../src/net/protocol';
 import { FetchError, isAllowedHostHeader, isAllowedOrigin, isLoopbackAddress, redactSecrets, safeFetchText, UnsafeUrlError, type Resolver, type Transport } from './netSafety';
 
 const MAX_BODY = 2 * 1024 * 1024;
@@ -105,10 +109,11 @@ export function validateChat(body: unknown): ChatRequest {
 
 /** Limites por rota (S1-SEC-014). Defesa em profundidade contra laços/abuso local — não é autenticação. */
 export interface RouteLimit { perMinute: number; concurrent: number }
-export const DEFAULT_LIMITS_BY_ROUTE: Record<'chat' | 'linkPreview' | 'pluggy', RouteLimit> = {
+export const DEFAULT_LIMITS_BY_ROUTE: Record<'chat' | 'linkPreview' | 'pluggy' | 'net', RouteLimit> = {
   chat: { perMinute: 30, concurrent: 3 },
   linkPreview: { perMinute: 60, concurrent: 4 },
   pluggy: { perMinute: 60, concurrent: 2 },
+  net: { perMinute: NET_SERVER_LIMITS.perMinute, concurrent: NET_SERVER_LIMITS.concurrent },
 };
 
 /** Meu Pluggy no servidor local. `client` nulo = não configurado (`problems` diz o que falta, sem valores). */
@@ -131,6 +136,8 @@ export interface AppDeps {
   pairing?: PairingStore | null;
   /** Meu Pluggy (uso pessoal). Ausente = as rotas respondem "não configurado". */
   pluggy?: PluggyDeps | null;
+  /** H2: transporte/DNS injetáveis (testes) e limite por domínio. */
+  net?: NetFetchDeps & { perHostPerMinute?: number };
 }
 
 /** Janela deslizante de 60 s + contador de chamadas em andamento. */
@@ -160,7 +167,9 @@ export function createApp(deps: AppDeps = {}): RequestListener {
     chat: createLimiter({ ...DEFAULT_LIMITS_BY_ROUTE.chat, ...deps.limits?.chat }, now),
     linkPreview: createLimiter({ ...DEFAULT_LIMITS_BY_ROUTE.linkPreview, ...deps.limits?.linkPreview }, now),
     pluggy: createLimiter({ ...DEFAULT_LIMITS_BY_ROUTE.pluggy, ...deps.limits?.pluggy }, now),
+    net: createLimiter({ ...DEFAULT_LIMITS_BY_ROUTE.net, ...deps.limits?.net }, now),
   };
+  const netHostOk = createHostLimiter(deps.net?.perHostPerMinute ?? NET_SERVER_LIMITS.perHostPerMinute, now);
   const guarded = async <T,>(name: keyof typeof limiters, res: ServerResponse, fn: () => Promise<T>): Promise<T | undefined> => {
     const slot = limiters[name].acquire();
     if (!slot.ok) {
@@ -247,6 +256,30 @@ export function createApp(deps: AppDeps = {}): RequestListener {
         }
       }
 
+      if (url.pathname.startsWith('/api/net/')) {
+        // H2: só o computador principal (um pareado usaria a rede e o IP desta máquina). Nada do pedido é repassado.
+        if (remote) throw new HttpError(403, 'O acesso à rede dos blocos HTML só funciona no computador principal.', 'local_only');
+        if (req.method === 'GET' && url.pathname === '/api/net/status') return send(res, 200, { available: true, version: 1, limits: { perMinute: NET_SERVER_LIMITS.perMinute, perHostPerMinute: deps.net?.perHostPerMinute ?? NET_SERVER_LIMITS.perHostPerMinute, maxBytes: NET_SERVER_LIMITS.maxBytes } });
+        if (req.method !== 'POST' || url.pathname !== '/api/net/fetch') throw new HttpError(404, 'Rota não encontrada.');
+        const parsed = parseNetBody(await readJSON(req));
+        if (!parsed.ok) return send(res, 400, parsed.outcome);
+        const slot = limiters.net.acquire();
+        if (!slot.ok) { res.setHeader('retry-after', String(slot.retryAfter)); return send(res, 429, { ok: false, error: { code: 'rate_limited', message: slot.message } }); }
+        try {
+          if (!netHostOk(netOrigin(parsed.req.url))) return send(res, 429, { ok: false, error: { code: 'rate_limited', message: 'Limite de consultas por minuto para este domínio atingido.' } });
+          // Cliente desistiu (desmontagem, revogação, aurora:abort) → a consulta externa é cancelada.
+          const ctrl = new AbortController();
+          const onClose = () => { if (!res.writableEnded) ctrl.abort(); };
+          res.on('close', onClose);
+          try {
+            return send(res, 200, await netFetch(parsed.req, deps.net ?? {}, ctrl.signal));
+          } finally {
+            res.off('close', onClose);
+          }
+        } finally {
+          slot.release();
+        }
+      }
       if (req.method === 'GET' && url.pathname === '/api/health') return send(res, 200, { ok: true });
       if (req.method === 'GET' && url.pathname === '/api/ai/providers') {
         return send(res, 200, { providers: Object.values(providers).map((p) => ({ id: p.id, name: p.name, configured: p.configured(), defaultModel: p.defaultModel() })) });

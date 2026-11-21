@@ -85,15 +85,33 @@ test.describe('H2 — HTML Network Bridge', () => {
     await page.getByRole('dialog').getByRole('button', { name: 'Negar' }).click();
     await expect(f.locator('#err')).toHaveText('AuroraRequestError:permission_denied');
     expect(await calls(page)).toBe(0);
-    // Sem transporte: indisponível, sem janela de confirmação.
+    // Sem transporte (como no build público): indisponível, sem janela de confirmação.
     await page.evaluate(() => (window as any).__aurora.net.setTransport(null));
-    await page.reload();
-    await page.waitForFunction(() => (window as any).__aurora?.getState().status === 'ready');
-    const g = frame(page);
-    await expect(g.locator('#net')).toHaveText('false');
-    await g.locator('#go').click();
-    await expect(g.locator('#err')).toHaveText('AuroraRequestError:unavailable');
+    await f.locator('#err').evaluate((el) => { el.textContent = '-'; });
+    await f.locator('#go').click();
+    await expect(f.locator('#err')).toHaveText('AuroraRequestError:unavailable');
     await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
+  test('D: transporte do app → /api/net/fetch (sem cabeçalhos do HTML); servidor local recusa destino interno', async ({ page }) => {
+    const bodies: unknown[] = [];
+    await page.route('**/api/net/fetch', async (route) => {
+      bodies.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, result: { status: 200, url: 'https://api.exemplo.com.br/repos/x', contentType: 'application/json', bytes: 25, responseType: 'json', data: { stargazers_count: 11 } } }) });
+    });
+    await setup(page, 'none');
+    const f = frame(page);
+    await f.locator('#go').click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Permitir uma vez' }).click();
+    await expect(f.locator('#out')).toHaveText('stars:11:200');
+    expect(bodies).toEqual([{ url: 'https://api.exemplo.com.br/repos/x', method: 'GET', responseType: 'json', timeoutMs: 10000 }]);
+    // O servidor local repete as regras sozinho (sem depender do host): IP/loopback e http são recusados.
+    await page.unroute('**/api/net/fetch');
+    const direct = await page.evaluate(async () => {
+      const call = async (url: string) => { const r = await fetch('/api/net/fetch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url }) }); return [r.status, (await r.json()).error?.code]; };
+      return [await call('https://127.0.0.1/'), await call('http://api.exemplo.com.br/'), await call('https://localhost/'), (await (await fetch('/api/net/status')).json()).available];
+    });
+    expect(direct).toEqual([[400, 'blocked_url'], [400, 'blocked_url'], [400, 'blocked_url'], true]);
   });
 
   test('C: mensagens forjadas fora do iframe (ou com token falso) são ignoradas', async ({ page }) => {
