@@ -140,6 +140,8 @@ export interface EditorState {
   htmlAiGrants: string[];
   /** Issue #24 (D2-C): autorizações LOCAIS de IA de blocos “Dados importados” (`<id>:<resumo>`). Separadas das do HTML e das bancárias; nunca vêm de quadro ou backup. */
   datasetAiGrants: string[];
+  /** H2 (HTML Network Bridge): autorizações LOCAIS de rede dos blocos HTML. Nunca vêm de quadro, backup ou do próprio HTML. */
+  htmlNetGrants: import('../net/policy').NetGrant[];
   toasts: Toast[];
   /** Último snapshot de dados de fluxo calculado (cache para widgets). */
   dataflowVersion: number;

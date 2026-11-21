@@ -1,5 +1,7 @@
 # HTML Data Bridge — contrato H1 (issue #11, protocolo 1)
 
+> Consultas a APIs externas autorizadas (`aurora.request()`) são do ciclo H2: ver [HTML_NETWORK_BRIDGE.md](HTML_NETWORK_BRIDGE.md). O iframe continua sem rede própria.
+
 Blocos **HTML isolado** podem ser nós do fluxo de dados. Eles **recebem entradas** de conexões, **publicam saídas** tipadas para Fórmula, Gráfico e outros blocos HTML, e podem expor **somente as saídas escolhidas** a um Assistente IA, com prévia exata e autorização local. O isolamento não muda: continua sendo `iframe sandbox="allow-scripts"`, sem `allow-same-origin`, com CSP sem rede.
 
 ## Decisão de arquitetura: iframe assíncrono × fluxo síncrono

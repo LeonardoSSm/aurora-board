@@ -64,6 +64,7 @@ export const initialEditorState: EditorState = {
   panelWidths: { ...PANEL_DEFAULTS },
   htmlAiGrants: [],
   datasetAiGrants: [],
+  htmlNetGrants: [],
   toasts: [],
   dataflowVersion: 0,
 };

@@ -13,6 +13,7 @@ import { getState, setState } from './editor';
 import { openBoard, refreshBoards, createBoard as createBoardAction } from './actions';
 import { toast } from './ui';
 import { buildDemoBoard } from './demo';
+import { sanitizeNetGrants } from '../net/policy';
 
 let stopAutosave: (() => void) | null = null;
 
@@ -72,7 +73,7 @@ export async function initEditor(adapter: PersistenceAdapter, opts: { demo?: boo
       clearJournal(journal.boardId);
     }
 
-    setState({ zoomPrefs: sanitizeZoomPrefs(await adapter.getSetting('zoomPreferences')), navigationPrefs: sanitizeNavigationPrefs(await adapter.getSetting('navigationPreferences')), animationPrefs: sanitizeAnimationPrefs(await adapter.getSetting('animationPreferences')), panelWidths: sanitizePanelWidths(await adapter.getSetting('panelWidths')), htmlAiGrants: sanitizeHtmlAiGrants(await adapter.getSetting('htmlAiGrants')), datasetAiGrants: sanitizeDatasetAiGrants(await adapter.getSetting('datasetAiGrants')), radialFavorites: loadedFavorites(await adapter.getSetting('radialFavorites')), companionPrefs: sanitizeCompanionPrefs(await adapter.getSetting('companionPreferences')) });
+    setState({ zoomPrefs: sanitizeZoomPrefs(await adapter.getSetting('zoomPreferences')), navigationPrefs: sanitizeNavigationPrefs(await adapter.getSetting('navigationPreferences')), animationPrefs: sanitizeAnimationPrefs(await adapter.getSetting('animationPreferences')), panelWidths: sanitizePanelWidths(await adapter.getSetting('panelWidths')), htmlAiGrants: sanitizeHtmlAiGrants(await adapter.getSetting('htmlAiGrants')), datasetAiGrants: sanitizeDatasetAiGrants(await adapter.getSetting('datasetAiGrants')), htmlNetGrants: sanitizeNetGrants(await adapter.getSetting('htmlNetGrants')), radialFavorites: loadedFavorites(await adapter.getSetting('radialFavorites')), companionPrefs: sanitizeCompanionPrefs(await adapter.getSetting('companionPreferences')) });
     const last = await adapter.getSetting<string>('lastWorkspace');
     const workspaceId = workspaces.some((w) => w.id === last) ? last! : workspaces[0].id;
     setState({ workspaces, workspaceId });

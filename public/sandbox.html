@@ -19,6 +19,13 @@
         aurora.onInputs(cb)        → chama cb(inputs, connections) agora e a cada mudança; devolve “cancelar”
         aurora.publish(porta, v)   → publica uma SAÍDA declarada (validada pelo host; não é gravada no quadro)
       Eventos: 'aurora:init' (estado), 'aurora:inputs' (detail = { inputs, connections }).
+
+      HTML Network Bridge (H2) — consultas GET a APIs HTTPS autorizadas, SEMPRE pelo host (este documento continua
+      sem rede: a CSP acima não muda). Ver docs/HTML_NETWORK_BRIDGE.md.
+        aurora.request({ url, method?: 'GET', responseType?: 'json'|'text', timeoutMs?, signal? })
+                                   → Promise<{ ok, status, url, contentType, bytes, data | text }>
+                                     rejeita com AuroraRequestError { code, message, status?, data?, text? }
+        aurora.network             → { version, available, message }
     -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'" />
     <meta name="referrer" content="no-referrer" />
@@ -69,6 +76,59 @@
           connections = freeze(b && b.connections && typeof b.connections === 'object' ? b.connections : {});
         }
 
+        // H2: consultas pendentes deste documento (id → { resolve, reject }). O host responde cada uma uma única vez.
+        var network = Object.freeze({ version: 1, available: false, message: 'Ponte do Aurora não inicializada.' });
+        var pendingReq = Object.create(null);
+        var pendingCount = 0;
+        var reqSeq = 0;
+        function netErr(code, message, extra) {
+          var e = new Error(String(message || code));
+          e.name = 'AuroraRequestError';
+          e.code = String(code);
+          if (extra && typeof extra === 'object') {
+            if (typeof extra.status === 'number') e.status = extra.status;
+            if (extra.data !== undefined) e.data = extra.data;
+            if (typeof extra.text === 'string') e.text = extra.text;
+          }
+          return e;
+        }
+        function settle(id, ok, value) {
+          var p = pendingReq[id];
+          if (!p) return;
+          delete pendingReq[id];
+          pendingCount--;
+          if (p.cleanup) p.cleanup();
+          if (ok) p.resolve(value); else p.reject(value);
+        }
+        function request(options) {
+          return new Promise(function (resolve, reject) {
+            var o = typeof options === 'string' ? { url: options } : options;
+            if (!o || typeof o !== 'object') return reject(netErr('invalid_request', 'Use aurora.request({ url, method: "GET", responseType: "json" }).'));
+            // Cabeçalhos, cookies, credenciais e corpo nunca são aceitos (o host define cabeçalhos seguros).
+            if (o.headers !== undefined || o.credentials !== undefined || o.mode !== undefined) return reject(netErr('headers_not_allowed', 'Cabeçalhos, cookies e credenciais não podem ser definidos pelo HTML.'));
+            if (o.body !== undefined) return reject(netErr('method_not_allowed', 'Somente GET, sem corpo, é permitido nesta versão.'));
+            if (!token) return reject(netErr('unavailable', 'Ponte do Aurora não inicializada.'));
+            if (pendingCount >= 8) return reject(netErr('too_many_pending', 'Mais de 8 consultas em andamento: aguarde as anteriores.'));
+            var signal = o.signal;
+            if (signal && signal.aborted) return reject(netErr('aborted', 'Consulta cancelada.'));
+            var id = 'r' + (++reqSeq) + '-' + Math.random().toString(36).slice(2, 10);
+            var msg = { type: 'aurora:request', token: token, id: id, url: typeof o.url === 'string' ? o.url : String(o.url == null ? '' : o.url), method: o.method === undefined ? 'GET' : String(o.method), responseType: o.responseType === undefined ? 'json' : String(o.responseType) };
+            if (o.timeoutMs !== undefined) msg.timeoutMs = Number(o.timeoutMs);
+            var entry = { resolve: resolve, reject: reject, cleanup: null };
+            if (signal && typeof signal.addEventListener === 'function') {
+              var onAbort = function () {
+                post({ type: 'aurora:abort', token: token, id: id });
+                settle(id, false, netErr('aborted', 'Consulta cancelada.'));
+              };
+              signal.addEventListener('abort', onAbort, { once: true });
+              entry.cleanup = function () { signal.removeEventListener('abort', onAbort); };
+            }
+            pendingReq[id] = entry;
+            pendingCount++;
+            post(msg);
+          });
+        }
+
         var api = {
           protocol: 1,
           state: null,
@@ -80,10 +140,12 @@
             try { cb(inputs, connections); } catch (err) { console.error(err); }
             return function () { var i = callbacks.indexOf(cb); if (i >= 0) callbacks.splice(i, 1); };
           },
+          request: request,
         };
         Object.defineProperty(api, 'inputs', { get: function () { return inputs; }, enumerable: true });
         Object.defineProperty(api, 'connections', { get: function () { return connections; }, enumerable: true });
         Object.defineProperty(api, 'ports', { get: function () { return ports; }, enumerable: true });
+        Object.defineProperty(api, 'network', { get: function () { return network; }, enumerable: true });
         window.aurora = api;
 
         window.addEventListener('message', function (e) {
@@ -96,6 +158,12 @@
               token = typeof b.token === 'string' ? b.token : '';
               ports = freeze({ inputs: Array.isArray(b.ports && b.ports.inputs) ? b.ports.inputs : [], outputs: Array.isArray(b.ports && b.ports.outputs) ? b.ports.outputs : [] });
               setInputs(b);
+            }
+            // H2: identificação da montagem também para blocos sem portas (aurora.request precisa dela).
+            var n = e.data.net;
+            if (n && typeof n === 'object') {
+              if (!token && typeof n.token === 'string') token = n.token;
+              network = Object.freeze({ version: 1, available: n.available === true, message: typeof n.message === 'string' ? n.message.slice(0, 300) : '' });
             }
             var tpl = document.createElement('template');
             tpl.innerHTML = e.data.html;
@@ -118,6 +186,17 @@
           } else if (e.data.type === 'aurora:inputs' && loaded && e.data.token === token && token) {
             setInputs(e.data);
             emitInputs();
+          } else if (e.data.type === 'aurora:response' && loaded && e.data.token === token && token && typeof e.data.id === 'string' && pendingReq[e.data.id]) {
+            var d = e.data;
+            if (d.ok === true && d.result && typeof d.result === 'object') {
+              var r = d.result;
+              var out = { ok: true, status: r.status, url: r.url, contentType: r.contentType, bytes: r.bytes };
+              if (r.responseType === 'text') out.text = r.text; else out.data = r.data === undefined ? null : r.data;
+              settle(d.id, true, out);
+            } else {
+              var er = d.error && typeof d.error === 'object' ? d.error : {};
+              settle(d.id, false, netErr(typeof er.code === 'string' ? er.code : 'network_error', typeof er.message === 'string' ? er.message : 'Falha na consulta.', er));
+            }
           }
         });
       })();
