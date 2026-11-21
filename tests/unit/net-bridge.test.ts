@@ -434,6 +434,51 @@ describe('corretor do host (consentimento, limites, cancelamento)', () => {
     expect(sanitizeSandbox({ html: '', stateTaint: { sources: ['<lixo>'] } }).stateTaint?.sources).toEqual(['desconhecida']);
   });
 
+  it('Codex PR #31: HTML a montante com estado marcado ou memória de fonte protegida contamina o bloco a jusante', async () => {
+    const b = bank(), a = sandbox('A'), c = sandbox('B');
+    const aMarked = { ...a, data: { ...(a.data as object), stateTaint: { sources: [b.id], at: 1 } } } as WidgetElement;
+    board(aMarked, c, b, link(aMarked, c));
+    answers = ['deny'];
+    const x = open(c.id);
+    x.session.handle(req('r1'));
+    await vi.waitFor(() => expect(responses(x)).toHaveLength(1));
+    expect(prompts[0].need).toBe('sensitive');
+    expect(prompts[0].sensitive.map((s) => s.id)).toEqual([b.id]);
+    x.session.dispose();
+    // Fonte original excluída: a jusante também fica bloqueado (sem como identificar a origem).
+    board(aMarked, c, link(aMarked, c));
+    const y = open(c.id);
+    y.session.handle(req('r1'));
+    await vi.waitFor(() => expect(lastError(y)).toBe('sensitive_blocked'));
+    y.session.dispose();
+    // Sem marca no estado, mas a execução de A recebeu o banco (memória/saídas): B continua sensível.
+    board(a, c, b, link(b, a), link(a, c));
+    const ra = open(a.id, 'tok-a');
+    board(a, c, b, link(a, c)); // desconecta banco → A
+    answers = ['deny'];
+    const z = open(c.id, 'tok-c');
+    z.session.handle({ ...req('r2'), token: 'tok-c' });
+    await vi.waitFor(() => expect(responses(z)).toHaveLength(1));
+    expect(prompts.at(-1)?.need).toBe('sensitive');
+    ra.session.dispose();
+  });
+
+  it('Codex PR #31: consultas que estouram o tempo com transporte travado liberam a vaga global', async () => {
+    vi.useFakeTimers();
+    const h = sandbox(); board(h);
+    answers = ['always'];
+    transportImpl = () => new Promise(() => {}); // nunca termina
+    const x = open(h.id);
+    for (let i = 0; i < NET_LIMITS.maxConcurrent; i++) x.session.handle({ ...req(`t${i}`), timeoutMs: 1000 });
+    await vi.waitFor(() => expect(calls).toHaveLength(NET_LIMITS.maxConcurrent));
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(responses(x).filter((m) => (m as { error?: { code: string } }).error?.code === 'timeout')).toHaveLength(NET_LIMITS.maxConcurrent);
+    transportImpl = async () => okOutcome();
+    x.session.handle(req('depois'));
+    await vi.waitFor(() => expect(responses(x)).toHaveLength(NET_LIMITS.maxConcurrent + 1));
+    expect(responses(x).at(-1)).toMatchObject({ id: 'depois', ok: true });
+  });
+
   it('confirmação fecha sozinha quando o bloco desmonta', async () => {
     const h = sandbox(); board(h);
     let aborted = false;

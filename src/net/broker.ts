@@ -87,6 +87,8 @@ function touch(elementId: string): NetActivity {
 /* ------------------------------------------------------------------ sessões (uma por montagem do iframe) */
 
 interface Pending {
+  /** Libera a vaga global de execução (uma única vez: fim normal, tempo, cancelamento, revogação). */
+  release?: () => void;
   id: string;
   req: NetRequest;
   origin: string;
@@ -105,6 +107,12 @@ interface ConsentJob {
 }
 
 const sessions = new Set<NetSession>();
+/**
+ * Fontes protegidas que já alimentaram cada bloco HTML nesta página (memória do iframe, saídas publicadas que
+ * sobrevivem à desmontagem). Vale para blocos a JUSANTE também. Zera ao trocar de quadro ou recarregar a página.
+ */
+const remembered = new Map<string, Set<string>>();
+const rememberedOf = (elementId: string): Iterable<string> => remembered.get(elementId) ?? [];
 const consentQueue: ConsentJob[] = [];
 let consentBusy = false;
 const runQueue: { session: NetSession; id: string }[] = [];
@@ -152,7 +160,12 @@ export class NetSession {
   observe() {
     if (this.disposed) return;
     const s = getState();
-    for (const src of sensitiveUpstream(s.elements, this.elementId)) this.sticky.add(src.id);
+    for (const src of sensitiveUpstream(s.elements, this.elementId, rememberedOf)) this.sticky.add(src.id);
+    if (this.sticky.size) {
+      let set = remembered.get(this.elementId);
+      if (!set) { set = new Set(); remembered.set(this.elementId, set); }
+      for (const x of this.sticky) set.add(x);
+    }
   }
 
   private snapshot(): Snapshot | null {
@@ -168,7 +181,7 @@ export class NetSession {
   }
 
   sensitive(snap: Snapshot): SensitiveSource[] {
-    return mergeSources(sensitiveUpstream(snap.elements, this.elementId), sourcesFromIds(snap.elements, this.sticky), sourcesFromIds(snap.elements, snap.data.stateTaint?.sources ?? []));
+    return mergeSources(sensitiveUpstream(snap.elements, this.elementId, rememberedOf), sourcesFromIds(snap.elements, this.sticky), sourcesFromIds(snap.elements, snap.data.stateTaint?.sources ?? []));
   }
 
   decide(origin: string): NetDecision | null {
@@ -186,6 +199,7 @@ export class NetSession {
   private respond(id: string, outcome: NetOutcome, origin?: string) {
     const p = this.pending.get(id);
     if (p?.timer) clearTimeout(p.timer);
+    p?.release?.();
     this.pending.delete(id);
     this.remember(id);
     const a = touch(this.elementId);
@@ -251,6 +265,9 @@ export class NetSession {
   async run(id: string) {
     const p = this.pending.get(id);
     if (!p || this.disposed || !transport) { running--; pump(); return; }
+    // A vaga volta à fila uma única vez — mesmo se o transporte nunca terminar (tempo, cancelamento, revogação).
+    let released = false;
+    p.release = () => { if (released) return; released = true; running--; pump(); };
     p.phase = 'running';
     p.started = this.now();
     const t = transport;
@@ -261,8 +278,7 @@ export class NetSession {
     } catch {
       out = netError(p.ctrl.signal.aborted ? 'aborted' : 'network_error', p.ctrl.signal.aborted ? 'Consulta cancelada.' : 'Falha ao consultar pelo servidor local.');
     } finally {
-      running--;
-      pump();
+      p.release();
     }
     if (this.pending.get(id) !== p || p.ctrl.signal.aborted) return; // já respondida (cancelada, revogada, tempo)
     // Revalida no fim: a autorização pode ter caído (revogação, edição, conexão nova) durante a consulta.
@@ -296,7 +312,7 @@ export class NetSession {
   /** Desmontagem do iframe (fechar, editar, excluir, trocar de quadro, navegação bloqueada). */
   dispose() {
     if (this.disposed) return;
-    for (const p of this.pending.values()) { p.ctrl.abort(); if (p.timer) clearTimeout(p.timer); }
+    for (const p of this.pending.values()) { p.ctrl.abort(); if (p.timer) clearTimeout(p.timer); p.release?.(); }
     this.pending.clear();
     this.disposed = true;
     sessions.delete(this);
@@ -433,6 +449,7 @@ export async function revokeNetAccess(elementId: string, origin?: string) {
 let lastElements: unknown = null, lastGrants: unknown = null, lastBoard: unknown = null;
 useEditor.subscribe((s) => {
   if (s.elements === lastElements && s.htmlNetGrants === lastGrants && s.boardId === lastBoard) return;
+  if (s.boardId !== lastBoard) remembered.clear();
   lastElements = s.elements; lastGrants = s.htmlNetGrants; lastBoard = s.boardId;
   if (!sessions.size) return;
   for (const x of [...sessions]) { x.observe(); x.recheck(); }
@@ -446,6 +463,7 @@ export function resetNetForTests() {
   running = 0;
   consentBusy = false;
   activity.clear();
+  remembered.clear();
   transport = null;
   availability = LOCAL_API_ENABLED ? { available: false, message: INACTIVE_NET_MESSAGE } : { available: false, message: STATIC_NET_MESSAGE };
   prompter = async () => 'deny';

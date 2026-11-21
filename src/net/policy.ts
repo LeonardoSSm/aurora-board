@@ -60,8 +60,12 @@ function sourceOf(el: AuroraElement): SensitiveSource | null {
  * Fontes protegidas que alimentam o bloco `id`, direta ou indiretamente. Segue conexões de DADOS a montante e,
  * ao passar por um Assistente IA, tudo o que ele pode ler (conexões de contexto/dados em qualquer sentido, como
  * em `contextSources`).
+ *
+ * Um bloco HTML a montante também carrega o que GUARDOU: a marca do estado gravado (`stateTaint`) e, via
+ * `remembered`, as fontes que já alimentaram a execução dele nesta página (memória do iframe e saídas publicadas
+ * continuam valendo depois de a conexão sumir). Fonte lembrada que não existe mais vira `missing` (bloqueia).
  */
-export function sensitiveUpstream(elements: AuroraElement[], id: string): SensitiveSource[] {
+export function sensitiveUpstream(elements: AuroraElement[], id: string, remembered: (elementId: string) => Iterable<string> = () => []): SensitiveSource[] {
   const byId = new Map(elements.map((e) => [e.id, e]));
   const upstream = new Map<string, string[]>();
   const aiLinks = new Map<string, string[]>();
@@ -87,10 +91,15 @@ export function sensitiveUpstream(elements: AuroraElement[], id: string): Sensit
     if (!el) continue;
     const s = sourceOf(el);
     if (s) out.push(s);
+    if (el.type === 'widget' && el.widgetType === WIDGET.sandbox) {
+      const t = (el.data as { stateTaint?: { sources?: unknown } } | null)?.stateTaint?.sources;
+      const ids = [...(Array.isArray(t) ? t.filter((x): x is string => typeof x === 'string') : []), ...remembered(cur)];
+      if (ids.length) out.push(...sourcesFromIds(elements, ids));
+    }
     queue.push(...(upstream.get(cur) ?? []));
     if (isAI(cur)) queue.push(...(aiLinks.get(cur) ?? []));
   }
-  return out;
+  return mergeSources(out);
 }
 
 /** Fontes a partir de ids lembrados (marca do estado, execução atual). Id que sumiu → `missing` (não verificável). */

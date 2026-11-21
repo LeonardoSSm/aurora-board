@@ -60,6 +60,7 @@ Um bloco que recebe dados protegidos **não** consulta a rede só com a autoriza
 - **Fontes protegidas:** Consulta bancária (contas bancárias e Meu Pluggy), Dados importados (Data Hub) e Finanças (lançamentos).
 - **Derivados:** o percurso segue conexões de dados a montante (Fórmula, Mês, outro HTML) e, num **Assistente IA**, tudo o que ele lê — a resposta da IA deriva do contexto. Autorização para IA **não** conta como autorização para enviar a uma API.
 - **Memória do iframe:** uma fonte que alimentou a execução atual continua contando até o bloco ser recarregado, mesmo se a conexão for removida (o HTML pode ter guardado os dados).
+- **HTML a montante:** um bloco HTML que alimenta este carrega o que guardou — a marca do estado dele e as fontes que já alimentaram a execução dele nesta página (as saídas publicadas sobrevivem à desmontagem). Fonte lembrada que não existe mais bloqueia.
 - **Estado gravado:** `setState` feito por uma execução com dados protegidos marca o bloco (`stateTaint`, só restringe). Enquanto a marca existir, a rede exige a autorização específica daquelas fontes.
 - **Fonte que não existe mais** (excluída, ou marca ilegível): não há como identificar a origem dos dados — a consulta é **bloqueada** (`sensitive_blocked`) com o motivo. Não há bypass: limpe o estado e recarregue o bloco.
 - A autorização específica cobre id, tipo e configuração de cada fonte (consulta: ledger, contas, métrica, período…; dados importados: arquivo e visão). Mudar a fonte invalida só ela.
@@ -72,7 +73,7 @@ Um bloco que recebe dados protegidos **não** consulta a rede só com a autoriza
 | Tempo | 10 s padrão, 1–20 s |
 | Pendentes por iframe | 8 (`too_many_pending`) |
 | Por minuto por iframe | 30 (`rate_limited`) |
-| Simultâneas no total | 4 (as demais esperam na fila) |
+| Simultâneas no total | 4 (as demais esperam na fila; a vaga volta mesmo se o transporte travar) |
 | Mensagens de rede por segundo por iframe | 50 (excedentes descartadas) |
 | Resposta | 1 MB (`response_too_large`) |
 
