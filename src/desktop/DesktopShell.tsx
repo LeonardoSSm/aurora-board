@@ -15,7 +15,7 @@ import { applyImport, checkImportFileSize, ImportError, type ImportResult } from
 import { invalidateDatasets } from '../data/store';
 import { ensureFinanceLoaded, restoreFinanceBackup } from '../finance/store';
 import { desktopBridge } from './bridge';
-import { executeMigration, MIGRATION_INVENTORY, MigrationError, planMigration, type MigrationPlan } from './migration';
+import { executeMigration, importThenOpen, MIGRATION_INVENTORY, MigrationError, planMigration, type MigrationPlan } from './migration';
 import { openDesktopSettings } from './settings';
 
 const WELCOME_KEY = 'desktopWelcomeDone';
@@ -33,15 +33,18 @@ export function registerDesktopLifecycle() {
   try { void navigator.storage?.persist?.(); } catch { /* sem suporte: o perfil do app não é limpo automaticamente */ }
 }
 
-async function importBoards(r: ImportResult): Promise<{ boardIds: string[] }> {
+async function importBoards(r: ImportResult): Promise<{ boardIds: string[]; openError?: string }> {
   const ws = getState().workspaces.find((w) => w.id === getState().workspaceId);
   if (!ws) throw new ImportError('Nenhum workspace aberto.');
-  const { boardIds, workspace, assetIds } = await applyImport(getAdapter(), r, ws, () => uid('b_'));
-  invalidateDatasets(assetIds);
-  setState({ workspaces: getState().workspaces.map((w) => (w.id === ws.id ? workspace : w)) });
-  await refreshBoards();
-  if (boardIds[0]) await openBoard(boardIds[0]);
-  return { boardIds };
+  return importThenOpen(async () => {
+    const { boardIds, workspace, assetIds } = await applyImport(getAdapter(), r, ws, () => uid('b_'));
+    invalidateDatasets(assetIds);
+    setState({ workspaces: getState().workspaces.map((w) => (w.id === ws.id ? workspace : w)) });
+    return boardIds;
+  }, async (boardIds) => {
+    await refreshBoards();
+    if (boardIds[0]) await openBoard(boardIds[0]);
+  });
 }
 
 function Inventory() {
@@ -91,8 +94,9 @@ function MigrationBody({ done }: { done: () => void }) {
         : `${fin}Os quadros NÃO foram gravados (${out.failed.message}); nenhum quadro existente foi alterado. Repetir a migração é seguro: as finanças repetidas são ignoradas.`);
       return;
     }
-    setResult(`${fin}${brd}`.trim() || 'Nada novo a importar.');
-    toast(nWarn ? 'Migração concluída com avisos.' : 'Migração concluída.', nWarn ? 'warning' : 'success');
+    const open = out.openError ? ` Os quadros FORAM gravados, mas não abriram (${out.openError}): abra-os pela lista de quadros. Não repita a migração (criaria cópias).` : '';
+    setResult(`${fin}${brd}${open}`.trim() || 'Nada novo a importar.');
+    toast(nWarn || out.openError ? 'Migração concluída com avisos.' : 'Migração concluída.', nWarn || out.openError ? 'warning' : 'success');
     done();
   };
   return (

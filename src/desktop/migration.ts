@@ -72,12 +72,28 @@ export async function planMigration(text: string, password: string | undefined, 
 
 export interface MigrationDeps {
   restoreFinance: (b: FinanceBackup) => Promise<{ added: number; skipped: number }>;
-  importBoards: (r: ImportResult) => Promise<{ boardIds: string[] }>;
+  /** Rejeita só se a GRAVAÇÃO falhou (nada gravado). Falha ao abrir depois de gravar vem em `openError`. */
+  importBoards: (r: ImportResult) => Promise<{ boardIds: string[]; openError?: string }>;
+}
+
+/**
+ * Grava os quadros e depois tenta abri-los. Uma falha DEPOIS da gravação (atualizar a lista, abrir o quadro, gravar
+ * a preferência de último quadro…) não pode ser relatada como “nada foi gravado”: repetir a migração criaria cópias
+ * (Codex, PR #40). Só erros de `commit` rejeitam.
+ */
+export async function importThenOpen(commit: () => Promise<string[]>, open: (boardIds: string[]) => Promise<void>): Promise<{ boardIds: string[]; openError?: string }> {
+  const boardIds = await commit();
+  try { await open(boardIds); } catch (e) {
+    return { boardIds, openError: (e as Error)?.message || 'não foi possível abrir o quadro importado' };
+  }
+  return { boardIds };
 }
 
 export interface MigrationOutcome {
   finance: { added: number; skipped: number } | null;
   boardIds: string[];
+  /** Quadros GRAVADOS, mas a abertura falhou depois (não repetir a migração: criaria cópias). */
+  openError?: string;
   /** Etapa que falhou (o que veio antes dela foi gravado; o que vem depois, não). */
   failed?: { step: 'finance' | 'boards'; message: string };
 }
@@ -91,7 +107,11 @@ export async function executeMigration(plan: MigrationPlan, deps: MigrationDeps)
     }
   }
   if (plan.boards) {
-    try { out.boardIds = (await deps.importBoards(plan.boards)).boardIds; } catch (e) {
+    try {
+      const r = await deps.importBoards(plan.boards);
+      out.boardIds = r.boardIds;
+      if (r.openError) out.openError = r.openError;
+    } catch (e) {
       return { ...out, failed: { step: 'boards', message: (e as Error).message || 'Falha ao gravar os quadros.' } };
     }
   }

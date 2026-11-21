@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SecretStore, vaultInfo, type VaultCrypto } from '../../desktop/secrets';
-import { executeMigration, MigrationError, planMigration } from '../../src/desktop/migration';
+import { executeMigration, importThenOpen, MigrationError, planMigration } from '../../src/desktop/migration';
 import { registerBuiltinWidgets } from '../../src/widgets/builtin';
 import { buildExport } from '../../src/persistence/exportImport';
 import { createWidget } from '../../src/core/elements';
@@ -155,6 +155,24 @@ describe('migração por backup', () => {
     // Falha nas finanças: os quadros nem são tentados.
     const third = await executeMigration(plan, { ...deps, restoreFinance: async () => { throw new Error('cota'); } });
     expect(third).toMatchObject({ failed: { step: 'finance' }, boardIds: [] });
+  });
+
+  it('falha ao ABRIR depois de gravar não vira “nada gravado” (Codex, PR #40)', async () => {
+    // Gravou e a abertura falhou: os ids voltam e o erro de abertura vem separado.
+    const committed = await importThenOpen(async () => ['b_novo'], async () => { throw new Error('cota cheia ao gravar lastBoard'); });
+    expect(committed).toEqual({ boardIds: ['b_novo'], openError: 'cota cheia ao gravar lastBoard' });
+    // A gravação falhou: rejeita (o assistente diz que nada foi gravado) e a abertura nem é tentada.
+    let opened = false;
+    await expect(importThenOpen(async () => { throw new Error('disco cheio'); }, async () => { opened = true; })).rejects.toThrow('disco cheio');
+    expect(opened).toBe(false);
+    // No assistente: sem `failed`, com os quadros gravados e o aviso de abertura.
+    const boardsOnly = { finance: null, boards: { source: 'aurora', boards: [], assets: [], warnings: [], stats: { boards: 1, elements: 0, activeContent: 0 } } };
+    const out = await executeMigration(boardsOnly as never, {
+      restoreFinance: async () => ({ added: 0, skipped: 0 }),
+      importBoards: () => importThenOpen(async () => ['b_novo'], async () => { throw new Error('falhou ao abrir'); }),
+    });
+    expect(out.failed).toBeUndefined();
+    expect(out).toMatchObject({ boardIds: ['b_novo'], openError: 'falhou ao abrir' });
   });
 });
 
