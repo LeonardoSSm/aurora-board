@@ -2,7 +2,7 @@
 
 Widgets **HTML isolado** podem consultar APIs HTTPS externas **autorizadas** com `aurora.request()`, sem perder o isolamento: o iframe continua `sandbox="allow-scripts"`, sem `allow-same-origin`, com a CSP `default-src 'none'` (sem rede própria). Quem consulta é o **servidor local**, e só depois de o **host** (a origem do app) conferir a autorização do usuário e a política de dados sensíveis.
 
-> Estado: **H2-A** — protocolo, autorizações e política de dados sensíveis. O transporte remoto ainda está **inativo** (`aurora.request()` responde `unavailable`); os testes usam um transporte simulado. H2-B entrega o transporte HTTP seguro; H2-C, o painel “Acesso à rede”, exemplos e a documentação completa.
+> Estado: **H2-A** (protocolo, autorizações, dados sensíveis) + **H2-B** (transporte HTTP seguro no servidor local). H2-C entrega o painel “Acesso à rede”, exemplos e a documentação completa.
 
 ## API no HTML
 
@@ -87,9 +87,31 @@ Um bloco que recebe dados protegidos **não** consulta a rede só com a autoriza
 |---|---|
 | iframe (não confiável) | Nada: só pede. Sem rede própria (CSP), sem WebRTC. |
 | Host (origem do app) | Origem da mensagem, token, limites por iframe, **autorização do usuário**, **política de dados sensíveis**, cancelamento e revogação. |
-| Servidor local (H2-B) | Regras de rede independentes do frontend (HTTPS/443, SSRF, DNS, tamanho, tempo, tipos). |
+| Servidor local (`server/netBridge.ts`) | Regras de rede **independentes do frontend**: GET, HTTPS/443, sem IP literal/nomes locais, DNS validado na conexão, IP conectado conferido, sem redirecionamentos, tempo, tamanho, tipos, limites por minuto/domínio/concorrência, só o computador principal. |
+
+O servidor **não** conhece as autorizações do usuário: elas vivem no IndexedDB da origem do app (como as de IA) e são conferidas pelo host. O que o backend garante sozinho é que, mesmo chamado diretamente (por exemplo, por um processo local ou um app alterado), ele só faz GETs HTTPS a destinos públicos, sem repassar nada do navegador. Quem pode chamar a rota: só o próprio computador (par TCP loopback, `Host` e `Origin` locais — o iframe tem `Origin: null` e é recusado), nunca um dispositivo pareado (`local_only`).
+
+## Transporte (servidor local)
+
+`POST /api/net/fetch` com `{ url, method: 'GET', responseType, timeoutMs }` (chaves exatas; `headers`, `cookie`, `authorization`… → `headers_not_allowed`). `GET /api/net/status` informa disponibilidade e limites.
+
+| Regra | Como |
+|---|---|
+| Destino | `https:`, porta 443, sem usuário/senha, sem IP literal, sem nomes locais — validado de novo no servidor |
+| SSRF / DNS rebinding | DNS resolvido **dentro** da conexão (`lookup` seguro); **todos** os endereços conferidos; o IP do socket conectado é conferido de novo; conexão nova por consulta (sem pool) |
+| Endereços bloqueados | loopback, `0.0.0.0/8`, privados (RFC 1918), CGNAT, link-local (inclui `169.254.169.254`), multicast, reservados, documentação; IPv6 `::/96` (IPv4 compatível), `::1`, IPv4 mapeado, NAT64 (`64:ff9b::/96`, `64:ff9b:1::/48`), 6to4, Teredo/`2001::/23`, ULA (`fc00::/7`, inclui `fd00:ec2::254`), link-local, multicast |
+| Redirecionamentos | **não** seguidos (`redirect_blocked`, sem revelar o destino) |
+| Cabeçalhos enviados | só `Accept`, `Accept-Encoding: identity` e `User-Agent` fixos. Cookies, `Authorization` e o token de dispositivo pareado nunca são repassados |
+| Resposta | até 1 MB (inclusive `Content-Length` declarado); sem compressão; JSON (`application/json`, `+json`) ou texto (`text/*`, XML, NDJSON); binário (bytes nulos, `image/*`, `octet-stream`), `application/javascript`, charsets ≠ UTF-8 e UTF-8 inválido recusados; BOM removido; JSON com no máximo 64 níveis |
+| Tempo | total (conexão + cabeçalhos + corpo) = `timeoutMs` |
+| Cancelamento | o app fecha a conexão (desmontagem, revogação, `aurora:abort`) → a consulta externa é abortada |
+| Limites | 120/min no total, 6 simultâneas, 60/min por domínio (`429` estruturado) |
+| Erros e logs | mensagens sem segredos e sem a URL; nenhum log por consulta |
+
+Build público: sem servidor — `aurora.request()` responde `unavailable` sem confirmar nada; a rota nem existe no pacote (constante de build `LOCAL_API_ENABLED`).
 
 ## Testes
 
 - `tests/unit/net-bridge.test.ts`: protocolo (padrões, cabeçalhos, métodos, esquemas, IPs, nomes locais), conferência das respostas, política (fontes a montante, Fórmula/IA, chaves, sensível, fonte excluída), corretor (indisponível, permitir sempre/uma vez, negar, simultâneas, tokens/IDs, limites, revogação durante a consulta, edição/conexão durante a consulta, desmontagem, tempo, cancelamento, erros), backups/importação.
-- `e2e/net-bridge.spec.ts`: confirmação → resposta no HTML; negar; indisponível sem transporte; `fetch` direto bloqueado; cabeçalhos recusados; mensagens forjadas ignoradas.
+- `tests/unit/net-server.test.ts`: corpo da rota; 23 endereços proibidos (antes de conectar); lista mista; DNS rebinding; IP conectado; DNS inexistente; redirecionamento; **transporte real** com DNS injetado para loopback (nenhuma conexão); JSON/texto e cabeçalhos enviados; 404/500/JSON inválido/vazio; gigantes; binário/charset/UTF-8/compressão/profundidade; tempo e cancelamento; rota: `Origin: null`, site externo, `Host` forjado, par de fora, dispositivo pareado (`local_only`), 400/415, limites por minuto e por domínio, cliente que desiste cancela a consulta.
+- `e2e/net-bridge.spec.ts`: confirmação → resposta no HTML; negar; indisponível sem transporte; `fetch` direto bloqueado; cabeçalhos recusados; mensagens forjadas ignoradas; transporte do app para `/api/net/fetch` (corpo exato) e o servidor real recusando destinos internos.
