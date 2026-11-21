@@ -1,5 +1,7 @@
 # S1 — Modelo de ameaça
 
+> Extensão posterior: [H2 — HTML Network Bridge](H2-NETWORK-THREAT-MODEL.md) (widgets HTML com consultas GET autorizadas). Este documento continua descrevendo o estado auditado no S1.
+
 ## Ativos
 
 | Ativo | Onde vive | Por que importa |

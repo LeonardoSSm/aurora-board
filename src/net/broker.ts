@@ -18,6 +18,8 @@ import { checkResult, NET_LIMITS, netError, netOrigin, parseAbortMessage, parseR
 import { activationStamp, evaluateNet, mergeSources, sensitiveUpstream, sourcesFromIds, type NetContext, type NetDecision, type NetGrant, type SensitiveSource } from './policy';
 import { addNetGrants, removeNetGrants } from './grants';
 import { localNetTransport, STATIC_NET_MESSAGE } from './transport';
+import { clearOutputs } from '../widgets/htmlOutputs';
+import { apiFetch } from '../integrations/apiFetch';
 
 /* ------------------------------------------------------------------ transporte */
 
@@ -337,6 +339,7 @@ export class NetSession {
   }
 
   allowOnce(key: string, origin: string) { this.once.add(key); this.onceOrigin.set(key, origin); }
+  onceOrigins(): string[] { return [...new Set(this.onceOrigin.values())]; }
   /** Concessões “uma vez” desta execução (revogação pelo painel), de todas as origens ou de uma. */
   forgetOnce(origin?: string) {
     for (const k of [...this.once]) if (!origin || this.onceOrigin.get(k) === origin) { this.once.delete(k); this.onceOrigin.delete(k); }
@@ -448,6 +451,51 @@ function pump() {
 
 /* ------------------------------------------------------------------ revogação */
 
+/* ------------------------------------------------------------------ painel “Acesso à rede” (H2-C) */
+
+/** Situação de rede de um bloco para o painel: contexto atual, fontes protegidas e origens “uma vez” desta execução. */
+export function netStatusFor(elementId: string): { ctx: NetContext | null; sensitive: SensitiveSource[]; onceOrigins: string[] } {
+  const live = [...sessions].find((s) => s.elementId === elementId && !s.disposed);
+  const st = getState();
+  const el = st.elements.find((e) => e.id === elementId);
+  if (!el || el.type !== 'widget' || el.widgetType !== WIDGET.sandbox) return { ctx: null, sensitive: [], onceOrigins: [] };
+  const data = sanitizeSandbox(el.data);
+  const ctx: NetContext = { elementId, boardId: st.boardId ?? '', html: data.html, activation: activationStamp(data.activation), elements: st.elements };
+  const sensitive = mergeSources(sensitiveUpstream(st.elements, elementId, rememberedOf), sourcesFromIds(st.elements, live ? live.sticky : []), sourcesFromIds(st.elements, data.stateTaint?.sources ?? []));
+  return { ctx, sensitive, onceOrigins: live ? live.onceOrigins() : [] };
+}
+
+/** Recarregamentos pedidos pelo painel (a chave do iframe muda: memória limpa, sessão nova). */
+const reloads = new Map<string, number>();
+export const netReloadOf = (elementId: string) => reloads.get(elementId) ?? 0;
+
+/**
+ * “Limpar estado e recarregar”: esquece o que a execução deste bloco recebeu (memória, saídas publicadas) e
+ * remonta o iframe. O estado/marca gravados são limpos por quem chama (é uma alteração do quadro, com histórico).
+ */
+export function forgetNetMemory(elementId: string) {
+  remembered.delete(elementId);
+  clearOutputs(elementId);
+  for (const s of [...sessions]) if (s.elementId === elementId) s.dispose();
+  reloads.set(elementId, netReloadOf(elementId) + 1);
+  notify();
+}
+
+export type NetServerStatus = 'unknown' | 'ok' | 'offline' | 'missing' | 'local_only';
+let probe: { at: number; p: Promise<NetServerStatus> } | null = null;
+/** O servidor local oferece a rota? (cache de 30 s; só com servidor local habilitado no build). */
+export function probeNetServer(): Promise<NetServerStatus> {
+  if (!LOCAL_API_ENABLED) return Promise.resolve('unknown');
+  if (probe && Date.now() - probe.at < 30_000) return probe.p;
+  const p = apiFetch('/api/net/status').then(async (r) => {
+    if (r.ok) return 'ok' as const;
+    if (r.status === 403) { const b = await r.json().catch(() => null); return b?.code === 'local_only' ? 'local_only' as const : 'offline' as const; }
+    return r.status === 404 ? 'missing' as const : 'offline' as const;
+  }, () => 'offline' as const);
+  probe = { at: Date.now(), p };
+  return p;
+}
+
 /** Revoga o acesso de um bloco (todas as origens ou uma): persistentes, “uma vez” e consultas em andamento. */
 export async function revokeNetAccess(elementId: string, origin?: string) {
   const boardId = getState().boardId ?? '';
@@ -476,6 +524,8 @@ export function resetNetForTests() {
   consentBusy = false;
   activity.clear();
   remembered.clear();
+  reloads.clear();
+  probe = null;
   transport = defaultTransport();
   availability = defaultAvailability();
   prompter = async () => 'deny';
