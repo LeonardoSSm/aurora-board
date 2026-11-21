@@ -46,7 +46,7 @@ Issue #34. O aplicativo desktop é o **mesmo frontend** da versão web (React + 
 
 `nodeIntegration: false`, `nodeIntegrationInSubFrames: false`, `contextIsolation: true`, `sandbox: true` (e `app.enableSandbox()` para todos), `webSecurity: true`, `allowRunningInsecureContent: false`, `webviewTag: false`, `navigateOnDragDrop: false`, DevTools desligadas no pacote (só com `AURORA_DESKTOP_DEVTOOLS=1`, usado pelos testes).
 
-O preload expõe só `window.auroraDesktop` (congelado): `{ isDesktop, platform, api: { call, cancel } }` — dois canais IPC fixos, revalidados no processo principal (ver [IPC.md](IPC.md)). Nenhum `require`, `process`, `ipcRenderer` ou objeto do Electron chega ao renderer.
+O preload expõe só `window.auroraDesktop` (congelado): `{ isDesktop, platform, api: { call, cancel }, secrets: { status, set, clear }, lifecycle: { onBeforeClose } }` — dois canais IPC fixos, revalidados no processo principal (ver [IPC.md](IPC.md)). Nenhum `require`, `process`, `ipcRenderer` ou objeto do Electron chega ao renderer.
 
 ## Navegação, janelas e permissões
 
@@ -67,5 +67,5 @@ O perfil do Chromium do app fica no diretório de dados do usuário, **fora da p
 ## Próximas etapas do D1
 
 - **D1-B** (feito) — IPC tipado: IA, HTML Network Bridge, Meu Pluggy e pré-visualização de links no processo principal, sem servidor HTTP ([IPC.md](IPC.md)).
-- **D1-C** — credenciais no cofre do SO, migração guiada navegador → desktop, recuperação.
+- **D1-C** (feito) — credenciais no cofre do SO, migração guiada navegador → desktop, encerramento seguro e recuperação ([DATA.md](DATA.md)).
 - **D1-D** — instaladores (NSIS, AppImage, .deb), UX desktop, CI de empacotamento, documentação de usuário.

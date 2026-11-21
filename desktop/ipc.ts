@@ -64,3 +64,19 @@ export function registerIpc(service: ApiService, appWindow: () => BrowserWindow 
     if (id) pending.get(e.sender.id)?.get(id)?.abort();
   });
 }
+
+/**
+ * D1-C — credenciais: o renderer só lê o STATUS e define/remove valores; nunca recebe um valor de volta.
+ * Mesmas regras de remetente das operações (documento principal da janela do app).
+ */
+export function registerSecretsIpc(store: import('./secrets').SecretStore, appWindow: () => BrowserWindow | null) {
+  ipcMain.handle('aurora:secrets-status', (e) => (isTrustedSender(e, appWindow) ? store.status() : null));
+  ipcMain.handle('aurora:secrets-set', (e, name: unknown, value: unknown, mode: unknown) => {
+    if (!isTrustedSender(e, appWindow)) return { ok: false, error: 'Remetente não autorizado.' };
+    try { store.set(name, value, mode); return { ok: true, status: store.status() }; } catch (err) { return { ok: false, error: (err as Error).message, status: store.status() }; }
+  });
+  ipcMain.handle('aurora:secrets-clear', (e, name: unknown) => {
+    if (!isTrustedSender(e, appWindow)) return { ok: false, error: 'Remetente não autorizado.' };
+    try { store.clear(name); return { ok: true, status: store.status() }; } catch (err) { return { ok: false, error: (err as Error).message, status: store.status() }; }
+  });
+}

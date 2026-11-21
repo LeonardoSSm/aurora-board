@@ -21,7 +21,8 @@ import { FinanceHub } from './ui/finance/FinanceHub';
 import { PairingDialog } from './ui/PairingDialog';
 import { setLastPointerWorld, useKeyboard } from './ui/useKeyboard';
 import { screenToWorld } from './store/actions';
-import { LAN_PAIRING_UI } from './config/runtime';
+import { DESKTOP, LAN_PAIRING_UI } from './config/runtime';
+import { DesktopWelcome } from './desktop/DesktopShell';
 
 export function App() {
   const status = useEditor((s) => s.status);
@@ -112,6 +113,7 @@ export function App() {
       <ShortcutsDialog />
       <Toasts />
       <BetaNotice />
+      {DESKTOP && <DesktopWelcome />}
     </div>
   );
 }

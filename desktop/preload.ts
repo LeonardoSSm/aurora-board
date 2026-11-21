@@ -3,7 +3,7 @@
  * (`nodeIntegrationInSubFrames: false`: o iframe dos widgets HTML não recebe nada).
  *
  * Expõe UM objeto congelado, sem `require`, `process`, `ipcRenderer` ou objetos do Electron. As chamadas viram
- * dois canais IPC fixos; o processo principal revalida remetente, operação e argumentos (desktop/ipcValidation.ts).
+ * canais IPC fixos; o processo principal revalida remetente, operação e argumentos (desktop/ipcValidation.ts).
  */
 import { contextBridge, ipcRenderer } from 'electron';
 
@@ -13,8 +13,29 @@ const api = Object.freeze({
   cancel: (callId: string) => { void ipcRenderer.invoke('aurora:api-cancel', String(callId)); },
 });
 
+/** Credenciais: só status e escrita — o valor nunca volta ao renderer. */
+const secrets = Object.freeze({
+  status: () => ipcRenderer.invoke('aurora:secrets-status'),
+  set: (name: string, value: string, mode: 'vault' | 'session') => ipcRenderer.invoke('aurora:secrets-set', String(name), String(value), String(mode)),
+  clear: (name: string) => ipcRenderer.invoke('aurora:secrets-clear', String(name)),
+});
+
+/** Encerramento seguro: o processo principal pede para gravar o pendente antes de fechar a janela. */
+const lifecycle = Object.freeze({
+  onBeforeClose: (handler: () => Promise<boolean>) => {
+    ipcRenderer.removeAllListeners('aurora:before-close');
+    ipcRenderer.on('aurora:before-close', async () => {
+      let ok = false;
+      try { ok = (await handler()) === true; } catch { ok = false; }
+      void ipcRenderer.invoke('aurora:close-ready', ok);
+    });
+  },
+});
+
 contextBridge.exposeInMainWorld('auroraDesktop', Object.freeze({
   isDesktop: true as const,
   platform: process.platform === 'win32' ? 'windows' : process.platform === 'linux' ? 'linux' : 'other',
   api,
+  secrets,
+  lifecycle,
 }));
