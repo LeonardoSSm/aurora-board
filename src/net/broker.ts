@@ -454,15 +454,22 @@ function pump() {
 /* ------------------------------------------------------------------ painel “Acesso à rede” (H2-C) */
 
 /** Situação de rede de um bloco para o painel: contexto atual, fontes protegidas e origens “uma vez” desta execução. */
-export function netStatusFor(elementId: string): { ctx: NetContext | null; sensitive: SensitiveSource[]; onceOrigins: string[] } {
+export function netStatusFor(elementId: string): { ctx: NetContext | null; sensitive: SensitiveSource[]; onceOrigins: string[]; decisions: Record<string, NetDecision['state']> } {
   const live = [...sessions].find((s) => s.elementId === elementId && !s.disposed);
   const st = getState();
   const el = st.elements.find((e) => e.id === elementId);
-  if (!el || el.type !== 'widget' || el.widgetType !== WIDGET.sandbox) return { ctx: null, sensitive: [], onceOrigins: [] };
+  if (!el || el.type !== 'widget' || el.widgetType !== WIDGET.sandbox) return { ctx: null, sensitive: [], onceOrigins: [], decisions: {} };
   const data = sanitizeSandbox(el.data);
   const ctx: NetContext = { elementId, boardId: st.boardId ?? '', html: data.html, activation: activationStamp(data.activation), elements: st.elements };
   const sensitive = mergeSources(sensitiveUpstream(st.elements, elementId, rememberedOf), sourcesFromIds(st.elements, live ? live.sticky : []), sourcesFromIds(st.elements, data.stateTaint?.sources ?? []));
-  return { ctx, sensitive, onceOrigins: live ? live.onceOrigins() : [] };
+  const onceOrigins = live ? live.onceOrigins() : [];
+  // Decisão COMPLETA por destino (comum + específica de dados protegidos + “uma vez” + negação), igual à da consulta:
+  // uma concessão comum ainda válida não basta se a específica caiu (Codex PR #33).
+  const decisions: Record<string, NetDecision['state']> = {};
+  for (const origin of new Set([...st.htmlNetGrants.filter((g) => g.elementId === elementId && g.boardId === ctx.boardId).map((g) => g.origin), ...onceOrigins])) {
+    decisions[origin] = evaluateNet({ ctx, origin, sensitive, grants: st.htmlNetGrants, once: live ? live.once : new Set(), denied: live ? live.denied : new Set() }).state;
+  }
+  return { ctx, sensitive, onceOrigins, decisions };
 }
 
 /** Recarregamentos pedidos pelo painel (a chave do iframe muda: memória limpa, sessão nova). */

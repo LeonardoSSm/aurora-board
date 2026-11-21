@@ -73,27 +73,33 @@ export function parseBridgeMessage(data: unknown): { token: string; port: string
   return { token: o.token, port: o.port, value: o.value };
 }
 
-/** Limitador "a última vence": no máximo N entregas por segundo; a última pendente é entregue depois. */
+/**
+ * Limitador "a última vence": no máximo N entregas por segundo; a última pendente é entregue depois.
+ * `cancel()` descarta a pendente e impede entregas futuras (desmontagem: nada chega depois do fim da montagem).
+ */
 export function createThrottle<T>(
   deliver: (v: T) => void,
   perSecond = MAX_UPDATES_PER_SECOND,
   now = () => Date.now(),
   schedule: (fn: () => void, ms: number) => unknown = (fn, ms) => setTimeout(fn, ms),
 ) {
-  let windowStart = -Infinity, count = 0, pending: { v: T } | null = null, scheduled = false;
+  let windowStart = -Infinity, count = 0, pending: { v: T } | null = null, scheduled = false, cancelled = false;
   const flush = () => {
     scheduled = false;
+    if (cancelled) { pending = null; return; }
     windowStart = now();
     count = 0;
     if (pending) { const p = pending; pending = null; count = 1; deliver(p.v); }
   };
-  return (v: T) => {
+  const push = (v: T) => {
+    if (cancelled) return;
     const t = now();
     if (t - windowStart >= 1000) { windowStart = t; count = 0; }
     if (count < perSecond && !scheduled) { count++; deliver(v); return; }
     pending = { v };
     if (!scheduled) { scheduled = true; schedule(flush, Math.max(0, 1000 - (t - windowStart))); }
   };
+  return Object.assign(push, { cancel: () => { cancelled = true; pending = null; } });
 }
 
 /** Iframes de HTML ativos ao mesmo tempo (os excedentes ficam pausados até liberar vaga). */
@@ -183,7 +189,9 @@ export function SandboxFrame({ html, state, onState, title, bridge, elementId: n
   // useLayoutEffect: o listener existe antes de o iframe (inserido neste mesmo commit) conseguir postar a
   // primeira mensagem — com useEffect, o WebKit às vezes entregava o primeiro setState antes do registro.
   useLayoutEffect(() => {
-    const deliver = createThrottle<unknown>((st) => { if (!navigatedRef.current) onStateRef.current(st, netRef.current?.taintIds() ?? []); });
+    // H2: a marca de dados protegidos é capturada quando a mensagem CHEGA (a sessão ainda existe), não na entrega
+    // atrasada pelo limitador; e nada é entregue depois da desmontagem (Codex PR #33: “Limpar estado e recarregar”).
+    const deliver = createThrottle<{ st: unknown; taint: string[] }>(({ st, taint }) => { if (!navigatedRef.current) onStateRef.current(st, taint); });
     let windowStart = 0, inWindow = 0, warned = false;
     const onMessage = (e: MessageEvent) => {
       // Só aceita mensagens do PRÓPRIO iframe (identidade da janela; a origem do srcdoc é opaca)
@@ -217,11 +225,11 @@ export function SandboxFrame({ html, state, onState, title, bridge, elementId: n
       if (!r) return;
       const tok = (e.data as { token?: unknown }).token;
       if (tok !== undefined && tok !== '' && tok !== tokenRef.current) return;
-      if (r.ok) deliver(r.state);
+      if (r.ok) deliver({ st: r.state, taint: netRef.current?.taintIds() ?? [] });
       else setError(r.error);
     };
     window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
+    return () => { window.removeEventListener('message', onMessage); deliver.cancel(); };
   }, []);
   // Entradas: só reenviadas quando o conteúdo muda (sem eco; até 10 por segundo, a última vence).
   const postInputs = useMemo(() => createThrottle<InputSnapshot>((snap) => {

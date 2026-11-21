@@ -206,6 +206,56 @@ test.describe('H2-C — Acesso à rede', () => {
     expect(api.seen).toHaveLength(1);
   });
 
+  test('K (Codex PR #33): “Limpar estado” com gravações represadas não restaura dados sem a marca; painel reflete a decisão completa', async ({ page }) => {
+    await fakeApi(page);
+    await ready(page);
+    await newBoard(page, 'Rajada de estado E2E');
+    // Grava estado sem parar (50/s > limite de 10/s): sempre há uma gravação represada no limitador do host.
+    const FLOOD = PROBE.replace('<script>', '<script>let n = 0, cur = null; const gen = Math.random().toString(36).slice(2); aurora.onInputs((i) => { cur = i.gasto; }); setInterval(() => aurora.setState({ copia: cur ? cur.cents : -1, n: ++n, gen }), 20);');
+    const ids = await page.evaluate((probe) => {
+      const { actions, elements: E } = (window as any).__aurora;
+      const q = actions.addWidget('aurora.bank-query', { x: -500, y: 0 }, { metric: 'expense', period: '2026-11', periodMode: 'month' }, { title: 'Banco' });
+      const h = actions.addWidget('aurora.sandbox-html', { x: 0, y: 0 }, { html: probe, state: null, bridge: { version: 1, inputs: [{ id: 'gasto', label: 'Gasto', type: 'money' }], outputs: [], ai: { mode: 'none', outputs: [], confirmedDigest: '', confirmedAt: 0 } } }, { title: 'Rajada' });
+      const l = E.createLinear('arrow', 0, 0, [[0, 0], [1, 1]], {}, 'data');
+      l.startBinding = { elementId: q.id, fixedPoint: null };
+      l.endBinding = { elementId: h.id, fixedPoint: null };
+      l.connection = { ...l.connection, sourcePort: 'value', targetPort: 'gasto' };
+      actions.addElements([l], false);
+      actions.setSelection([]);
+      return { q: q.id as string, h: h.id as string };
+    }, FLOOD);
+    await expect.poll(async () => (await state(page)).elements.find((e) => e.id === ids.h)?.data.stateTaint?.sources).toEqual([ids.q]);
+    // Registra qualquer instante, depois de limpar, em que reapareça um estado gravado pela execução ANTERIOR
+    // (gravação represada no limitador) ou um estado com conteúdo sem a marca de dados protegidos.
+    await page.evaluate((h) => {
+      const w = window as any;
+      w.__violations = [];
+      w.__oldGen = w.__aurora.getState().elements.find((e: any) => e.id === h)?.data.state?.gen;
+      w.__armed = false;
+      w.__aurora.store.subscribe((s: any) => {
+        if (!w.__armed) return;
+        const d = s.elements.find((e: any) => e.id === h)?.data;
+        if (d?.state?.gen === w.__oldGen) w.__violations.push('estado antigo restaurado');
+        if (d?.state && !d.stateTaint) w.__violations.push('sem marca');
+      });
+    }, ids.h);
+    expect(await page.evaluate(() => typeof (window as any).__oldGen)).toBe('string');
+    await select(page, ids.h);
+    await page.getByTestId('net-clear-state').evaluate((b) => { (window as any).__armed = true; (b as HTMLButtonElement).click(); });
+    await page.waitForTimeout(1600);
+    expect(await page.evaluate(() => [...new Set((window as any).__violations)])).toEqual([]);
+
+    // Painel: “sempre” concedido com o banco; mudar a consulta bancária invalida só a específica → não “autorizado”.
+    await frame(page).locator('#go').click();
+    await expect(dialog(page).getByTestId('net-consent-sensitive')).toBeVisible();
+    await dialog(page).getByRole('button', { name: 'Permitir sempre neste dispositivo' }).click();
+    await expect(frame(page).locator('#out')).toHaveText('ok:42');
+    await expect(page.getByTestId('net-state')).toHaveText('autorizado');
+    await page.evaluate((q) => (window as any).__aurora.actions.updateWidgetData(q, (d: any) => ({ ...d, metric: 'income' })), ids.q);
+    await expect(page.getByTestId('net-state')).not.toHaveText('autorizado');
+    await expect(page.getByTestId('net-stale')).toBeVisible();
+  });
+
   test('I: painel “Acesso à rede” cabe em 220 px', async ({ page }) => {
     await fakeApi(page);
     await ready(page);

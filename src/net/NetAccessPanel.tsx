@@ -9,7 +9,7 @@ import type { SandboxData } from '../core/widgetData';
 import { useEditor } from '../store/editor';
 import { Badge, Button, Label } from '../ui/primitives';
 import { forgetNetMemory, netActivity, netAvailability, netStatusFor, netVersion, probeNetServer, revokeNetAccess, subscribeNet, type NetServerStatus } from './broker';
-import { grantIsCurrent, SENSITIVE_LABELS, type NetGrant } from './policy';
+import { SENSITIVE_LABELS } from './policy';
 import { NET_ERROR_HINTS, type NetErrorCode } from './protocol';
 
 const time = (t: number) => new Date(t).toLocaleTimeString('pt-BR');
@@ -33,8 +33,8 @@ export function NetAccessPanel({ element, data, onClearState }: { element: Widge
   const grants = grantsAll.filter((g) => g.elementId === element.id && g.boardId === boardId);
   const act = netActivity(element.id);
   const origins = [...new Set([...grants.map((g) => g.origin), ...st.onceOrigins])].sort();
-  const current = (g: NetGrant) => !!st.ctx && grantIsCurrent(g, st.ctx, st.sensitive);
-  const anyCurrent = grants.some(current) || st.onceOrigins.length > 0;
+  const allowedAt = (o: string) => st.decisions[o] === 'allowed';
+  const anyCurrent = origins.some(allowedAt);
   const blockedSens = st.sensitive.some((s) => s.kind === 'missing');
   const state = !avail.available ? 'indisponível' : blockedSens ? 'bloqueado' : act?.pendingConsent ? 'aguardando autorização' : anyCurrent ? 'autorizado' : 'desativado';
   const tone = state === 'autorizado' ? 'ok' : state === 'desativado' ? undefined : 'warn';
@@ -73,7 +73,8 @@ export function NetAccessPanel({ element, data, onClearState }: { element: Widge
               const gs = grants.filter((g) => g.origin === o);
               const sens = gs.find((g) => g.kind === 'sensitive');
               const once = st.onceOrigins.includes(o);
-              const stale = gs.length > 0 && !gs.some(current) && !once;
+              // Desatualizada: há concessão (sempre ou uma vez), mas a decisão completa para este destino não permite mais.
+              const stale = (gs.length > 0 || once) && !allowedAt(o) && st.decisions[o] !== 'denied';
               return (
                 <li key={o} className="rounded-md border border-line/60 p-1.5 flex flex-col gap-0.5 min-w-0" data-testid="net-destination">
                   <div className="flex flex-wrap items-center gap-1.5 min-w-0">

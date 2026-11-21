@@ -232,10 +232,3 @@ export function evaluateNet(i: EvaluateInput): NetDecision {
   }
   return { state: 'allowed', origin, sensitive: i.sensitive, basis };
 }
-
-/** Situação de uma concessão persistente para a configuração atual (painel). */
-export function grantIsCurrent(g: NetGrant, ctx: NetContext, sensitive: SensitiveSource[]): boolean {
-  if (g.elementId !== ctx.elementId || g.boardId !== ctx.boardId) return false;
-  if (g.kind === 'network') return g.key === networkKey(ctx, g.origin);
-  return sensitive.length > 0 && !sensitive.some((s) => s.kind === 'missing') && g.key === sensitiveKey(ctx, g.origin, sensitive);
-}
