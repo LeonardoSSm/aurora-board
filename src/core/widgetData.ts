@@ -169,7 +169,14 @@ export const sanitizeChart = (raw: unknown): ChartData => {
  */
 export interface SandboxActivation { state: 'blocked' | 'allowed'; source: 'import' | 'paste'; at: number }
 /** `bridge`: portas da ponte de dados (issue #11). Ausente = bloco legado (só `aurora.setState`). */
-export interface SandboxData { html: string; state: unknown; activation?: SandboxActivation; bridge?: BridgeConfig }
+/**
+ * H2 (HTML Network Bridge): o estado foi gravado por uma execução que recebia dados PROTEGIDOS (bancários, dados
+ * importados, finanças). Só restringe — enquanto existir, a rede do bloco exige a autorização específica dessas
+ * fontes (ou fica bloqueada se alguma não existir mais). Some ao limpar o estado.
+ */
+export interface SandboxStateTaint { sources: string[]; at: number }
+export interface SandboxData { html: string; state: unknown; activation?: SandboxActivation; bridge?: BridgeConfig; stateTaint?: SandboxStateTaint }
+export const MAX_STATE_TAINT_SOURCES = 50;
 export const sanitizeSandbox = (raw: unknown): SandboxData => {
   const d = obj(raw);
   const a = obj(d.activation);
@@ -177,6 +184,13 @@ export const sanitizeSandbox = (raw: unknown): SandboxData => {
   if (a.state === 'blocked' || a.state === 'allowed') out.activation = { state: a.state, source: a.source === 'paste' ? 'paste' : 'import', at: Number(a.at) || 0 };
   const bridge = sanitizeBridge(d.bridge);
   if (bridge) out.bridge = bridge;
+  const t = obj(d.stateTaint);
+  if (Array.isArray(t.sources)) {
+    const sources = [...new Set(t.sources.filter((x): x is string => typeof x === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(x)))].slice(0, MAX_STATE_TAINT_SOURCES);
+    // Marca malformada não pode virar “sem marca” por acidente: sem ids válidos, uma fonte desconhecida.
+    out.stateTaint = { sources: sources.length || !t.sources.length ? sources : ['desconhecida'], at: Number(t.at) || 0 };
+    if (!out.stateTaint.sources.length) delete out.stateTaint;
+  }
   return out;
 };
 

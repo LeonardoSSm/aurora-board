@@ -28,11 +28,14 @@ import { summarizeFlows } from './finance/reports';
 // Só nos ganchos de teste/benchmark (nunca no build público): store + funções puras para medir desempenho.
 const financeStore = { ...financeStoreBase, lib: { parseCsvStatement, runBankQuery, sanitizeBankQuery, summarizeFlows } };
 import { IndexedDBFinanceRepository } from './finance/repository';
+import { netActivity, netAvailability, revokeNetAccess, setNetTransport } from './net/broker';
 
 // Ciclo F1: razão financeiro num banco IndexedDB próprio (aurora-finance), carregado sob demanda.
 setFinanceRepositoryFactory(() => new IndexedDBFinanceRepository());
 
 const coreApi = { updateBoundArrows, getDataflow, computeDataflow, dataflowSpec, isCameraAnimating };
+// H2: transporte simulado nos E2E (o build público ignora qualquer transporte — ver setNetTransport).
+const netApi = { setTransport: setNetTransport, availability: netAvailability, activity: netActivity, revoke: revokeNetAccess };
 
 registerBuiltinWidgets();
 
@@ -54,7 +57,7 @@ void Promise.race([fontsReady, timeout]).then(() => initEditor(new IndexedDBAdap
 // VITE_AURORA_TEST_HOOKS=1 (constante de build; não existe flag de runtime que o ative).
 declare global {
   interface Window {
-    __aurora?: { getState: typeof getState; store: typeof useEditor; actions: typeof actions; elements: typeof elementsApi; core: typeof coreApi; checkpoints: typeof checkpointActions; finance?: typeof financeStore };
+    __aurora?: { getState: typeof getState; store: typeof useEditor; actions: typeof actions; elements: typeof elementsApi; core: typeof coreApi; checkpoints: typeof checkpointActions; finance?: typeof financeStore; net?: typeof netApi };
   }
 }
-if (EXPOSE_TEST_HOOKS) window.__aurora = { getState, store: useEditor, actions, elements: elementsApi, core: coreApi, checkpoints: checkpointActions, finance: financeStore };
+if (EXPOSE_TEST_HOOKS) window.__aurora = { getState, store: useEditor, actions, elements: elementsApi, core: coreApi, checkpoints: checkpointActions, finance: financeStore, net: netApi };

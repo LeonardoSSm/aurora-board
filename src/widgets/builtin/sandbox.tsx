@@ -17,6 +17,9 @@ import { Badge, Button, Field, Label, Segmented, Select } from '../../ui/primiti
 import { BRIDGE_EXAMPLES } from './sandboxExamples';
 import { sanitizeDatasetData } from './dataset';
 import { datasetGrantKey } from '../../data/aiShare';
+import { NetSession, netAvailability } from '../../net/broker';
+import { netError, parseRequestMessage, responseMessage } from '../../net/protocol';
+import '../../net/consent';
 
 /**
  * Host de widgets isolados. O conteúdo roda em <iframe sandbox="allow-scripts"> SEM allow-same-origin:
@@ -28,6 +31,8 @@ import { datasetGrantKey } from '../../data/aiShare';
  *                 { type: 'aurora:inputs', token, inputs, connections }       (só quando mudam)
  *   iframe → app: { type: 'aurora:setState', token?, state }                  (JSON, até 100 KB; gravado)
  *                 { type: 'aurora:publish', token, port, value }              (validado; NÃO gravado)
+ *                 { type: 'aurora:request' | 'aurora:abort', token, id, … }   (H2 — ver src/net/broker.ts)
+ *   app → iframe: { type: 'aurora:response', token, id, ok, result | error }   (H2)
  * O `token` identifica a montagem atual do iframe: mensagens de montagens anteriores são descartadas.
  */
 const MAX_STATE = 100_000;
@@ -137,7 +142,7 @@ export interface FrameBridge {
   snapshot: InputSnapshot;
 }
 
-export function SandboxFrame({ html, state, onState, title, bridge }: { html: string; state: unknown; onState: (s: unknown) => void; title: string; bridge?: FrameBridge }) {
+export function SandboxFrame({ html, state, onState, title, bridge, elementId: netElementId }: { html: string; state: unknown; onState: (s: unknown, taint: string[]) => void; title: string; bridge?: FrameBridge; elementId?: string }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [error, setError] = useState('');
   const [navigated, setNavigated] = useState(false);
@@ -159,6 +164,15 @@ export function SandboxFrame({ html, state, onState, title, bridge }: { html: st
   if (!tokenRef.current) tokenRef.current = randomToken();
   const elementId = bridge?.elementId;
   const signature = bridge?.signature;
+  // H2: uma sessão de rede por montagem do iframe (mesmo token). Desmontar = cancelar tudo o que estiver pendente.
+  const netRef = useRef<NetSession | null>(null);
+  useLayoutEffect(() => {
+    if (!netElementId) return;
+    const session = new NetSession({ elementId: netElementId, token: tokenRef.current, post: (m) => { if (!navigatedRef.current) ref.current?.contentWindow?.postMessage(m, '*'); } });
+    netRef.current = session;
+    return () => { session.dispose(); if (netRef.current === session) netRef.current = null; };
+    // `nonce`: “Recarregar widget” depois de uma navegação bloqueada começa uma sessão nova.
+  }, [netElementId, nonce]);
   useLayoutEffect(() => {
     if (!elementId || !signature) return;
     const token = tokenRef.current;
@@ -168,12 +182,20 @@ export function SandboxFrame({ html, state, onState, title, bridge }: { html: st
   // useLayoutEffect: o listener existe antes de o iframe (inserido neste mesmo commit) conseguir postar a
   // primeira mensagem — com useEffect, o WebKit às vezes entregava o primeiro setState antes do registro.
   useLayoutEffect(() => {
-    const deliver = createThrottle<unknown>((st) => { if (!navigatedRef.current) onStateRef.current(st); });
+    const deliver = createThrottle<unknown>((st) => { if (!navigatedRef.current) onStateRef.current(st, netRef.current?.taintIds() ?? []); });
     let windowStart = 0, inWindow = 0, warned = false;
     const onMessage = (e: MessageEvent) => {
       // Só aceita mensagens do PRÓPRIO iframe (identidade da janela; a origem do srcdoc é opaca)
       // e nunca depois de o frame ter navegado para outro documento.
       if (!ref.current || e.source !== ref.current.contentWindow || navigatedRef.current) return;
+      const type = (e.data as { type?: unknown } | null)?.type;
+      if (type === 'aurora:request' || type === 'aurora:abort') {
+        if (netRef.current) { netRef.current.handle(e.data); return; }
+        // Bloco sem sessão de rede (widgets de terceiros): responde “indisponível” a quem tiver token válido.
+        const m = parseRequestMessage(e.data);
+        if (m && m.token === tokenRef.current) ref.current.contentWindow?.postMessage(responseMessage(m.token, m.id, netError('unavailable', 'Este tipo de bloco não tem acesso à rede.')), '*');
+        return;
+      }
       const pub = parseBridgeMessage(e.data);
       if (pub) {
         // Teto de publicações por segundo (protege contra laços no HTML do usuário). O setState tem a sua
@@ -233,11 +255,12 @@ export function SandboxFrame({ html, state, onState, title, bridge }: { html: st
           // O documento hospedeiro dispara UM load. Um segundo load significa que o frame navegou (location, meta
           // refresh, link): o novo documento está fora do nosso controle, então o widget é desmontado e nada mais
           // é aceito dele. (A CSP do app, frame-src 'self', já impede navegar para outras origens.)
-          if (loads.current > 1) { navigatedRef.current = true; setNavigated(true); return; }
+          if (loads.current > 1) { navigatedRef.current = true; netRef.current?.dispose(); netRef.current = null; setNavigated(true); return; }
           const b = bridgeRef.current;
           loadedRef.current = true;
           if (b) sentInputs.current = b.snapshot.json;
-          ref.current?.contentWindow?.postMessage({ type: 'aurora:load', html: htmlRef.current, state: stateRef.current, ...(b ? { bridge: { v: BRIDGE_VERSION, token: tokenRef.current, ports: b.ports, inputs: b.snapshot.inputs, connections: b.snapshot.connections } } : {}) }, '*');
+          const net = netRef.current ? netAvailability() : { available: false, message: 'Este tipo de bloco não tem acesso à rede.' };
+          ref.current?.contentWindow?.postMessage({ type: 'aurora:load', html: htmlRef.current, state: stateRef.current, net: { v: 1, token: tokenRef.current, available: net.available, message: net.message }, ...(b ? { bridge: { v: BRIDGE_VERSION, token: tokenRef.current, ports: b.ports, inputs: b.snapshot.inputs, connections: b.snapshot.connections } } : {}) }, '*');
         }}
       />
       {error && <div className="text-[11px] text-warn">{error}</div>}
@@ -340,7 +363,7 @@ export const sandboxPlugin: WidgetPlugin<SandboxData> = {
     } else if (!slot) {
       body = <SandboxNotice testId="sandbox-paused" title="Pausado">Há {MAX_ACTIVE_FRAMES} widgets HTML em execução. Este começa quando outro for fechado.</SandboxNotice>;
     } else {
-      body = <SandboxFrame key={signature} html={data.html} state={data.state} title={element.title} onState={(state) => update({ state }, { coalesce: true })} bridge={frameBridge} />;
+      body = <SandboxFrame key={signature} html={data.html} state={data.state} title={element.title} elementId={element.id} onState={(state, taint) => update((d) => ({ ...d, state, ...(taint.length ? { stateTaint: { sources: taint, at: Date.now() } } : {}) }), { coalesce: true })} bridge={frameBridge} />;
     }
     return (
       <div className="flex flex-col gap-1.5 h-full">
