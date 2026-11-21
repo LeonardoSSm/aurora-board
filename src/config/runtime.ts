@@ -7,7 +7,10 @@
  *   É o build destinado à hospedagem pública.
  * - `VITE_AURORA_LOCAL_API=1`: build de produção que ainda conversa com o servidor local (uso pessoal).
  * - `VITE_AURORA_TEST_HOOKS=1`: build de produção com `window.__aurora` (somente benchmarks/testes locais).
+ * - `VITE_AURORA_DESKTOP=1`: frontend do Aurora Board Desktop (D1, `npm run build:desktop`), servido por `aurora://app`.
  */
+/** Este pacote é o aplicativo desktop (Electron)? */
+export const DESKTOP: boolean = import.meta.env.VITE_AURORA_DESKTOP === '1';
 /** O servidor local (`/api/ai/*`, `/api/link-preview`) faz parte desta distribuição? */
 // Acessos DIRETOS a import.meta.env: o Vite os troca por constantes e o minificador elimina o código morto
 // (o build público não contém nem a string das rotas /api nem window.__aurora).

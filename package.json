@@ -29,7 +29,11 @@
     "test:finance": "vitest run tests/unit/finance-import.test.ts tests/unit/finance-ledger.test.ts tests/unit/finance-backup-providers.test.ts tests/unit/finance-canvas-ai.test.ts tests/unit/finance-pluggy.test.ts tests/unit/pluggy-server.test.ts && playwright test e2e/finance.spec.ts e2e/pluggy.spec.ts --project=chromium",
     "perf:finance": "playwright test -c playwright.perf.config.ts e2e/perf/finance-ledger.perf.ts",
     "dev:lan": "node scripts/dev-lan.mjs",
-    "perf:gifs": "playwright test -c playwright.perf.config.ts e2e/perf/gifs.perf.ts"
+    "perf:gifs": "playwright test -c playwright.perf.config.ts e2e/perf/gifs.perf.ts",
+    "build:desktop": "node scripts/desktop/build.mjs",
+    "desktop": "node scripts/desktop/build.mjs && electron desktop-app",
+    "dist:desktop": "node scripts/desktop/build.mjs && electron-builder --config electron-builder.yml",
+    "test:desktop": "playwright test -c playwright.desktop.config.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
@@ -56,6 +60,9 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
     "concurrently": "^10.0.7",
+    "electron": "45.4.1",
+    "electron-builder": "26.18.0",
+    "esbuild": "0.28.2",
     "fake-indexeddb": "^6.2.8",
     "tailwindcss": "^4.3.5",
     "tsx": "^4.23.15",
