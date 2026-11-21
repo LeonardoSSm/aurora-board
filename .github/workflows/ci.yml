@@ -70,7 +70,7 @@ jobs:
           test -f dist/_headers && test -f dist/sandbox.html
       - name: Configuração de hospedagem gerada está atualizada
         run: npx tsx scripts/generate-hosting-config.ts && git diff --exit-code -- public/_headers vercel.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: dist, path: dist, retention-days: 7 }
 
   audit:
@@ -135,7 +135,7 @@ jobs:
         env: { CI: 'true' }
       - name: Artefatos de falha (relatório, traces, vídeos)
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-${{ matrix.project }}
           path: |
@@ -198,7 +198,7 @@ jobs:
         env: { CI: 'true' }
       - name: Artefatos de falha
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: desktop-linux-results, path: test-results, retention-days: 14 }
 
   desktop-windows:
@@ -225,5 +225,5 @@ jobs:
         env: { CI: 'true', AURORA_DESKTOP_EXECUTABLE: '${{ github.workspace }}/release/win-unpacked/Aurora Board.exe' }
       - name: Artefatos de falha
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: desktop-windows-results, path: test-results, retention-days: 14 }
