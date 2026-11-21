@@ -20,6 +20,8 @@ env:
   OPENAI_API_KEY: ''
   ANTHROPIC_API_KEY: ''
   GEMINI_API_KEY: ''
+  # D1: o binário do Electron (~100 MB) só é baixado nos jobs do desktop.
+  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
 # Actions fixadas por SHA de commit (ciclo S1 — S1-SEC-017); o comentário indica a versão.
 # Atualizações chegam pelo Dependabot (.github/dependabot.yml), revisadas em PR.
@@ -168,3 +170,60 @@ jobs:
       # Fase 2: CSP aplicada — é a configuração que vai para a hospedagem.
       - run: npx playwright test -c playwright.static.config.ts --project=${{ matrix.project }}
         env: { CI: 'true' }
+
+  # D1 (#34) — Aurora Board Desktop. Os testes rodam no APLICATIVO ELECTRON (não no Vite): janela própria,
+  # protocolo aurora://app, renderer sem Node, CSP, navegação/permissões bloqueadas, widget HTML isolado,
+  # persistência do perfil depois de reabrir.
+  desktop-linux:
+    name: Desktop (Electron, Linux)
+    needs: [typecheck, unit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Mesma imagem fixada dos jobs e2e/static (dependências do Chromium e xvfb já incluídas; nada de apt).
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.1-noble@sha256:1507cbfc550a63a6b7396791ca4f00df17beb56342d2447b3f106c306f525579
+      options: --user 1001
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: ''
+      # O contêiner não oferece namespaces de usuário ao sandbox do SO; o sandbox do renderer continua ligado.
+      AURORA_DESKTOP_NO_SANDBOX: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run build:desktop
+      - run: xvfb-run -a npx playwright test -c playwright.desktop.config.ts
+        env: { CI: 'true' }
+      - name: Artefatos de falha
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with: { name: desktop-linux-results, path: test-results, retention-days: 14 }
+
+  desktop-windows:
+    name: Desktop (Electron, Windows — app e pacote)
+    needs: [typecheck, unit]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: ''
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run build:desktop
+      - name: Testes no app montado (Electron do projeto)
+        run: npx playwright test -c playwright.desktop.config.ts
+        env: { CI: 'true' }
+      - name: Empacotar (pasta, sem instalador nem assinatura)
+        run: npx electron-builder --config electron-builder.yml --win --dir --publish never
+      - name: Testes no EXECUTÁVEL EMPACOTADO
+        run: npx playwright test -c playwright.desktop.config.ts
+        env: { CI: 'true', AURORA_DESKTOP_EXECUTABLE: '${{ github.workspace }}/release/win-unpacked/Aurora Board.exe' }
+      - name: Artefatos de falha
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with: { name: desktop-windows-results, path: test-results, retention-days: 14 }

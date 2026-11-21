@@ -1,0 +1,66 @@
+# Aurora Board Desktop (D1) — empacotamento. Entrada: desktop-app/ (npm run build:desktop). Saída: release/.
+# Builds SEM assinatura por padrão (não há certificados neste repositório): ver docs/desktop/DISTRIBUTION.md.
+appId: io.github.leonardossm.auroraboard
+productName: Aurora Board
+copyright: Aurora Board
+electronVersion: 45.4.1
+directories:
+  app: desktop-app
+  output: release
+  buildResources: desktop/build
+files:
+  - main.cjs
+  - preload.cjs
+  - package.json
+  - renderer/**
+  - "!**/node_modules/**"
+asar: true
+# Nada de módulos nativos nem dependências: tudo vem embutido nos bundles.
+npmRebuild: false
+nodeGypRebuild: false
+publish: null
+artifactName: Aurora-Board-${version}-${os}-${arch}.${ext}
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: desktop/build/icon.png
+  # Assinatura: só quando WIN_CSC_LINK/WIN_CSC_KEY_PASSWORD (ou CSC_LINK) estiverem definidos fora do repositório.
+  signAndEditExecutable: true
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Aurora Board
+  # Os dados ficam no perfil do usuário (%APPDATA%\Aurora Board), fora da pasta de instalação, e NÃO são
+  # apagados ao desinstalar (evita perda de quadros/finanças).
+  deleteAppDataOnUninstall: false
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  category: Office
+  icon: desktop/build/icons
+  executableName: aurora-board
+  synopsis: Workspace visual infinito, local-first
+  description: Aurora Board — quadros visuais, widgets, finanças pessoais e IA, com dados guardados no seu computador.
+  maintainer: Aurora Board <noreply@users.noreply.github.com>
+  desktop:
+    entry:
+      Name: Aurora Board
+      StartupWMClass: Aurora Board
+deb:
+  depends:
+    - libgtk-3-0
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0

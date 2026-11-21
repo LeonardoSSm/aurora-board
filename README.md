@@ -72,6 +72,7 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | [docs/finance/PERSONAL_FINANCE.md](docs/finance/PERSONAL_FINANCE.md) | Minhas contas (ciclo F1): contas, cartões, extratos, conciliação, canvas, IA, backups — índice dos documentos em `docs/finance/` |
 | [docs/finance/MEU_PLUGGY.md](docs/finance/MEU_PLUGGY.md) | Meu Pluggy (uso pessoal, somente leitura): passo a passo de configuração local, arquitetura, decisões e testes |
 | [docs/HTML_DATA_BRIDGE.md](docs/HTML_DATA_BRIDGE.md) | HTML Data Bridge (protocolo 1): entradas/saídas tipadas para widgets HTML, IA só com saídas autorizadas, proteção financeira transitiva |
+| [docs/desktop/ARCHITECTURE.md](docs/desktop/ARCHITECTURE.md) | Aurora Board Desktop (D1, Electron): decisão tecnológica, processos, protocolo `aurora://app`, isolamento; desenvolvimento e testes em [docs/desktop/DEVELOPMENT.md](docs/desktop/DEVELOPMENT.md) |
 | [docs/HTML_NETWORK_BRIDGE.md](docs/HTML_NETWORK_BRIDGE.md) | HTML Network Bridge (H2): `aurora.request()` — GET a APIs HTTPS autorizadas pelo servidor local, confirmação por bloco/destino, dados sensíveis só com autorização específica, proteções SSRF ([modelo de ameaça H2](docs/security/H2-NETWORK-THREAT-MODEL.md)) |
 | [docs/DATA_HUB.md](docs/DATA_HUB.md) | Data Hub: bloco “Dados importados” (CSV/JSON), persistência local, exportação segura, saídas limitadas e política de backup |
 | [docs/PANELS.md](docs/PANELS.md) | Laterais redimensionáveis (arrastar, teclado, padrão) e formulários de Propriedades responsivos |

@@ -110,3 +110,27 @@ describe('CI-1 — testes de navegador na imagem fixada do Playwright', () => {
     expect(dependabot).toMatch(/'@playwright\/test'/);
   });
 });
+
+describe('D1 — jobs do aplicativo desktop', () => {
+  it('Linux roda na MESMA imagem fixada; o Electron só é baixado nos jobs do desktop', () => {
+    const linux = job('desktop-linux');
+    expect(linux.match(IMAGE_RE)?.[0]).toBe(job('e2e').match(IMAGE_RE)?.[0]);
+    expect(linux).toMatch(/options: --user 1001\b/);
+    expect(code).toMatch(/\n {2}ELECTRON_SKIP_BINARY_DOWNLOAD: '1'\n/);
+    for (const id of ['desktop-linux', 'desktop-windows']) expect(job(id)).toMatch(/ELECTRON_SKIP_BINARY_DOWNLOAD: ''/);
+  });
+
+  it('Windows testa o app montado E o executável empacotado, no caminho que o electron-builder gera', () => {
+    const win = job('desktop-windows');
+    expect(win).toMatch(/runs-on: windows-latest/);
+    expect(win).toMatch(/electron-builder --config electron-builder\.yml --win --dir/);
+    // Regressão (Codex, PR #37): separadores do caminho tinham sumido do YAML.
+    expect(win).toContain("AURORA_DESKTOP_EXECUTABLE: '${{ github.workspace }}/release/win-unpacked/Aurora Board.exe'");
+    expect(workflow).not.toMatch(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/);
+    expect(win.match(/npx playwright test -c playwright\.desktop\.config\.ts/g)).toHaveLength(2);
+  });
+
+  it('nenhum job do desktop esconde falhas', () => {
+    for (const id of ['desktop-linux', 'desktop-windows']) expect(job(id)).not.toMatch(/continue-on-error/);
+  });
+});
