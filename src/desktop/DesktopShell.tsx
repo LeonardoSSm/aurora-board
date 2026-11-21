@@ -63,7 +63,7 @@ function MigrationBody({ done }: { done: () => void }) {
   const [result, setResult] = useState('');
   const analyze = async () => {
     if (!file) return;
-    setBusy(true); setError(''); setPlan(null);
+    setBusy(true); setError(''); setPlan(null); setResult('');
     try {
       checkImportFileSize(file.size);
       setPlan(await planMigration(await file.text(), password, getState().workspaceId));
@@ -78,7 +78,8 @@ function MigrationBody({ done }: { done: () => void }) {
     const out = await executeMigration(plan, { restoreFinance: restoreFinanceBackup, importBoards });
     setBusy(false);
     const fin = out.finance ? `Finanças: ${out.finance.added} registro(s) novo(s), ${out.finance.skipped} já existente(s). ` : '';
-    const brd = out.boardIds.length ? `${out.boardIds.length} quadro(s) importado(s).` : '';
+    const nWarn = plan.boards?.warnings.length ?? 0;
+    const brd = out.boardIds.length ? `${out.boardIds.length} quadro(s) importado(s)${nWarn ? ` com ${nWarn} aviso(s): parte do conteúdo não veio (ver a lista).` : '.'}` : '';
     if (out.failed) {
       setError(out.failed.step === 'finance'
         ? `Nada foi gravado: falha nas finanças (${out.failed.message}).`
@@ -86,7 +87,7 @@ function MigrationBody({ done }: { done: () => void }) {
       return;
     }
     setResult(`${fin}${brd}`.trim() || 'Nada novo a importar.');
-    toast('Migração concluída.', 'success');
+    toast(nWarn ? 'Migração concluída com avisos.' : 'Migração concluída.', nWarn ? 'warning' : 'success');
     done();
   };
   return (
@@ -96,7 +97,7 @@ function MigrationBody({ done }: { done: () => void }) {
         <li>Escolha o arquivo aqui. Tudo é validado antes de gravar; nada existente é substituído.</li>
       </ol>
       <div className="flex flex-wrap gap-1.5 items-center">
-        <input type="file" accept=".json,application/json" data-testid="migration-file" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPlan(null); setError(''); }} />
+        <input type="file" accept=".json,application/json" data-testid="migration-file" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPlan(null); setError(''); setResult(''); }} />
         <input type="password" autoComplete="off" placeholder="Senha (se cifrado)" aria-label="Senha do backup" value={password} onChange={(e) => setPassword(e.target.value)} className="h-8 px-2 rounded-md border border-line bg-[#0f1826]" />
         <button disabled={!file || busy} onClick={() => void analyze()} data-testid="migration-analyze" className="h-8 px-2.5 rounded-md border border-line disabled:opacity-40">Analisar</button>
       </div>
@@ -107,6 +108,14 @@ function MigrationBody({ done }: { done: () => void }) {
           {plan.counts.activeContent > 0 && <div className="text-warn">{plan.counts.activeContent} widget(s) HTML personalizado(s) chegarão desativados.</div>}
           <button disabled={busy} onClick={() => void run()} data-testid="migration-run" className="self-start h-8 px-3 rounded-md bg-[#3174db] text-white disabled:opacity-40">Migrar agora</button>
         </div>
+      )}
+      {plan?.boards && plan.boards.warnings.length > 0 && (
+        // Avisos da leitura do backup (arquivos inválidos/ausentes): visíveis antes de confirmar e depois de migrar,
+        // para distinguir migração completa de recuperação parcial antes de apagar os dados do navegador (Codex, PR #40).
+        <details open={plan.boards.warnings.length < 6} className="rounded-md border border-warn/40 bg-warn/10 p-2" data-testid="migration-warnings">
+          <summary className="cursor-pointer text-warn">{plan.boards.warnings.length} aviso(s): parte do conteúdo não será migrada. Confira antes de apagar os dados do navegador.</summary>
+          <ul className="list-disc pl-5 max-h-40 overflow-auto text-[11px] text-muted mt-1">{plan.boards.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+        </details>
       )}
       {result && <div className="rounded-md border border-ok/40 bg-ok/10 p-2" data-testid="migration-result">{result}</div>}
       <details>

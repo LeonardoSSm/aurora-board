@@ -22,10 +22,11 @@ const widgets = (page: Page) => page.locator('[data-type="widget"]');
 const providers = (page: Page) => page.evaluate(async () => ((await (window as any).auroraDesktop.api.call('p' + Date.now(), { op: 'ai.providers' })).body.providers as { id: string; configured: boolean }[]).map((p) => `${p.id}:${p.configured}`));
 
 /** Backup pessoal (quadros + finanças) como o navegador gera em Minhas contas → Privacidade e backups. */
-function personalBackup() {
+function personalBackup(opts: { brokenAsset?: boolean } = {}) {
   const now = Date.now();
   const el = { id: 'n_migr_1', type: 'widget', x: 0, y: 0, width: 240, height: 140, angle: 0, style: { strokeColor: '#e6e9f4', backgroundColor: 'transparent', fillStyle: 'solid', strokeWidth: 2, strokeStyle: 'solid', roughness: 0, opacity: 100, roundness: 'round', fontFamily: 'sans', fontSize: 14, textAlign: 'left', verticalAlign: 'top', textColor: '' }, groupIds: [], frameId: null, locked: false, seed: 1, version: 1, updatedAt: now, text: '', widgetType: 'aurora.notes', widgetVersion: '1.0.0', title: 'Nota migrada', data: { text: 'veio do navegador' } };
-  const boards = { format: 'aurora-board', schemaVersion: 3, exportedAt: now, app: 'Aurora Board 1.0.0', boards: [{ id: 'b_migrado', workspaceId: 'w_web', name: 'Quadro do navegador', description: '', elements: [el], camera: { x: 0, y: 0, zoom: 1 }, createdAt: now, updatedAt: now, schemaVersion: 3 }], assets: [] };
+  const boards = { format: 'aurora-board', schemaVersion: 3, exportedAt: now, app: 'Aurora Board 1.0.0', boards: [{ id: 'b_migrado', workspaceId: 'w_web', name: 'Quadro do navegador', description: '', elements: [el], camera: { x: 0, y: 0, zoom: 1 }, createdAt: now, updatedAt: now, schemaVersion: 3 }],
+    assets: opts.brokenAsset ? [{ id: 'a_quebrado', mimeType: 'image/png', dataURL: 'isto-nao-e-um-data-url', name: 'foto.png', size: 10, createdAt: now }] : [] };
   const finance = {
     format: 'aurora-finance', schemaVersion: 1, exportedAt: now, sensitive: true,
     institutions: [{ id: 'inst_s', name: 'Banco Sintético' }],
@@ -175,9 +176,19 @@ test('migração do navegador: backup pessoal completo traz quadros e finanças;
     await expect(m.getByTestId('migration-plan')).toContainText('1 quadro(s)');
     await expect(m.getByTestId('migration-plan')).toContainText('1 conta(s)');
     await m.getByTestId('migration-run').click();
-    await expect(m.getByTestId('migration-result')).toContainText('1 quadro(s) importado(s)');
+    await expect(m.getByTestId('migration-result')).toContainText('1 quadro(s) importado(s).');
+    await expect(m.getByTestId('migration-warnings')).toHaveCount(0);
+    // Outro backup no MESMO diálogo: o resultado anterior some e o novo plano pode ser migrado (Codex, PR #40);
+    // um arquivo inválido no backup aparece como aviso ANTES de confirmar e o resultado diz que foi parcial.
+    await m.getByTestId('migration-file').setInputFiles({ name: 'aurora-parcial.json', mimeType: 'application/json', buffer: Buffer.from(personalBackup({ brokenAsset: true })) });
+    await expect(m.getByTestId('migration-result')).toHaveCount(0);
+    await m.getByTestId('migration-analyze').click();
+    await expect(m.getByTestId('migration-warnings')).toContainText('1 aviso(s)');
+    await expect(m.getByTestId('migration-warnings')).toContainText('foto.png');
+    await m.getByTestId('migration-run').click();
+    await expect(m.getByTestId('migration-result')).toContainText('1 quadro(s) importado(s) com 1 aviso(s)');
     await page.getByRole('dialog').getByRole('button', { name: 'Fechar' }).click();
-    await expect(page.locator('[data-type="widget"]')).toHaveCount(1); // abriu o quadro migrado
+    await expect(page.locator('[data-type="widget"]')).toHaveCount(1); // abriu o quadro migrado (a cópia parcial)
     await page.getByTestId('open-finance').click();
     await expect(page.getByText('Conta Sintética').first()).toBeVisible();
     await page.keyboard.press('Escape');
