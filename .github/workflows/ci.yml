@@ -243,7 +243,8 @@ jobs:
   desktop-linux-package:
     name: Desktop (Linux — AppImage e .deb instalados)
     needs: [typecheck, unit]
-    # Host (não contêiner): instalar o .deb exige root e o sandbox do Chromium usa o auxiliar SUID do pacote.
+    # Host (não contêiner): instalar o .deb exige root, e o sandbox do Chromium usa o que o pacote configura
+    # (perfil AppArmor no Ubuntu 24+ ou, sem namespaces de usuário, o auxiliar SUID).
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
@@ -269,7 +270,9 @@ jobs:
         run: |
           set -e
           sudo dpkg -i release/Aurora-Board-*-linux-amd64-unsigned.deb
-          test -u '/opt/Aurora Board/chrome-sandbox'
+          # Sandbox configurado pela pós-instalação: SUID (sem namespaces) OU perfil AppArmor (Ubuntu 24+) OU namespaces livres.
+          ls -l '/opt/Aurora Board/chrome-sandbox'
+          test -u '/opt/Aurora Board/chrome-sandbox' || test -f /etc/apparmor.d/aurora-board || unshare --user true
           xvfb-run -a npx playwright test -c playwright.desktop.config.ts
         env: { CI: 'true', AURORA_INSTALL_TEST: '1', AURORA_DESKTOP_EXECUTABLE: '/opt/Aurora Board/aurora-board' }
       # AppImage: sem FUSE no runner (extrai e roda). Sandbox por namespaces de usuário, liberados como em
