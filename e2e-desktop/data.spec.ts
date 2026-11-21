@@ -182,9 +182,17 @@ test('migração do navegador: backup pessoal completo traz quadros e finanças;
     // um arquivo inválido no backup aparece como aviso ANTES de confirmar e o resultado diz que foi parcial.
     await m.getByTestId('migration-file').setInputFiles({ name: 'aurora-parcial.json', mimeType: 'application/json', buffer: Buffer.from(personalBackup({ brokenAsset: true })) });
     await expect(m.getByTestId('migration-result')).toHaveCount(0);
+    // Durante a análise (ex.: decifrar), o arquivo não pode ser trocado (Codex, PR #40): leitura atrasada de propósito.
+    await page.evaluate(() => {
+      const orig = File.prototype.text;
+      File.prototype.text = function (this: File) { return new Promise((r) => setTimeout(r, 1500)).then(() => orig.call(this)); };
+    });
     await m.getByTestId('migration-analyze').click();
+    await expect(m.getByTestId('migration-file')).toBeDisabled();
+    await expect(m.getByLabel('Senha do backup')).toBeDisabled();
     await expect(m.getByTestId('migration-warnings')).toContainText('1 aviso(s)');
     await expect(m.getByTestId('migration-warnings')).toContainText('foto.png');
+    await expect(m.getByTestId('migration-file')).toBeEnabled();
     await m.getByTestId('migration-run').click();
     await expect(m.getByTestId('migration-result')).toContainText('1 quadro(s) importado(s) com 1 aviso(s)');
     await page.getByRole('dialog').getByRole('button', { name: 'Fechar' }).click();

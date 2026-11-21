@@ -5,7 +5,7 @@
  * - boas-vindas na primeira abertura (não bloqueia o quadro) com o caminho de migração do navegador;
  * - assistente de migração por backup (quadros + finanças), com inventário do que migra e do que não migra.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { uid } from '../core/elements';
 import { getState, setState } from '../store/editor';
 import { flushTextEditor, openBoard, refreshBoards } from '../store/actions';
@@ -61,15 +61,20 @@ function MigrationBody({ done }: { done: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState('');
+  // Só a análise mais recente vale: trocar o arquivo durante a análise (ex.: decifrando um backup) descarta o
+  // resultado em andamento, para “Migrar agora” nunca importar um arquivo diferente do escolhido (Codex, PR #40).
+  const analysis = useRef(0);
   const analyze = async () => {
     if (!file) return;
+    const ticket = ++analysis.current;
     setBusy(true); setError(''); setPlan(null); setResult('');
     try {
       checkImportFileSize(file.size);
-      setPlan(await planMigration(await file.text(), password, getState().workspaceId));
+      const p = await planMigration(await file.text(), password, getState().workspaceId);
+      if (ticket === analysis.current) setPlan(p);
     } catch (e) {
-      setError(e instanceof MigrationError || e instanceof ImportError ? e.message : 'Não foi possível ler o arquivo.');
-    } finally { setBusy(false); }
+      if (ticket === analysis.current) setError(e instanceof MigrationError || e instanceof ImportError ? e.message : 'Não foi possível ler o arquivo.');
+    } finally { if (ticket === analysis.current) setBusy(false); }
   };
   const run = async () => {
     if (!plan) return;
@@ -97,8 +102,8 @@ function MigrationBody({ done }: { done: () => void }) {
         <li>Escolha o arquivo aqui. Tudo é validado antes de gravar; nada existente é substituído.</li>
       </ol>
       <div className="flex flex-wrap gap-1.5 items-center">
-        <input type="file" accept=".json,application/json" data-testid="migration-file" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPlan(null); setError(''); setResult(''); }} />
-        <input type="password" autoComplete="off" placeholder="Senha (se cifrado)" aria-label="Senha do backup" value={password} onChange={(e) => setPassword(e.target.value)} className="h-8 px-2 rounded-md border border-line bg-[#0f1826]" />
+        <input type="file" accept=".json,application/json" data-testid="migration-file" disabled={busy} onChange={(e) => { analysis.current++; setBusy(false); setFile(e.target.files?.[0] ?? null); setPlan(null); setError(''); setResult(''); }} />
+        <input type="password" autoComplete="off" disabled={busy} placeholder="Senha (se cifrado)" aria-label="Senha do backup" value={password} onChange={(e) => setPassword(e.target.value)} className="h-8 px-2 rounded-md border border-line bg-[#0f1826]" />
         <button disabled={!file || busy} onClick={() => void analyze()} data-testid="migration-analyze" className="h-8 px-2.5 rounded-md border border-line disabled:opacity-40">Analisar</button>
       </div>
       {error && <div className="rounded-md border border-danger/50 bg-danger/10 p-2 text-fg-2" data-testid="migration-error">{error}</div>}
