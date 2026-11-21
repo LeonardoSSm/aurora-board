@@ -13,9 +13,12 @@ import {
   Upload,
   Wallet,
   MonitorSmartphone,
+  Settings,
 } from 'lucide-react';
 import { openPairing } from './PairingDialog';
-import { LAN_PAIRING_UI } from '../config/runtime';
+import { DESKTOP, LAN_PAIRING_UI } from '../config/runtime';
+import { openDesktopSettings } from '../desktop/settings';
+import { openMigrationDialog } from '../desktop/DesktopShell';
 import { openFinanceHub } from './finance/uiState';
 import { useEditor, setState } from '../store/editor';
 import { Inbox, MapPin, Search } from 'lucide-react';
@@ -158,6 +161,7 @@ export function TopBar() {
           <>
             <MenuItem onClick={() => { close(); pickImportFile(); }} hint=".json">Arquivo JSON (backup ou v0.2/v0.3)…</MenuItem>
             <MenuItem onClick={() => { close(); void importLegacyFromBrowser(); }}>Dados do protótipo v0.3 deste navegador</MenuItem>
+            {DESKTOP && <MenuItem onClick={() => { close(); void openMigrationDialog(); }}>Migrar do navegador (backup pessoal completo)…</MenuItem>}
           </>
         )}
       </Menu>
@@ -176,6 +180,7 @@ export function TopBar() {
       </Menu>
       <IconButton label="Quadros" onClick={() => setState({ boardsPanelOpen: true })} className="md:hidden"><FolderOpen size={16} /></IconButton>
       {LAN_PAIRING_UI && <IconButton label="Parear outro computador (IA pela rede)" onClick={openPairing}><MonitorSmartphone size={16} /></IconButton>}
+      {DESKTOP && <IconButton label="Configurações do aplicativo (chaves de IA, Meu Pluggy)" onClick={() => void openDesktopSettings()}><Settings size={16} /></IconButton>}
       <IconButton label="Atalhos e ajuda (?)" onClick={() => setState({ shortcutsOpen: true })}><CircleHelp size={16} /></IconButton>
       <IconButton label="Painel de propriedades" active={propertiesOpen} onClick={() => setState({ propertiesOpen: !propertiesOpen, ...(compact && !propertiesOpen ? { libraryOpen: false } : {}) })}><PanelRight size={16} /></IconButton>
     </header>

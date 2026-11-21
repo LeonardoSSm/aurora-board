@@ -9,7 +9,7 @@
  * - Navegação, janelas novas, webviews e permissões passam por desktop/security.ts.
  * Ver docs/desktop/ARCHITECTURE.md.
  */
-import { app, BrowserWindow, Menu, protocol, session, shell, type WebContents } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, session, shell, type WebContents } from 'electron';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { headersForPath } from '../hosting/headers';
@@ -17,7 +17,8 @@ import { APP_ENTRY, APP_HOST, APP_SCHEME, externalOpenTarget, isAppUrl, isPermis
 import { createApiService } from '../server/apiService';
 import { PROVIDERS } from '../server/providers';
 import { PluggyClient, readPluggyConfig } from '../server/pluggy';
-import { registerIpc } from './ipc';
+import { isTrustedSender, registerIpc, registerSecretsIpc } from './ipc';
+import { SecretStore } from './secrets';
 
 // Testes e uso portátil: perfil em outra pasta (antes de qualquer acesso ao perfil).
 if (process.env.AURORA_USER_DATA_DIR) app.setPath('userData', process.env.AURORA_USER_DATA_DIR);
@@ -111,9 +112,84 @@ function createWindow() {
   });
   win.once('ready-to-show', () => win.show());
   win.on('closed', () => { if (mainWindow === win) mainWindow = null; });
+  guardClose(win);
+  recoverFromCrashes(win);
   mainWindow = win;
   void win.loadURL(APP_ENTRY);
   return win;
+}
+
+/* ------------------------------------------------------------------ encerramento seguro (D1-C) */
+
+/** Respostas do renderer ao pedido “grave o pendente antes de fechar”. */
+const closeWaiters = new Map<number, (ok: boolean) => void>();
+ipcMain.handle('aurora:close-ready', (e, ok: unknown) => {
+  if (!isTrustedSender(e, () => mainWindow)) return;
+  closeWaiters.get(e.sender.id)?.(ok === true);
+});
+
+/**
+ * Fechar a janela pede ao renderer que grave as alterações pendentes (IndexedDB) e espera a confirmação. Se não
+ * vier (gravação falhou, renderer travado), pergunta: tentar de novo ou fechar mesmo assim — o diário de
+ * recuperação (localStorage) traz de volta o que não foi gravado na próxima abertura.
+ */
+function guardClose(win: BrowserWindow) {
+  let allowed = false, asking = false;
+  win.on('close', (e) => {
+    if (allowed || win.webContents.isCrashed()) return;
+    e.preventDefault();
+    if (asking) return;
+    asking = true;
+    const id = win.webContents.id;
+    void new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => { closeWaiters.delete(id); resolve(false); }, 8000);
+      closeWaiters.set(id, (ok) => { clearTimeout(timer); closeWaiters.delete(id); resolve(ok); });
+      win.webContents.send('aurora:before-close');
+    }).then(async (ok) => {
+      if (!ok && !win.isDestroyed()) {
+        const r = await dialog.showMessageBox(win, {
+          type: 'warning',
+          title: 'Aurora Board',
+          message: 'Algumas alterações ainda não foram gravadas.',
+          detail: 'Elas ficam no diário de recuperação e voltam ao abrir o Aurora Board, mas o mais seguro é tentar gravar de novo.',
+          buttons: ['Tentar de novo', 'Fechar mesmo assim', 'Cancelar'],
+          defaultId: 0,
+          cancelId: 2,
+          noLink: true,
+        });
+        asking = false;
+        if (r.response === 0) { win.close(); return; }
+        if (r.response !== 1) return;
+      }
+      asking = false;
+      allowed = true;
+      if (!win.isDestroyed()) win.close();
+    });
+  });
+}
+
+/**
+ * Recuperação após falha: se o processo do renderer cair, recarrega (o diário de recuperação devolve o que não foi
+ * gravado). Duas quedas seguidas em menos de 30 s → pergunta antes de insistir.
+ */
+function recoverFromCrashes(win: BrowserWindow) {
+  let lastCrash = 0;
+  win.webContents.on('render-process-gone', async (_e, details) => {
+    if (details.reason === 'clean-exit' || win.isDestroyed()) return;
+    console.error(`[desktop] renderer encerrou: ${details.reason}`);
+    const now = Date.now();
+    const repeated = now - lastCrash < 30_000;
+    lastCrash = now;
+    if (repeated) {
+      const r = await dialog.showMessageBox(win, { type: 'error', title: 'Aurora Board', message: 'O Aurora Board parou de responder novamente.', detail: 'Seus dados gravados estão no perfil do aplicativo. Recarregar tenta recuperar as alterações do diário.', buttons: ['Recarregar', 'Fechar'], defaultId: 0, cancelId: 1, noLink: true });
+      if (r.response !== 0) { win.destroy(); return; }
+    }
+    if (!win.isDestroyed()) void win.loadURL(APP_ENTRY);
+  });
+  win.on('unresponsive', async () => {
+    const r = await dialog.showMessageBox(win, { type: 'warning', title: 'Aurora Board', message: 'O Aurora Board não está respondendo.', buttons: ['Esperar', 'Recarregar'], defaultId: 0, cancelId: 0, noLink: true });
+    if (r.response === 1 && !win.isDestroyed()) win.webContents.reload();
+  });
 }
 
 const single = app.requestSingleInstanceLock();
@@ -136,7 +212,16 @@ if (!single) {
       { label: 'Exibir', submenu: [{ role: 'togglefullscreen', label: 'Tela cheia' }, ...(DEV_TOOLS ? [{ role: 'toggleDevTools' as const, label: 'Ferramentas de desenvolvimento' }] : [])] },
       { label: 'Ajuda', submenu: [{ label: 'Documentação', click: () => void shell.openExternal('https://github.com/LeonardoSSm/aurora-board/tree/main/docs/desktop') }, { label: `Aurora Board ${app.getVersion()}`, enabled: false }] },
     ]));
+    // Credenciais no cofre do sistema (DPAPI no Windows; Secret Service/KWallet no Linux) — ver desktop/secrets.ts.
+    const secrets = new SecretStore(join(app.getPath('userData'), 'credentials.json'), {
+      isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+      backend: () => (process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : ''),
+      encrypt: (t) => safeStorage.encryptString(t),
+      decrypt: (b) => safeStorage.decryptString(b),
+    }, process.platform);
+    secrets.load();
     registerIpc(service, () => mainWindow);
+    registerSecretsIpc(secrets, () => mainWindow);
     createWindow();
   });
   app.on('window-all-closed', () => app.quit());
