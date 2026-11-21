@@ -262,7 +262,9 @@ jobs:
           set -e
           DEB=$(ls release/Aurora-Board-*-linux-amd64-unsigned.deb)
           dpkg-deb --info "$DEB"
-          dpkg-deb --contents "$DEB" | grep -q 'opt/Aurora Board/aurora-board'
+          dpkg-deb --contents "$DEB" > deb-contents.txt
+          grep 'opt/Aurora Board/aurora-board' deb-contents.txt
+          dpkg-deb --field "$DEB" Depends Recommends
       - name: Instalar o .deb (como no Linux Mint) e testar o app INSTALADO, sem root
         run: |
           set -e

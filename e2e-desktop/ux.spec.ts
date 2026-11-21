@@ -34,7 +34,8 @@ test('menu nativo: Configurações e Migrar abrem as telas do app; nenhum item r
     // Atalhos do canvas continuam do app: Ctrl+Z desfaz a inserção.
     await s.page.locator('[data-library-item="aurora.notes"]').click();
     await expect(s.page.locator('[data-type="widget"]')).toHaveCount(1);
-    await s.page.getByTestId('canvas').click({ position: { x: 20, y: 20 } });
+    // Foco no canvas pelo teclado (em telas pequenas a biblioteca cobre a borda do canvas).
+    await s.page.getByTestId('canvas').focus();
     await s.page.keyboard.press('Control+z');
     await expect(s.page.locator('[data-type="widget"]')).toHaveCount(0);
   } finally { await s.close(); }

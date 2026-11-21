@@ -64,4 +64,8 @@ deb:
     - xdg-utils
     - libatspi2.0-0
     - libuuid1
+  # Cofre de credenciais (Secret Service): o Chromium carrega a libsecret em tempo de execução; sem ela o app
+  # recusa gravar chaves e oferece “só nesta sessão”. Recomendado (o apt instala), não obrigatório.
+  recommends:
     - libsecret-1-0
+    - gnome-keyring
