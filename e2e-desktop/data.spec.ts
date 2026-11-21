@@ -131,7 +131,9 @@ test('recuperação após queda do renderer: recarrega sozinho e os dados gravad
     await expect.poll(() => s.main!.evaluate(async ({ BrowserWindow }) => {
       const wc = BrowserWindow.getAllWindows()[0].webContents;
       if (wc.isCrashed()) return 'caído';
-      return `${wc.getURL()}|${await wc.executeJavaScript('document.querySelectorAll("[data-testid=canvas]").length + ":" + document.querySelectorAll("[data-type=widget]").length').catch(() => 'carregando')}`;
+      // Cada tentativa tem limite próprio: durante a recarga o executeJavaScript pode não responder.
+      const probe = wc.executeJavaScript('document.querySelectorAll("[data-testid=canvas]").length + ":" + document.querySelectorAll("[data-type=widget]").length').catch(() => 'carregando');
+      return `${wc.getURL()}|${await Promise.race([probe, new Promise((r) => setTimeout(() => r('sem resposta'), 2000))])}`;
     }), { timeout: 30_000 }).toBe('aurora://app/index.html|1:1');
   } finally { await s.close(); }
 });
