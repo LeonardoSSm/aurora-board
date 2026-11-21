@@ -28,7 +28,11 @@ test('ao vivo: GitHub real pelo app desktop; autorização permanente sobrevive 
       await s.page.locator('[data-type="widget"] textarea').fill(HTML);
       await s.page.getByRole('button', { name: 'Aplicar' }).click();
       const f = s.page.frameLocator('iframe[sandbox]').first();
-      await f.locator('#go').click();
+      await s.page.keyboard.press('Escape');
+      await expect(async () => {
+        await f.locator('#go').click();
+        await expect(s.page.getByRole('dialog').getByTestId('net-consent-origin')).toBeVisible({ timeout: 2000 });
+      }).toPass({ timeout: 20_000 });
       const dlg = s.page.getByRole('dialog');
       await expect(dlg.getByTestId('net-consent-origin')).toHaveText('https://api.github.com');
       await dlg.getByRole('button', { name: 'Permitir sempre neste dispositivo' }).click();

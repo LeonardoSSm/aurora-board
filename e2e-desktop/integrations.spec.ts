@@ -67,7 +67,13 @@ test('widget HTML → aurora.request() → IPC → processo principal → DNS re
     const f = page.frameLocator('iframe[sandbox]').first();
     await expect(f.locator('#go')).toBeVisible();
     await expect(f.locator('#r')).toHaveText('-');
-    await f.locator('#go').click();
+    // Sai da edição/seleção antes de usar o iframe e repete o clique até a confirmação aparecer (no Windows da
+    // CI o primeiro clique às vezes chegava antes do iframe aceitar eventos). Cliques extras viram UMA confirmação.
+    await page.keyboard.press('Escape');
+    await expect(async () => {
+      await f.locator('#go').click();
+      await expect(page.getByRole('dialog').getByTestId('net-consent-origin')).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 20_000 });
     const dlg = page.getByRole('dialog');
     await expect(dlg.getByTestId('net-consent-origin')).toHaveText('https://aurora-d1-ipc-teste-q7k2m9.com.br');
     await dlg.getByRole('button', { name: 'Permitir uma vez' }).click();

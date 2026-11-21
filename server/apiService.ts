@@ -70,10 +70,13 @@ export interface ServiceDeps {
   missingKeyHint?: (provider: Provider) => string;
 }
 
-function decodeEntities(s: string) {
-  return s
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => { const c = Number(n); return c > 0 && c < 0x10ffff ? String.fromCodePoint(c) : ''; });
+/** Entidades de texto do Open Graph, num único passo (sem decodificação dupla: `&amp;lt;` → `&lt;`, não `<`). */
+export function decodeEntities(s: string) {
+  const named: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" };
+  return s.replace(/&(amp|lt|gt|quot|#39|#(\d{1,7}));/g, (m, name: string, num: string | undefined) => {
+    if (num !== undefined) { const c = Number(num); return c > 0 && c < 0x10ffff ? String.fromCodePoint(c) : ''; }
+    return named[name] ?? m;
+  });
 }
 
 function meta(html: string, names: string[]): string {

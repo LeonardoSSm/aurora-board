@@ -112,3 +112,12 @@ describe('serviço compartilhado (mesmas respostas do HTTP)', () => {
 });
 
 afterEach(() => vi.restoreAllMocks());
+
+describe('pré-visualização de link: entidades HTML (CodeQL, PR #38)', () => {
+  it('decodifica num passo só, sem decodificação dupla', async () => {
+    const { decodeEntities } = await import('../../server/apiService');
+    expect(decodeEntities('A &amp; B &lt;b&gt; &quot;x&quot; &#39;y&#39; &#233;')).toBe('A & B <b> "x" \'y\' é');
+    expect(decodeEntities('&amp;lt;script&amp;gt;')).toBe('&lt;script&gt;');
+    expect(decodeEntities('&#0; &#99999999; &foo;')).toBe(' &#99999999; &foo;');
+  });
+});
