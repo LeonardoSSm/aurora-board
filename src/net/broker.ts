@@ -268,6 +268,11 @@ export class NetSession {
     // A vaga volta à fila uma única vez — mesmo se o transporte nunca terminar (tempo, cancelamento, revogação).
     let released = false;
     p.release = () => { if (released) return; released = true; running--; pump(); };
+    // Revalida IMEDIATAMENTE antes de enviar: a URL já carrega os dados — recusar a resposta depois não desfaz o envio.
+    // (Revogação/edição enquanto a consulta esperava vaga na fila.)
+    const before = this.decide(p.origin);
+    if (!before) return this.respond(id, netError('unmounted', 'O bloco foi fechado, movido para outro quadro ou excluído.'), p.origin);
+    if (before.state !== 'allowed') return this.respond(id, netError('revoked', 'A autorização deixou de valer antes do envio (revogada, ou o HTML/as conexões mudaram).'), p.origin);
     p.phase = 'running';
     p.started = this.now();
     const t = transport;
@@ -312,11 +317,13 @@ export class NetSession {
   /** Desmontagem do iframe (fechar, editar, excluir, trocar de quadro, navegação bloqueada). */
   dispose() {
     if (this.disposed) return;
-    for (const p of this.pending.values()) { p.ctrl.abort(); if (p.timer) clearTimeout(p.timer); p.release?.(); }
-    this.pending.clear();
+    // Primeiro marca e tira da fila: liberar as vagas abaixo chama pump(), que não pode despachar nada desta sessão.
     this.disposed = true;
     sessions.delete(this);
     for (let i = runQueue.length - 1; i >= 0; i--) if (runQueue[i].session === this) runQueue.splice(i, 1);
+    const pend = [...this.pending.values()];
+    this.pending.clear();
+    for (const p of pend) { p.ctrl.abort(); if (p.timer) clearTimeout(p.timer); p.release?.(); }
     cancelStaleConsent(this);
     for (let i = consentQueue.length - 1; i >= 0; i--) if (consentQueue[i].session === this && !(consentBusy && i === 0)) consentQueue.splice(i, 1);
     const a = activity.get(this.elementId);

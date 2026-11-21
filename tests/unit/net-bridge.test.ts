@@ -479,6 +479,40 @@ describe('corretor do host (consentimento, limites, cancelamento)', () => {
     expect(responses(x).at(-1)).toMatchObject({ id: 'depois', ok: true });
   });
 
+  it('Codex PR #31 (2ª rodada): revogar com consultas na fila não despacha as da fila', async () => {
+    const h = sandbox(); board(h);
+    answers = ['always'];
+    transportImpl = (_r, signal) => new Promise((resolve) => signal.addEventListener('abort', () => resolve(okOutcome())));
+    const x = open(h.id);
+    const n = NET_LIMITS.maxConcurrent + 3;
+    for (let i = 0; i < n; i++) x.session.handle(req(`q${i}`));
+    await vi.waitFor(() => expect(calls).toHaveLength(NET_LIMITS.maxConcurrent));
+    await revokeNetAccess(h.id);
+    await vi.waitFor(() => expect(responses(x)).toHaveLength(n));
+    expect(calls).toHaveLength(NET_LIMITS.maxConcurrent);
+    expect(responses(x).map((m) => (m as { error?: { code: string } }).error?.code)).toEqual(Array(n).fill('revoked'));
+  });
+
+  it('Codex PR #31 (2ª rodada): desmontar com consultas na fila não as despacha', async () => {
+    const h = sandbox(); board(h);
+    answers = ['always'];
+    transportImpl = (_r, signal) => new Promise((resolve) => signal.addEventListener('abort', () => resolve(okOutcome())));
+    const x = open(h.id);
+    for (let i = 0; i < NET_LIMITS.maxConcurrent + 3; i++) x.session.handle(req(`d${i}`));
+    await vi.waitFor(() => expect(calls).toHaveLength(NET_LIMITS.maxConcurrent));
+    x.session.dispose();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls).toHaveLength(NET_LIMITS.maxConcurrent);
+    // Outro bloco continua podendo usar as vagas liberadas.
+    const h2 = sandbox('Outro'); board(h, h2);
+    const y = open(h2.id, 'tok2');
+    transportImpl = async () => okOutcome();
+    answers = ['always'];
+    y.session.handle({ ...req('ok'), token: 'tok2' });
+    await vi.waitFor(() => expect(responses(y)).toHaveLength(1));
+    expect(responses(y)[0]).toMatchObject({ ok: true });
+  });
+
   it('confirmação fecha sozinha quando o bloco desmonta', async () => {
     const h = sandbox(); board(h);
     let aborted = false;
