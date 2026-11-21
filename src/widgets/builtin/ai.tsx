@@ -1,3 +1,5 @@
+import { DESKTOP } from '../../config/runtime';
+import { openDesktopSettings } from '../../desktop/settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cancelAIRequest, sendAIMessage, useAIRequest, watchConversation } from '../../integrations/aiChat';
 import { CompanionCharacter } from '../../ui/companions/CompanionCharacter';
@@ -144,7 +146,7 @@ export function AIClassic(props: WidgetProps<AIData>) {
           </div>
         ) : !configured.length ? (
           <div className="rounded-lg border border-warn/40 bg-warn/10 p-2 text-[11px] text-warn" data-testid="ai-status">
-            <b>Não configurado.</b> Nenhuma chave de API no servidor. Defina <code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code> ou <code>GEMINI_API_KEY</code> no arquivo <code>.env</code> e reinicie <code>npm run dev</code>.
+            {DESKTOP ? <><b>Não configurado.</b> Nenhuma chave de IA neste computador. <button onClick={() => void openDesktopSettings()} className="underline">Configurar chaves</button> (ficam no cofre do sistema).</> : <><b>Não configurado.</b> Nenhuma chave de API no servidor. Defina <code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code> ou <code>GEMINI_API_KEY</code> no arquivo <code>.env</code> e reinicie <code>npm run dev</code>.</>}
             <button onClick={() => refresh(true)} className="ml-1 underline">Verificar</button>
           </div>
         ) : (

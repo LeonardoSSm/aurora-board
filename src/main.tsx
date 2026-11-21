@@ -18,7 +18,7 @@ import { dataflowSpec } from './widgets/registry';
 import { isCameraAnimating } from './store/cameraMotion';
 import * as checkpointActions from './store/checkpointActions';
 import { getDataflow } from './widgets/dataflow';
-import { EXPOSE_TEST_HOOKS } from './config/runtime';
+import { DESKTOP, EXPOSE_TEST_HOOKS } from './config/runtime';
 import { setFinanceRepositoryFactory } from './finance/store';
 import * as financeStoreBase from './finance/store';
 import { parseCsvStatement } from './finance/csv';
@@ -29,6 +29,7 @@ import { summarizeFlows } from './finance/reports';
 const financeStore = { ...financeStoreBase, lib: { parseCsvStatement, runBankQuery, sanitizeBankQuery, summarizeFlows } };
 import { IndexedDBFinanceRepository } from './finance/repository';
 import { netActivity, netAvailability, revokeNetAccess, setNetTransport } from './net/broker';
+import { registerDesktopLifecycle } from './desktop/DesktopShell';
 
 // Ciclo F1: razão financeiro num banco IndexedDB próprio (aurora-finance), carregado sob demanda.
 setFinanceRepositoryFactory(() => new IndexedDBFinanceRepository());
@@ -51,6 +52,9 @@ const fontsReady = Promise.all(
 );
 const timeout = new Promise((r) => setTimeout(r, 2500));
 void Promise.race([fontsReady, timeout]).then(() => initEditor(new IndexedDBAdapter()));
+
+// D1-C: encerramento seguro e armazenamento persistente no aplicativo desktop (no build web, código morto).
+if (DESKTOP) registerDesktopLifecycle();
 
 // Acesso para depuração, testes de interação e benchmarks (mesma instância de módulo que o app usa).
 // S1-SEC-009: ausente no build público padrão — só em desenvolvimento ou num build gerado explicitamente com
