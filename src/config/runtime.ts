@@ -14,7 +14,10 @@ export const DESKTOP: boolean = import.meta.env.VITE_AURORA_DESKTOP === '1';
 /** O servidor local (`/api/ai/*`, `/api/link-preview`) faz parte desta distribuição? */
 // Acessos DIRETOS a import.meta.env: o Vite os troca por constantes e o minificador elimina o código morto
 // (o build público não contém nem a string das rotas /api nem window.__aurora).
-export const LOCAL_API_ENABLED: boolean = import.meta.env.DEV || import.meta.env.VITE_AURORA_LOCAL_API === '1';
+export const LOCAL_API_ENABLED: boolean = import.meta.env.DEV || import.meta.env.VITE_AURORA_LOCAL_API === '1' || import.meta.env.VITE_AURORA_DESKTOP === '1';
+
+/** Pareamento de outros computadores da rede (só a versão web com servidor local; o desktop não abre porta). */
+export const LAN_PAIRING_UI: boolean = LOCAL_API_ENABLED && import.meta.env.VITE_AURORA_DESKTOP !== '1';
 
 /** Expor `window.__aurora` (API interna completa) — nunca no build público padrão. */
 export const EXPOSE_TEST_HOOKS: boolean = import.meta.env.DEV || import.meta.env.VITE_AURORA_TEST_HOOKS === '1';

@@ -35,7 +35,7 @@ test('abre a janela própria com o frontend em aurora://app, sem Node no rendere
       hooks: typeof (window as any).__aurora,
     }));
     expect(env).toMatchObject({ require: 'undefined', process: 'undefined', module: 'undefined', buffer: 'undefined', electron: 'undefined', frozen: true, origin: 'aurora://app' });
-    expect(env.desktop).toEqual(['isDesktop', 'platform']);
+    expect(env.desktop).toEqual(['api', 'isDesktop', 'platform']);
     expect(env.csp).toContain("script-src 'self'");
     expect(env.csp).toContain("connect-src 'self'");
     expect(env.hooks).toBe('undefined'); // build distribuído: sem ganchos internos
