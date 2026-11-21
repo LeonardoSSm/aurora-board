@@ -27,7 +27,7 @@ Instalação silenciosa (administração/testes): `Aurora-Board-<versão>-win-x6
 sudo apt install ./Aurora-Board-<versão>-linux-amd64-unsigned.deb
 ```
 
-- Instala em `/opt/Aurora Board/`, com atalho no menu (Escritório → Aurora Board) e o comando `aurora-board`.
+- Instala em `/opt/Aurora Board/`, com atalho no menu (Escritório → Aurora Board) e o comando `aurora-board`. A instalação configura o sandbox do Chromium (perfil AppArmor no Mint 22/Ubuntu 24+).
 - **Use sem root.** O root só é necessário para instalar o pacote.
 - Dados: `~/.config/Aurora Board`.
 - Credenciais: para guardar chaves de IA com segurança, o Linux Mint usa o **GNOME Keyring (Secret Service)**, que já vem ativo na sessão Cinnamon. Sem cofre, o app só aceita chaves “nesta sessão”.

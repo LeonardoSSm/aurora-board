@@ -4,7 +4,7 @@
 |---|---|---|
 | Windows: “O Windows protegeu o computador” | Build de teste **não assinado** (SmartScreen) | Confirme a origem do arquivo; “Mais informações → Executar assim mesmo”. Ver DISTRIBUTION.md › Assinatura |
 | Abrir o atalho de novo não abre outra janela | Instância única (evita dois processos no mesmo perfil) | A janela existente é trazida para a frente |
-| AppImage não abre no Ubuntu 24.04+ (“SUID sandbox helper … not configured correctly”) | Restrição de namespaces de usuário do AppArmor | Use o `.deb` (instala o auxiliar SUID). Não rode com `--no-sandbox` |
+| AppImage não abre no Ubuntu 24.04+ (“SUID sandbox helper … not configured correctly”) | Restrição de namespaces de usuário do AppArmor | Use o `.deb` (instala um perfil AppArmor que libera o sandbox). Não rode com `--no-sandbox` |
 | AppImage: “dlopen(): error loading libfuse.so.2” | Falta FUSE 2 | `sudo apt install libfuse2` ou use o `.deb` |
 | “Sem cofre seguro do sistema” nas Configurações (Linux) | Sem Secret Service/KWallet na sessão (ex.: sessão mínima, i3 sem keyring) | Instale/inicie o GNOME Keyring (`gnome-keyring`) ou KWallet e reabra o app; ou use “Só nesta sessão” |
 | “Há credenciais gravadas, mas o cofre … não está disponível” | Keyring bloqueado ou outro usuário/perfil | Desbloqueie o chaveiro e reabra; ou configure de novo |

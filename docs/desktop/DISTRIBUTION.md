@@ -5,7 +5,7 @@
 | Plataforma | Formato | Arquivo | Decisão |
 |---|---|---|---|
 | Windows 10/11 x64 | Instalador NSIS (assistido, por usuário, sem administrador; escolha de pasta; atalhos no menu Iniciar e área de trabalho) | `Aurora-Board-<v>-win-x64-unsigned.exe` | Formato convencional do Windows; desinstalação pelo Painel/Configurações; dados preservados |
-| Linux x64 (Mint, Ubuntu, Debian) | `.deb` | `Aurora-Board-<v>-linux-amd64-unsigned.deb` | **Recomendado** para Linux Mint: integra ao menu, instala o auxiliar SUID do sandbox do Chromium (funciona mesmo com a restrição de namespaces do AppArmor), atualiza pelo `apt` |
+| Linux x64 (Mint, Ubuntu, Debian) | `.deb` | `Aurora-Board-<v>-linux-amd64-unsigned.deb` | **Recomendado** para Linux Mint: integra ao menu e configura o sandbox do Chromium na instalação — perfil AppArmor no Ubuntu 24+/Mint 22 (compatível com a restrição de namespaces) ou o auxiliar SUID em sistemas sem namespaces de usuário; atualiza pelo `apt` |
 | Linux x64 | AppImage | `Aurora-Board-<v>-linux-x86_64-unsigned.AppImage` | Portátil, sem instalação; depende de `libfuse2` e de namespaces de usuário para o sandbox |
 
 Configuração única: `electron-builder.yml` (entrada `desktop-app/`, saída `release/`). O pacote leva só `main.cjs`, `preload.cjs`, `package.json` (sem dependências) e o frontend (`renderer/`) num `app.asar` de ≈2 MB, com integridade de ASAR registrada no executável.
@@ -13,7 +13,7 @@ Configuração única: `electron-builder.yml` (entrada `desktop-app/`, saída `r
 ### CI de empacotamento
 
 - **Desktop (Electron, Windows — app, pacote e instalador)**: build, testes no app, instalador NSIS + pasta, testes no executável empacotado, **instalação silenciosa real** (por usuário, pasta temporária), abertura do app instalado com o perfil padrão, desinstalação (dados preservados) e reinstalação; publica o instalador como artefato (14 dias).
-- **Desktop (Linux — AppImage e .deb instalados)**: build, AppImage + `.deb`, metadados do `.deb`, **`sudo dpkg -i`**, conferência do `chrome-sandbox` SUID, testes no app **instalado** sem root e com o sandbox do sistema; AppImage extraído e testado com sandbox por namespaces; publica os pacotes como artefatos.
+- **Desktop (Linux — AppImage e .deb instalados)**: build, AppImage + `.deb`, metadados do `.deb`, **`sudo dpkg -i`**, conferência do sandbox configurado (perfil AppArmor, SUID ou namespaces), testes no app **instalado** sem root e com o sandbox do sistema; AppImage extraído e testado com sandbox por namespaces; publica os pacotes como artefatos.
 - Nenhum job publica releases. Nada de `continue-on-error`.
 
 ## Assinatura (não configurada — builds marcados como `unsigned`)

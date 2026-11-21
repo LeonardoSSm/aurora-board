@@ -133,12 +133,12 @@ describe('D1 — jobs do aplicativo desktop', () => {
     expect(win).toMatch(/win-x64-unsigned\.exe/);
   });
 
-  it('Linux: AppImage e .deb gerados; o .deb é INSTALADO e testado sem root, com o auxiliar SUID do sandbox', () => {
+  it('Linux: AppImage e .deb gerados; o .deb é INSTALADO e testado sem root, com o sandbox configurado pelo pacote', () => {
     const lin = job('desktop-linux-package');
     expect(lin).toMatch(/runs-on: ubuntu-24\.04/);
     expect(lin).toMatch(/electron-builder --config electron-builder\.yml --linux --publish never/);
     expect(lin).toMatch(/sudo dpkg -i release\/Aurora-Board-\*-linux-amd64-unsigned\.deb/);
-    expect(lin).toMatch(/test -u '\/opt\/Aurora Board\/chrome-sandbox'/);
+    expect(lin).toMatch(/test -u '\/opt\/Aurora Board\/chrome-sandbox' \|\| test -f \/etc\/apparmor\.d\/aurora-board/);
     expect(lin).toMatch(/AURORA_DESKTOP_EXECUTABLE: '\/opt\/Aurora Board\/aurora-board'/);
     expect(lin).not.toMatch(/AURORA_DESKTOP_NO_SANDBOX/); // pacote instalado roda com o sandbox do sistema
     expect(lin).toMatch(/x86_64-unsigned\.AppImage/);
