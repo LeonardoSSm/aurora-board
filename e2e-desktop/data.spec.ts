@@ -122,6 +122,10 @@ test('fechar a janela logo depois de uma alteração grava o pendente antes de s
 test('recuperação após queda do renderer: recarrega sozinho e os dados gravados continuam', async () => {
   const s = await launch(profile(), NO_KEYS);
   test.skip(!s.main, 'Precisa do processo principal para derrubar o renderer (modo app montado).');
+  // No contêiner Linux da CI (sem sandbox do SO), derrubar o renderer à força deixa o processo do Electron travado
+  // (nem o encerramento conclui). Verificado no Windows (local e CI); no Linux fica registrado como NÃO verificado
+  // (docs/desktop/HOMOLOGATION.md). Só esta configuração de teste é pulada.
+  if (process.env.AURORA_DESKTOP_NO_SANDBOX === '1') { await s.close().catch(() => undefined); test.skip(true, 'Contêiner sem sandbox: queda forçada trava o Electron (ver HOMOLOGATION.md).'); }
   try {
     await s.page.locator('[data-library-item="aurora.notes"]').click();
     await expect(widgets(s.page)).toHaveCount(1);
