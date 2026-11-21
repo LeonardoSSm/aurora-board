@@ -15,7 +15,7 @@ export interface DesktopBridge {
   platform: 'windows' | 'linux' | 'other';
   api: { call(id: string, op: unknown, body?: unknown): Promise<ApiResult>; cancel(id: string): void };
   secrets: { status(): Promise<SecretsStatus | null>; set(name: SecretName, value: string, mode: 'vault' | 'session'): Promise<SecretsResult>; clear(name: SecretName): Promise<SecretsResult> };
-  lifecycle: { onBeforeClose(handler: () => Promise<boolean>): void };
+  lifecycle: { onBeforeClose(handler: () => Promise<boolean>): void; onMenu(handler: (action: string) => void): void };
 }
 
 export function desktopBridge(): DesktopBridge | null {

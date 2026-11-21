@@ -123,14 +123,28 @@ describe('D1 — jobs do aplicativo desktop', () => {
   it('Windows testa o app montado E o executável empacotado, no caminho que o electron-builder gera', () => {
     const win = job('desktop-windows');
     expect(win).toMatch(/runs-on: windows-latest/);
-    expect(win).toMatch(/electron-builder --config electron-builder\.yml --win --dir/);
+    expect(win).toMatch(/electron-builder --config electron-builder\.yml --win --publish never/);
     // Regressão (Codex, PR #37): separadores do caminho tinham sumido do YAML.
     expect(win).toContain("AURORA_DESKTOP_EXECUTABLE: '${{ github.workspace }}/release/win-unpacked/Aurora Board.exe'");
     expect(workflow).not.toMatch(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/);
-    expect(win.match(/npx playwright test -c playwright\.desktop\.config\.ts/g)).toHaveLength(2);
+    expect(win.match(/npx playwright test -c playwright\.desktop\.config\.ts/g)).toHaveLength(3);
+    // D1-D: instalação real em máquina descartável + instalador publicado como artefato NÃO assinado.
+    expect(win).toMatch(/AURORA_INSTALL_TEST: '1'/);
+    expect(win).toMatch(/win-x64-unsigned\.exe/);
+  });
+
+  it('Linux: AppImage e .deb gerados; o .deb é INSTALADO e testado sem root, com o auxiliar SUID do sandbox', () => {
+    const lin = job('desktop-linux-package');
+    expect(lin).toMatch(/runs-on: ubuntu-24\.04/);
+    expect(lin).toMatch(/electron-builder --config electron-builder\.yml --linux --publish never/);
+    expect(lin).toMatch(/sudo dpkg -i release\/Aurora-Board-\*-linux-amd64-unsigned\.deb/);
+    expect(lin).toMatch(/test -u '\/opt\/Aurora Board\/chrome-sandbox'/);
+    expect(lin).toMatch(/AURORA_DESKTOP_EXECUTABLE: '\/opt\/Aurora Board\/aurora-board'/);
+    expect(lin).not.toMatch(/AURORA_DESKTOP_NO_SANDBOX/); // pacote instalado roda com o sandbox do sistema
+    expect(lin).toMatch(/x86_64-unsigned\.AppImage/);
   });
 
   it('nenhum job do desktop esconde falhas', () => {
-    for (const id of ['desktop-linux', 'desktop-windows']) expect(job(id)).not.toMatch(/continue-on-error/);
+    for (const id of ['desktop-linux', 'desktop-windows', 'desktop-linux-package']) expect(job(id)).not.toMatch(/continue-on-error/);
   });
 });

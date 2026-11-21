@@ -68,4 +68,4 @@ O perfil do Chromium do app fica no diretório de dados do usuário, **fora da p
 
 - **D1-B** (feito) — IPC tipado: IA, HTML Network Bridge, Meu Pluggy e pré-visualização de links no processo principal, sem servidor HTTP ([IPC.md](IPC.md)).
 - **D1-C** (feito) — credenciais no cofre do SO, migração guiada navegador → desktop, encerramento seguro e recuperação ([DATA.md](DATA.md)).
-- **D1-D** — instaladores (NSIS, AppImage, .deb), UX desktop, CI de empacotamento, documentação de usuário.
+- **D1-D** (feito) — instaladores (NSIS, AppImage, .deb), menu nativo e estado da janela, CI de empacotamento com instalação real, documentação de usuário ([INSTALL.md](INSTALL.md), [DISTRIBUTION.md](DISTRIBUTION.md), [HOMOLOGATION.md](HOMOLOGATION.md)).

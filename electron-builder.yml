@@ -19,7 +19,8 @@ asar: true
 npmRebuild: false
 nodeGypRebuild: false
 publish: null
-artifactName: Aurora-Board-${version}-${os}-${arch}.${ext}
+# Sem certificado configurado os artefatos saem marcados como NÃO ASSINADOS (ver docs/desktop/DISTRIBUTION.md).
+artifactName: Aurora-Board-${version}-${os}-${arch}-unsigned.${ext}
 win:
   target:
     - target: nsis

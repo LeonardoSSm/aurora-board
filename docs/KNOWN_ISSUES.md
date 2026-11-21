@@ -135,6 +135,15 @@ Google Calendar, Google Drive, GitHub, API externa, indicadores financeiros, das
 - O estado gravado por uma execução com dados protegidos marca o bloco; se a fonte for excluída, a rede fica bloqueada até **Limpar estado e recarregar** no painel. A memória do iframe também conta até ele ser recarregado.
 - Depois de autorizado, o HTML pode codificar dados (inclusive derivados de fontes autorizadas) no caminho/consulta do GET — a confirmação avisa. Autorize só destinos em que você confia.
 
+## Aurora Board Desktop (ciclo D1, issue #34)
+
+- Pacotes de teste **não assinados**: SmartScreen no Windows; sem atualização automática (instale a versão nova por cima). Ver docs/desktop/DISTRIBUTION.md.
+- Linux Mint não foi testado diretamente (CI em Ubuntu 24.04 com o `.deb` instalado). O **AppImage** pode não abrir em sistemas com a restrição de namespaces do AppArmor (Ubuntu 24.04+) e precisa de `libfuse2`: prefira o `.deb`.
+- Sem Secret Service/KWallet no Linux, chaves de IA e do Meu Pluggy valem só na sessão (o app recusa gravar sem cofre).
+- O pareamento de outros computadores da rede (LAN) não existe no desktop (nenhuma porta é aberta).
+- Preferências locais, autorizações (IA, rede, dados importados) e credenciais não migram do navegador: ajuste/autorize/configure de novo.
+- O executável empacotado não pode ser dirigido pelo `electron.launch` do Playwright: os testes dele conectam por CDP e não acessam o processo principal (testes que dependem dele rodam no modo “app montado”).
+
 ## Data Hub (issue #24, D2-A)
 
 - Importação de planilhas `.xlsx` não é suportada: salve como “CSV UTF-8”. Outras codificações (Latin-1/Windows-1252) são recusadas com orientação.
