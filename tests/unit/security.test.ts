@@ -268,6 +268,20 @@ describe('sandbox de plugins', () => {
     expect(delivered).toHaveLength(11);
   });
 
+  it('H2 (Codex PR #33): cancelar descarta a entrega pendente e as futuras (nada chega depois da desmontagem)', () => {
+    let t = 0;
+    const delivered: number[] = [];
+    let scheduled: (() => void) | null = null;
+    const push = createThrottle<number>((v) => delivered.push(v), 10, () => t, (fn) => { scheduled = fn; });
+    for (let i = 0; i < 50; i++) push(i);
+    expect(delivered).toHaveLength(10);
+    push.cancel();
+    t = 1000;
+    scheduled!();
+    push(99);
+    expect(delivered).toHaveLength(10);
+  });
+
   it('CSP bloqueia rede, frames, formulários e base', () => {
     for (const d of ["default-src 'none'", "base-uri 'none'", "form-action 'none'", "frame-src 'none'", "object-src 'none'"]) expect(SANDBOX_CSP).toContain(d);
     expect(SANDBOX_CSP).not.toMatch(/connect-src|https?:/);

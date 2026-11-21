@@ -559,3 +559,15 @@ describe('autorizações nunca viajam em quadros/backups', () => {
     expect(prompts).toHaveLength(2);
   });
 });
+
+describe('exemplos (H2-C)', () => {
+  it('scripts dos exemplos são JavaScript válido e o de rede só consulta ao clicar', async () => {
+    const { BRIDGE_EXAMPLES, NET_GITHUB_DASHBOARD } = await import('../../src/widgets/builtin/sandboxExamples');
+    for (const ex of BRIDGE_EXAMPLES) for (const js of ex.html.split('<script>').slice(1).map((x) => x.split('</script>')[0])) expect(() => new Function(js), ex.id).not.toThrow();
+    expect(BRIDGE_EXAMPLES.find((x) => x.id === 'net-github')?.html).toBe(NET_GITHUB_DASHBOARD);
+    // Única chamada fica dentro de load(), ligada ao botão (nada ao abrir/importar).
+    expect(NET_GITHUB_DASHBOARD.match(/aurora\.request\(/g)).toHaveLength(1);
+    expect(NET_GITHUB_DASHBOARD).toContain("$('go').onclick = load;");
+    expect(NET_GITHUB_DASHBOARD).not.toMatch(/^\s*load\(\);?\s*$/m);
+  });
+});

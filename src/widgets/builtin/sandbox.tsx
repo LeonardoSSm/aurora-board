@@ -17,7 +17,8 @@ import { Badge, Button, Field, Label, Segmented, Select } from '../../ui/primiti
 import { BRIDGE_EXAMPLES } from './sandboxExamples';
 import { sanitizeDatasetData } from './dataset';
 import { datasetGrantKey } from '../../data/aiShare';
-import { NetSession, netAvailability } from '../../net/broker';
+import { NetSession, netAvailability, netReloadOf, subscribeNet } from '../../net/broker';
+import { NetAccessPanel } from '../../net/NetAccessPanel';
 import { netError, parseRequestMessage, responseMessage } from '../../net/protocol';
 import '../../net/consent';
 
@@ -72,27 +73,33 @@ export function parseBridgeMessage(data: unknown): { token: string; port: string
   return { token: o.token, port: o.port, value: o.value };
 }
 
-/** Limitador "a última vence": no máximo N entregas por segundo; a última pendente é entregue depois. */
+/**
+ * Limitador "a última vence": no máximo N entregas por segundo; a última pendente é entregue depois.
+ * `cancel()` descarta a pendente e impede entregas futuras (desmontagem: nada chega depois do fim da montagem).
+ */
 export function createThrottle<T>(
   deliver: (v: T) => void,
   perSecond = MAX_UPDATES_PER_SECOND,
   now = () => Date.now(),
   schedule: (fn: () => void, ms: number) => unknown = (fn, ms) => setTimeout(fn, ms),
 ) {
-  let windowStart = -Infinity, count = 0, pending: { v: T } | null = null, scheduled = false;
+  let windowStart = -Infinity, count = 0, pending: { v: T } | null = null, scheduled = false, cancelled = false;
   const flush = () => {
     scheduled = false;
+    if (cancelled) { pending = null; return; }
     windowStart = now();
     count = 0;
     if (pending) { const p = pending; pending = null; count = 1; deliver(p.v); }
   };
-  return (v: T) => {
+  const push = (v: T) => {
+    if (cancelled) return;
     const t = now();
     if (t - windowStart >= 1000) { windowStart = t; count = 0; }
     if (count < perSecond && !scheduled) { count++; deliver(v); return; }
     pending = { v };
     if (!scheduled) { scheduled = true; schedule(flush, Math.max(0, 1000 - (t - windowStart))); }
   };
+  return Object.assign(push, { cancel: () => { cancelled = true; pending = null; } });
 }
 
 /** Iframes de HTML ativos ao mesmo tempo (os excedentes ficam pausados até liberar vaga). */
@@ -182,7 +189,9 @@ export function SandboxFrame({ html, state, onState, title, bridge, elementId: n
   // useLayoutEffect: o listener existe antes de o iframe (inserido neste mesmo commit) conseguir postar a
   // primeira mensagem — com useEffect, o WebKit às vezes entregava o primeiro setState antes do registro.
   useLayoutEffect(() => {
-    const deliver = createThrottle<unknown>((st) => { if (!navigatedRef.current) onStateRef.current(st, netRef.current?.taintIds() ?? []); });
+    // H2: a marca de dados protegidos é capturada quando a mensagem CHEGA (a sessão ainda existe), não na entrega
+    // atrasada pelo limitador; e nada é entregue depois da desmontagem (Codex PR #33: “Limpar estado e recarregar”).
+    const deliver = createThrottle<{ st: unknown; taint: string[] }>(({ st, taint }) => { if (!navigatedRef.current) onStateRef.current(st, taint); });
     let windowStart = 0, inWindow = 0, warned = false;
     const onMessage = (e: MessageEvent) => {
       // Só aceita mensagens do PRÓPRIO iframe (identidade da janela; a origem do srcdoc é opaca)
@@ -216,11 +225,11 @@ export function SandboxFrame({ html, state, onState, title, bridge, elementId: n
       if (!r) return;
       const tok = (e.data as { token?: unknown }).token;
       if (tok !== undefined && tok !== '' && tok !== tokenRef.current) return;
-      if (r.ok) deliver(r.state);
+      if (r.ok) deliver({ st: r.state, taint: netRef.current?.taintIds() ?? [] });
       else setError(r.error);
     };
     window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
+    return () => { window.removeEventListener('message', onMessage); deliver.cancel(); };
   }, []);
   // Entradas: só reenviadas quando o conteúdo muda (sem eco; até 10 por segundo, a última vence).
   const postInputs = useMemo(() => createThrottle<InputSnapshot>((snap) => {
@@ -299,7 +308,7 @@ export const sandboxPlugin: WidgetPlugin<SandboxData> = {
   version: '1.0.0',
   category: 'Desenvolvimento',
   status: 'experimental',
-  statusNote: 'Isolado por iframe sandbox + CSP. Sem rede; só recebe os dados das conexões que você ligar às entradas dele.',
+  statusNote: 'Isolado por iframe sandbox + CSP (sem rede própria). Recebe só os dados das conexões ligadas às entradas; consultas GET a APIs HTTPS só pelo Aurora Board, com sua autorização (aurora.request).',
   accent: '#9cb1cf',
   permissions: ['sandbox:scripts'],
   defaultSize: { width: 360, height: 300 },
@@ -322,6 +331,8 @@ export const sandboxPlugin: WidgetPlugin<SandboxData> = {
     const tooBig = data.html.length > MAX_HTML_CHARS;
     const slot = useFrameSlot(`${element.id}:${useId()}`, !editing && !blocked && !SAFE_MODE && !tooBig);
     const signature = useMemo(() => bridgeSignature(data), [data]);
+    // Só re-renderiza quando o painel pede “Limpar estado e recarregar” (não a cada consulta).
+    const netReload = useSyncExternalStore(subscribeNet, () => netReloadOf(element.id));
     const bridgeInputs = data.bridge?.inputs;
     const snapshot = useMemo(() => (bridgeInputs ? buildInputSnapshot(bridgeInputs, inputs) : null), [bridgeInputs, inputs]);
     const frameBridge = useMemo<FrameBridge | undefined>(() => (data.bridge && snapshot ? { elementId: element.id, signature, ports: { inputs: data.bridge.inputs, outputs: data.bridge.outputs }, snapshot } : undefined), [data.bridge, snapshot, element.id, signature]);
@@ -363,7 +374,7 @@ export const sandboxPlugin: WidgetPlugin<SandboxData> = {
     } else if (!slot) {
       body = <SandboxNotice testId="sandbox-paused" title="Pausado">Há {MAX_ACTIVE_FRAMES} widgets HTML em execução. Este começa quando outro for fechado.</SandboxNotice>;
     } else {
-      body = <SandboxFrame key={signature} html={data.html} state={data.state} title={element.title} elementId={element.id} onState={(state, taint) => update((d) => ({ ...d, state, ...(taint.length ? { stateTaint: { sources: taint, at: Date.now() } } : {}) }), { coalesce: true })} bridge={frameBridge} />;
+      body = <SandboxFrame key={`${signature}:${netReload}`} html={data.html} state={data.state} title={element.title} elementId={element.id} onState={(state, taint) => update((d) => ({ ...d, state, ...(taint.length ? { stateTaint: { sources: taint, at: Date.now() } } : {}) }), { coalesce: true })} bridge={frameBridge} />;
     }
     return (
       <div className="flex flex-col gap-1.5 h-full">
@@ -477,6 +488,8 @@ function SandboxInspector({ element, data, update, api }: WidgetProps<SandboxDat
   const grants = useEditor((s) => s.htmlAiGrants);
   const entry = useOutputs(element.id);
   const b = data.bridge;
+  // H2-C: limpa o estado gravado e a marca de dados protegidos (o painel também esquece a memória da execução).
+  const clearState = () => update((d) => { const { stateTaint: _drop, ...rest } = d; void _drop; return { ...rest, state: null }; });
   const setBridge = (patch: Partial<BridgeConfig>) => update((d) => ({ ...d, bridge: sanitizeBridge({ ...(d.bridge ?? emptyBridge()), ...patch }) }));
   const ins = flow.inputs.get(element.id) ?? {};
   // Conexões de dados que chegam a esta entrada (inclusive as inválidas: porta inexistente, tipo errado, ciclo).
@@ -499,6 +512,7 @@ function SandboxInspector({ element, data, update, api }: WidgetProps<SandboxDat
         <Label>Ponte de dados</Label>
         <div className="text-[11px] text-soft">Este bloco só guarda o próprio estado (<code>aurora.setState</code>). Ative a ponte para receber dados de conexões e publicar saídas tipadas para fórmulas, gráficos e IA.</div>
         <Button data-testid="bridge-enable" onClick={() => setBridge({})}>Ativar entradas e saídas</Button>
+        <NetAccessPanel element={element} data={data} onClearState={clearState} />
         <Examples data={data} update={update} api={api} />
       </div>
     );
@@ -564,6 +578,7 @@ function SandboxInspector({ element, data, update, api }: WidgetProps<SandboxDat
         )}
         {b.ai.mode === 'none' && <div className="text-[11px] text-soft" data-testid="bridge-ai-status">Nada deste bloco é enviado à IA, mesmo conectado a um Assistente.</div>}
       </div>
+      <NetAccessPanel element={element} data={data} onClearState={clearState} />
       <Examples data={data} update={update} api={api} />
     </div>
   );

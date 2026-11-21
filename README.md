@@ -72,6 +72,7 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | [docs/finance/PERSONAL_FINANCE.md](docs/finance/PERSONAL_FINANCE.md) | Minhas contas (ciclo F1): contas, cartões, extratos, conciliação, canvas, IA, backups — índice dos documentos em `docs/finance/` |
 | [docs/finance/MEU_PLUGGY.md](docs/finance/MEU_PLUGGY.md) | Meu Pluggy (uso pessoal, somente leitura): passo a passo de configuração local, arquitetura, decisões e testes |
 | [docs/HTML_DATA_BRIDGE.md](docs/HTML_DATA_BRIDGE.md) | HTML Data Bridge (protocolo 1): entradas/saídas tipadas para widgets HTML, IA só com saídas autorizadas, proteção financeira transitiva |
+| [docs/HTML_NETWORK_BRIDGE.md](docs/HTML_NETWORK_BRIDGE.md) | HTML Network Bridge (H2): `aurora.request()` — GET a APIs HTTPS autorizadas pelo servidor local, confirmação por bloco/destino, dados sensíveis só com autorização específica, proteções SSRF ([modelo de ameaça H2](docs/security/H2-NETWORK-THREAT-MODEL.md)) |
 | [docs/DATA_HUB.md](docs/DATA_HUB.md) | Data Hub: bloco “Dados importados” (CSV/JSON), persistência local, exportação segura, saídas limitadas e política de backup |
 | [docs/PANELS.md](docs/PANELS.md) | Laterais redimensionáveis (arrastar, teclado, padrão) e formulários de Propriedades responsivos |
 | [docs/ANIMATED_GIFS.md](docs/ANIMATED_GIFS.md) | GIFs animados (ciclo 6): auditoria do suporte nativo, repetição, pausa, movimento reduzido, exportação, limites |
@@ -118,7 +119,7 @@ Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuraç
 | Código | ✅ | Destaque de sintaxe (10 linguagens), Tab, copiar |
 | Assistente IA | 🟡 | OpenAI, Claude e Gemini via servidor local; só envia contexto conectado e autorizado; respostas estruturadas viram blocos/tarefas/conexões **somente após confirmação** |
 | Gráfico | ✅ | Barras/rosca a partir de blocos financeiros conectados |
-| HTML isolado | ✅ experimental | Base de plugins de terceiros (iframe sandbox + CSP); ponte de dados com entradas/saídas tipadas e IA só com saídas autorizadas (docs/HTML_DATA_BRIDGE.md) |
+| HTML isolado | ✅ experimental | Base de plugins de terceiros (iframe sandbox + CSP); ponte de dados com entradas/saídas tipadas e IA só com saídas autorizadas (docs/HTML_DATA_BRIDGE.md); consultas GET a APIs HTTPS autorizadas com `aurora.request()` pelo servidor local, painel “Acesso à rede” e exemplo de dashboard público (docs/HTML_NETWORK_BRIDGE.md) |
 | Dados importados | ✅ | CSV/JSON com prévia e validação, guardados no dispositivo, exportação CSV/JSON segura, saídas paginadas e agrupamento nativo para Fórmula/Gráfico/HTML, dashboard HTML conectado em um clique; IA só com consentimento granular e autorização local (docs/DATA_HUB.md) |
 | AI Tiles | ✅ | ChatGPT, Codex, Claude, Claude Code, Gemini e Grok com logos locais; modos compacto, normal e detalhado; arrastar da biblioteca, conectar, agrupar, exportar PNG/SVG com a logo. Não exige API; vínculo opcional com um bloco Assistente IA. Ver [docs/AI_TILES.md](docs/AI_TILES.md) |
 | Valor | ✅ | Dinheiro (receita/despesa/neutro, em centavos), número ou porcentagem; digita-se no próprio bloco; “Converter em valor” transforma um texto com número |
@@ -250,4 +251,5 @@ Lista completa em [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md). Principais:
 - Sincronização com backend e colaboração em tempo real: arquitetura preparada (`PersistenceAdapter`), não implementada.
 - Recorte visual de frames e desvio de obstáculos em setas de cotovelo ainda não existem; importação de `.excalidraw` não suportada.
 - Bundle de ~730 KB (230 KB gzip): candidatos a carregamento sob demanda são highlight.js e o bloco de IA.
+- HTML Network Bridge: só GET/HTTPS/JSON-texto, sem redirecionamentos nem cabeçalhos próprios; só no computador principal com servidor local (docs/KNOWN_ISSUES.md).
 - O servidor local não tem autenticação: é para uso local (`127.0.0.1`), protegido contra sites visitados (ver docs/SECURITY.md).

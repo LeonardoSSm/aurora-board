@@ -1,4 +1,7 @@
-/** Exemplos editáveis da ponte de dados (issue #11). Só usam a API documentada; nenhum acessa rede. */
+/**
+ * Exemplos editáveis da ponte de dados (issue #11). Só usam a API documentada. Só o “Dashboard público (GitHub)”
+ * (H2) consulta a rede — com aurora.request(), depois de autorização, e só quando o usuário clica em Atualizar.
+ */
 import type { BridgeConfig } from '../../core/htmlBridge';
 
 export interface BridgeExample { id: string; name: string; html: string; bridge: BridgeConfig }
@@ -213,8 +216,81 @@ export const DATASET_DASHBOARD_BRIDGE: BridgeConfig = {
 };
 export const DATASET_DASHBOARD_HTML = DATASET_DASHBOARD;
 
+/** H2: dashboard de API pública (GET, sem chave). Não consulta nada ao abrir/importar: só ao clicar em Atualizar. */
+export const NET_GITHUB_DASHBOARD = `<style>
+  .w{padding:10px;display:flex;flex-direction:column;gap:8px}
+  .h{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .h input{flex:1;min-width:120px;background:#0f1826;border:1px solid #2a3a52;border-radius:6px;color:#e6ecf6;padding:4px 6px;font:12px ui-monospace,monospace}
+  .h button{background:#3174db;border:0;border-radius:6px;color:#fff;padding:5px 10px;font-weight:600;cursor:pointer}
+  .h button[disabled]{opacity:.5;cursor:default}
+  .k{display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:6px}
+  .c{border:1px solid #2a3a52;border-radius:8px;padding:6px 8px}
+  .l{font-size:10px;color:#9cb1cf}.v{font-size:17px;font-weight:700}
+  .s{font-size:11px;color:#9cb1cf}.e{color:#ff8a8a}
+</style>
+<div class="w">
+  <div class="h">
+    <input id="repo" aria-label="Repositório (dono/nome)" value="LeonardoSSm/aurora-board" />
+    <button id="go">Atualizar</button>
+  </div>
+  <div class="k">
+    <div class="c"><div class="l">Estrelas</div><div class="v" id="stars">—</div></div>
+    <div class="c"><div class="l">Forks</div><div class="v" id="forks">—</div></div>
+    <div class="c"><div class="l">Issues abertas</div><div class="v" id="issues">—</div></div>
+  </div>
+  <div class="s" id="desc"></div>
+  <div class="s" id="status">Clique em Atualizar (pede autorização para api.github.com na primeira vez).</div>
+</div>
+<script>
+  // GET público da API do GitHub (sem chave). A consulta passa pelo Aurora Board: o HTML não tem rede própria.
+  const $ = (id) => document.getElementById(id);
+  const msgs = {
+    permission_denied: 'Acesso negado. Libere em Propriedades → Acesso à rede (ou clique de novo depois de recarregar o bloco).',
+    unavailable: 'Acesso à rede indisponível nesta versão (precisa do servidor local).',
+    local_only: 'Disponível só no computador principal.',
+    rate_limited: 'Muitas consultas: aguarde um minuto.',
+    timeout: 'A API demorou demais.',
+    sensitive_blocked: 'Bloqueado: este bloco recebe dados protegidos.',
+  };
+  let ctrl = null;
+  async function load() {
+    const repo = $('repo').value.trim();
+    if (!/^[\\w.-]+\\/[\\w.-]+$/.test(repo)) { $('status').textContent = 'Use o formato dono/nome.'; return; }
+    if (ctrl) ctrl.abort();
+    ctrl = new AbortController();
+    $('go').disabled = true;
+    $('status').textContent = 'Consultando…';
+    try {
+      const r = await aurora.request({ url: 'https://api.github.com/repos/' + repo, responseType: 'json', timeoutMs: 10000, signal: ctrl.signal });
+      const d = r.data || {};
+      $('stars').textContent = (d.stargazers_count ?? 0).toLocaleString('pt-BR');
+      $('forks').textContent = (d.forks_count ?? 0).toLocaleString('pt-BR');
+      $('issues').textContent = (d.open_issues_count ?? 0).toLocaleString('pt-BR');
+      $('desc').textContent = d.description || '';
+      $('status').className = 's';
+      $('status').textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR') + (d.pushed_at ? ' · último push ' + new Date(d.pushed_at).toLocaleDateString('pt-BR') : '');
+      aurora.publish('estrelas', d.stargazers_count ?? 0);
+      aurora.setState({ repo });
+    } catch (e) {
+      if (e.code === 'aborted') return;
+      $('status').className = 's e';
+      $('status').textContent = e.code === 'http_error' && e.status === 404 ? 'Repositório não encontrado (ou privado).' : (msgs[e.code] || e.message);
+    } finally {
+      $('go').disabled = false;
+    }
+  }
+  $('go').onclick = load;
+  addEventListener('aurora:init', (e) => { if (e.detail && e.detail.repo) $('repo').value = e.detail.repo; });
+</script>`;
+
 export const BRIDGE_EXAMPLES: BridgeExample[] = [
   { id: 'dataset-dashboard', name: 'Dashboard de dados importados (KPIs, filtro, tabela, gráfico)', html: DATASET_DASHBOARD, bridge: DATASET_DASHBOARD_BRIDGE },
+  {
+    id: 'net-github',
+    name: 'Dashboard público: repositório do GitHub (aurora.request)',
+    html: NET_GITHUB_DASHBOARD,
+    bridge: { version: 1, inputs: [], outputs: [{ id: 'estrelas', label: 'Estrelas', type: 'number' }], ai },
+  },
   {
     id: 'dashboard',
     name: 'Painel: receitas, despesas e saldo',

@@ -123,6 +123,18 @@ Google Calendar, Google Drive, GitHub, API externa, indicadores financeiros, das
 - Os testes de navegador rodam na imagem `mcr.microsoft.com/playwright:v1.65.1-noble` (fixada por digest), baixada do MCR a cada job (~1 GB comprimido). Uma degradação do MCR ainda pode atrasar um job; o tempo aparece em "Initialize containers". O travamento original (apt do WebKit a ~50 kB/s) deixou de ser possível porque nada é instalado via apt.
 - Subir o `@playwright/test` exige atualizar a tag e o digest da imagem nos jobs `e2e` e `static`; `tests/unit/ci-workflow.test.ts` e o passo "Navegadores da imagem" falham enquanto divergirem (procedimento em `docs/DEVELOPMENT.md`).
 
+## HTML Network Bridge (ciclo H2, issue #30)
+
+- Só **GET** de APIs públicas HTTPS na porta 443, com JSON ou texto UTF-8 de até 1 MB. Sem POST, cabeçalhos próprios (nem chave de API), cookies, OAuth, WebSocket ou streaming. APIs que exigem chave ou User-Agent específico não funcionam nesta versão.
+- **Redirecionamentos não são seguidos**: use o endereço final (`redirect_blocked`). Respostas comprimidas que ignoram `Accept-Encoding: identity` são recusadas (`invalid_encoding`).
+- Destinos por **IP literal** e nomes locais (`.local`, `.internal`, `.test`, `localhost`…) são recusados, mesmo que sejam públicos.
+- Depende do **servidor local** no computador principal: no build público e em computadores pareados da rede, `aurora.request()` responde `unavailable`/`local_only`.
+- “Permitir uma vez” vale para a execução atual do bloco; como o canvas desmonta blocos fora da vista, rolar para longe e voltar pede de novo. Use “Permitir sempre” para dashboards fixos.
+- Editar o HTML ou as conexões de entrada invalida a autorização (pede de novo). Isso é intencional (o código autorizado mudou).
+- Com dados protegidos conectados, a autorização é específica de cada fonte: mudar a consulta bancária (contas, período, métrica) ou o arquivo de dados importados pede de novo.
+- O estado gravado por uma execução com dados protegidos marca o bloco; se a fonte for excluída, a rede fica bloqueada até **Limpar estado e recarregar** no painel. A memória do iframe também conta até ele ser recarregado.
+- Depois de autorizado, o HTML pode codificar dados (inclusive derivados de fontes autorizadas) no caminho/consulta do GET — a confirmação avisa. Autorize só destinos em que você confia.
+
 ## Data Hub (issue #24, D2-A)
 
 - Importação de planilhas `.xlsx` não é suportada: salve como “CSV UTF-8”. Outras codificações (Latin-1/Windows-1252) são recusadas com orientação.
