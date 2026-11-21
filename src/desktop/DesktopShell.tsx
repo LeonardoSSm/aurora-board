@@ -17,6 +17,8 @@ import { ensureFinanceLoaded, restoreFinanceBackup } from '../finance/store';
 import { desktopBridge } from './bridge';
 import { executeMigration, importThenOpen, MIGRATION_INVENTORY, MigrationError, planMigration, type MigrationPlan } from './migration';
 import { openDesktopSettings } from './settings';
+import { exportWorkspaceJSON, pickImportFile } from '../ui/fileActions';
+import { isMenuAction } from '../../desktop/menuActions';
 
 const WELCOME_KEY = 'desktopWelcomeDone';
 
@@ -31,6 +33,14 @@ export function registerDesktopLifecycle() {
     return !hasPendingChanges();
   });
   try { void navigator.storage?.persist?.(); } catch { /* sem suporte: o perfil do app não é limpo automaticamente */ }
+  // Menu nativo → as MESMAS ações da barra superior.
+  b.lifecycle.onMenu((action) => {
+    if (!isMenuAction(action)) return;
+    if (action === 'import') pickImportFile();
+    else if (action === 'migrate') void openMigrationDialog();
+    else if (action === 'export-workspace') void exportWorkspaceJSON();
+    else if (action === 'settings') void openDesktopSettings();
+  });
 }
 
 async function importBoards(r: ImportResult): Promise<{ boardIds: string[]; openError?: string }> {
