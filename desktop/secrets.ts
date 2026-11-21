@@ -65,6 +65,8 @@ export class SecretStore {
   private vault = new Map<SecretName, string>();
   private session = new Map<SecretName, string>();
   private loadError = '';
+  /** Chamado depois de cada mudança efetiva (o processo principal descarta clientes em cache, ex.: Meu Pluggy). */
+  onChange: () => void = () => undefined;
   /** Valores das variáveis de ambiente ANTES do app (para restaurar ao remover a chave do app). */
   private readonly original: Partial<Record<SecretName, string>>;
 
@@ -110,23 +112,32 @@ export class SecretStore {
     const v = cleanSecretValue(value);
     if (mode === 'vault') {
       if (!this.info().strong) throw new SecretError('Sem cofre seguro do sistema: a chave não foi gravada. Use “só nesta sessão” ou configure o Secret Service/KWallet.');
-      this.vault.set(name, v);
+      // Grava o estado CANDIDATO primeiro: se a cifra ou o disco falharem, nada muda (status, ambiente e disco
+      // continuam coerentes — Codex, PR #40).
+      const next = new Map(this.vault).set(name, v);
+      this.persist(next);
+      this.vault = next;
       this.session.delete(name);
-      this.persist();
     } else if (mode === 'session') {
       this.session.set(name, v);
     } else {
       throw new SecretError('Modo inválido.');
     }
     this.apply();
+    this.onChange();
   }
 
   clear(name: unknown) {
     if (!isSecretName(name)) throw new SecretError('Credencial desconhecida.');
-    const had = this.vault.delete(name);
+    if (this.vault.has(name)) {
+      const next = new Map(this.vault);
+      next.delete(name);
+      this.persist(next); // falhou → a chave continua no cofre E ativa (status coerente)
+      this.vault = next;
+    }
     this.session.delete(name);
-    if (had) this.persist();
     this.apply();
+    this.onChange();
   }
 
   /** Valor efetivo vai para o ambiente DO PROCESSO PRINCIPAL (lido pelos provedores e pelo Meu Pluggy). */
@@ -137,9 +148,9 @@ export class SecretStore {
     }
   }
 
-  private persist() {
+  private persist(vault: Map<SecretName, string>) {
     const entries: Record<string, string> = {};
-    for (const [k, v] of this.vault) entries[k] = this.crypto.encrypt(v).toString('base64');
+    for (const [k, v] of vault) entries[k] = this.crypto.encrypt(v).toString('base64');
     mkdirSync(dirname(this.file), { recursive: true });
     // Escrita atômica: arquivo temporário + rename (nunca um arquivo pela metade).
     const tmp = `${this.file}.tmp`;

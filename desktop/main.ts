@@ -219,6 +219,7 @@ if (!single) {
       encrypt: (t) => safeStorage.encryptString(t),
       decrypt: (b) => safeStorage.decryptString(b),
     }, process.platform);
+    secrets.onChange = () => { pluggyCache = null; };
     secrets.load();
     registerIpc(service, () => mainWindow);
     registerSecretsIpc(secrets, () => mainWindow);

@@ -157,3 +157,39 @@ describe('migração por backup', () => {
     expect(third).toMatchObject({ failed: { step: 'finance' }, boardIds: [] });
   });
 });
+
+describe('cofre — consistência quando gravar falha (Codex, PR #40)', () => {
+  it('cifra/disco falhando: nada muda (status, ambiente e arquivo continuam coerentes); mudanças avisam', () => {
+    const file = tmp();
+    const env: NodeJS.ProcessEnv = {};
+    let failEncrypt = false;
+    const c = fakeCrypto();
+    const crypto: VaultCrypto = { ...c, encrypt: (t) => { if (failEncrypt) throw new Error('cofre indisponível'); return c.encrypt(t); } };
+    const s = new SecretStore(file, crypto, 'win32', env);
+    let changes = 0;
+    s.onChange = () => { changes++; };
+    s.load();
+    s.set('PLUGGY_CLIENT_SECRET', 'segredo-antigo', 'vault');
+    expect(changes).toBe(1);
+    const before = readFileSync(file, 'utf8');
+    failEncrypt = true;
+    expect(() => s.set('PLUGGY_CLIENT_SECRET', 'segredo-novo', 'vault')).toThrow();
+    expect(env.PLUGGY_CLIENT_SECRET).toBe('segredo-antigo');
+    expect(s.status().items.find((i) => i.name === 'PLUGGY_CLIENT_SECRET')?.source).toBe('vault');
+    expect(readFileSync(file, 'utf8')).toBe(before);
+    // Uma atualização de OUTRA chave depois não ativa a substituição que falhou.
+    failEncrypt = false;
+    s.set('OPENAI_API_KEY', FAKE_KEY, 'session');
+    expect(env.PLUGGY_CLIENT_SECRET).toBe('segredo-antigo');
+    // Remover com falha de gravação (o arquivo regravado ainda cifra outra chave): continua no cofre E ativa.
+    s.set('GEMINI_API_KEY', 'g', 'vault');
+    failEncrypt = true;
+    expect(() => s.clear('PLUGGY_CLIENT_SECRET')).toThrow();
+    expect(env.PLUGGY_CLIENT_SECRET).toBe('segredo-antigo');
+    expect(s.status().items.find((i) => i.name === 'PLUGGY_CLIENT_SECRET')?.configured).toBe(true);
+    failEncrypt = false;
+    s.clear('PLUGGY_CLIENT_SECRET');
+    expect(env.PLUGGY_CLIENT_SECRET).toBeUndefined();
+    expect(changes).toBe(4); // set antigo, sessão OpenAI, sessão Gemini, remoção — falhas não avisam
+  });
+});

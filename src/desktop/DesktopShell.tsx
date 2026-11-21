@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { uid } from '../core/elements';
 import { getState, setState } from '../store/editor';
-import { openBoard, refreshBoards } from '../store/actions';
+import { flushTextEditor, openBoard, refreshBoards } from '../store/actions';
 import { openDialog, toast } from '../store/ui';
 import { flushCurrentBoard, getAdapter, hasPendingChanges } from '../persistence/autosave';
 import { applyImport, checkImportFileSize, ImportError, type ImportResult } from '../persistence/exportImport';
@@ -25,6 +25,8 @@ export function registerDesktopLifecycle() {
   const b = desktopBridge();
   if (!b) return;
   b.lifecycle.onBeforeClose(async () => {
+    // Texto ainda no editor (estado local do React) entra no quadro antes de gravar (Codex, PR #40).
+    flushTextEditor();
     await flushCurrentBoard();
     return !hasPendingChanges();
   });

@@ -119,6 +119,26 @@ test('fechar a janela logo depois de uma alteração grava o pendente antes de s
   } finally { await s.close(); }
 });
 
+test('fechar a janela com um texto AINDA em edição grava o texto digitado (Codex, PR #40)', async () => {
+  const dir = profile();
+  let s = await launch(dir, NO_KEYS);
+  test.skip(!s.main, 'Precisa do processo principal para fechar a janela como o usuário (Alt+F4).');
+  try {
+    await s.page.getByTestId('desktop-welcome').getByRole('button', { name: 'Começar' }).click();
+    await s.page.getByTestId('canvas').focus();
+    await s.page.keyboard.press('t');
+    const box = (await s.page.getByTestId('canvas').boundingBox())!;
+    await s.page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await s.page.keyboard.type('Texto ainda no editor');
+    await expect(s.page.getByTestId('text-editor')).toBeFocused();
+    await s.main!.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].close(); });
+  } finally { await s.close(); }
+  s = await launch(dir, NO_KEYS);
+  try {
+    await expect(s.page.getByText('Texto ainda no editor')).toBeVisible({ timeout: 15_000 });
+  } finally { await s.close(); }
+});
+
 test('recuperação após queda do renderer: recarrega sozinho e os dados gravados continuam', async () => {
   const s = await launch(profile(), NO_KEYS);
   test.skip(!s.main, 'Precisa do processo principal para derrubar o renderer (modo app montado).');
