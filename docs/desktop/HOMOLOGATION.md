@@ -27,3 +27,22 @@ Ver a tabela de verificação na issue #34 e o relatório final do ciclo. Resumo
 - **Windows 11 x64 (máquina de desenvolvimento):** critérios 1–11 e 13 verificados localmente no app montado **e** no executável empacotado (`release/win-unpacked`), incluindo o critério 6 ao vivo (api.github.com). O instalador NSIS foi gerado; a instalação real (12) é feita na CI, para não alterar o computador do usuário.
 - **Windows (runner `windows-latest` da CI):** 1–5, 7–12 a cada push/PR (job “Desktop (Electron, Windows — app, pacote e instalador)”).
 - **Linux:** sem máquina Linux física/VM nesta homologação. CI: app montado em contêiner (job “Desktop (Electron, Linux)”) e **pacote `.deb` instalado** + AppImage no runner Ubuntu 24.04 (job “Desktop (Linux — AppImage e .deb instalados)”). **Linux Mint não foi testado diretamente** — a compatibilidade é inferida da base Ubuntu 24.04 (Mint 22) e do formato `.deb`; recomenda-se um teste manual em Mint antes de divulgar.
+
+## Evidência da CI (ciclo D1)
+
+Jobs do workflow `CI` no repositório, todos sem `continue-on-error`:
+
+| Job | O que comprova | Última execução verde no ciclo |
+|---|---|---|
+| Desktop (Electron, Windows — app, pacote e instalador) | app montado + executável empacotado (critérios 1–5, 7–11) + instalação NSIS silenciosa, app **instalado** aberto, desinstalação preservando `%APPDATA%\Aurora Board`, reinstalação (12) | commit `72318e4` (job 136985697006) |
+| Desktop (Linux — AppImage e .deb instalados) | `.deb` gerado e **instalado com `sudo dpkg -i`** no Ubuntu 24.04, sandbox configurado pela pós-instalação (perfil AppArmor), testes no app instalado sem root; AppImage executado | commit `72318e4` (job 136985697039) |
+| Desktop (Electron, Linux) | app montado no contêiner fixado da CI (sem sandbox do SO: `AURORA_DESKTOP_NO_SANDBOX=1` só ali) | commit `72318e4` (job 136985696970) |
+| Build de produção (público) / Build público + CSP | build web sem `/api` e sem ponte desktop (13) | idem |
+
+## Não verificado (limitações declaradas)
+
+- **Linux Mint**: nenhum teste em Mint real. Base inferida: Ubuntu 24.04 (Mint 22) + `.deb`.
+- **Recuperação após queda do renderer no Linux**: não verificada. No contêiner sem sandbox (app montado) a queda forçada trava o Electron e o teste é pulado ali; no job do pacote instalado o teste não roda (precisa do processo principal, que o harness por CDP não alcança). Verificada no Windows (local e CI, app montado).
+- **Cofre de credenciais no Linux com Secret Service/KWallet reais**: a CI não tem chaveiro de sessão; lá o app detecta `basic_text`, recusa gravar e oferece “só nesta sessão” (comportamento verificado). A gravação cifrada real no Linux não foi exercitada.
+- **Assinatura de código**: instaladores **não assinados** (SmartScreen avisa no Windows). Sem atualização automática.
+- **HTML Network Bridge ao vivo no Linux**: o teste ao vivo (`AURORA_LIVE=1`) foi executado só no Windows.
