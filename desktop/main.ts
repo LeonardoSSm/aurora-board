@@ -9,7 +9,8 @@
  * - Navegação, janelas novas, webviews e permissões passam por desktop/security.ts.
  * Ver docs/desktop/ARCHITECTURE.md.
  */
-import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, session, shell, type WebContents } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, screen, session, shell, type WebContents } from 'electron';
+import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { headersForPath } from '../hosting/headers';
@@ -17,8 +18,10 @@ import { APP_ENTRY, APP_HOST, APP_SCHEME, externalOpenTarget, isAppUrl, isPermis
 import { createApiService } from '../server/apiService';
 import { PROVIDERS } from '../server/providers';
 import { PluggyClient, readPluggyConfig } from '../server/pluggy';
-import { isTrustedSender, registerIpc, registerSecretsIpc } from './ipc';
+import { isTrustedSender, registerImportIpc, registerIpc, registerSecretsIpc } from './ipc';
 import { SecretStore } from './secrets';
+import { resolveWindowState, sanitizeWindowState, type WindowState } from './windowState';
+import { MENU_ACTIONS, type MenuAction } from './menuActions';
 
 // Testes e uso portátil: perfil em outra pasta (antes de qualquer acesso ao perfil).
 if (process.env.AURORA_USER_DATA_DIR) app.setPath('userData', process.env.AURORA_USER_DATA_DIR);
@@ -86,10 +89,34 @@ const service = createApiService({
   log: (m) => console.error(m),
 });
 
+/* ------------------------------------------------------------------ estado da janela (D1-D) */
+
+const windowStateFile = () => join(app.getPath('userData'), 'window-state.json');
+function loadWindowState(): WindowState {
+  let saved: WindowState | null = null;
+  try { saved = sanitizeWindowState(JSON.parse(readFileSync(windowStateFile(), 'utf8'))); } catch { saved = null; }
+  const displays = screen.getAllDisplays().map((d) => d.workArea);
+  return resolveWindowState(saved, displays, screen.getPrimaryDisplay().workArea);
+}
+function saveWindowState(win: BrowserWindow) {
+  if (win.isDestroyed()) return;
+  const state: WindowState = { bounds: win.isMaximized() || win.isFullScreen() ? win.getNormalBounds() : win.getBounds(), maximized: win.isMaximized(), ...(win.isFullScreen() ? { fullScreen: true } : {}) };
+  try {
+    const tmp = `${windowStateFile()}.tmp`;
+    writeFileSync(tmp, JSON.stringify(state));
+    renameSync(tmp, windowStateFile());
+  } catch { /* sem permissão de escrita: abre na posição padrão da próxima vez */ }
+}
+
+/** Ação do menu nativo → renderer (allowlist; o renderer executa as MESMAS ações da interface). */
+function sendMenuAction(action: MenuAction) {
+  if (mainWindow && !mainWindow.isDestroyed() && MENU_ACTIONS.includes(action)) mainWindow.webContents.send('aurora:menu', action);
+}
+
 function createWindow() {
+  const state = loadWindowState();
   const win = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    ...state.bounds,
     minWidth: 720,
     minHeight: 480,
     show: false,
@@ -110,7 +137,15 @@ function createWindow() {
       devTools: DEV_TOOLS,
     },
   });
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => {
+    if (state.maximized) win.maximize();
+    if (state.fullScreen) win.setFullScreen(true);
+    win.show();
+  });
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  const scheduleSave = () => { if (saveTimer) clearTimeout(saveTimer); saveTimer = setTimeout(() => saveWindowState(win), 500); };
+  for (const ev of ['resize', 'move', 'maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen'] as const) win.on(ev as 'resize', scheduleSave);
+  win.on('close', () => saveWindowState(win));
   win.on('closed', () => { if (mainWindow === win) mainWindow = null; });
   guardClose(win);
   recoverFromCrashes(win);
@@ -207,8 +242,17 @@ if (!single) {
     ses.setPermissionRequestHandler((wc, permission, cb) => cb(isPermissionAllowed(permission, wc.getURL())));
     ses.setPermissionCheckHandler((wc, permission) => !!wc && isPermissionAllowed(permission, wc.getURL()));
     // Menu mínimo, sem atalhos que colidam com os do canvas (Ctrl+Z/Y/C/V/A, +/-, setas… ficam com o app).
+    // Sem atalhos de teclado nos itens: Ctrl+Z/Y/C/V/A, +/-, setas, Delete etc. continuam com o canvas.
     Menu.setApplicationMenu(Menu.buildFromTemplate([
-      { label: 'Arquivo', submenu: [{ role: 'quit', label: 'Sair' }] },
+      { label: 'Arquivo', submenu: [
+        { label: 'Importar backup ou arquivo JSON…', click: () => sendMenuAction('import') },
+        { label: 'Migrar do navegador…', click: () => sendMenuAction('migrate') },
+        { label: 'Exportar backup do workspace…', click: () => sendMenuAction('export-workspace') },
+        { type: 'separator' },
+        { label: 'Configurações do aplicativo…', click: () => sendMenuAction('settings') },
+        { type: 'separator' },
+        { role: 'quit', label: 'Sair' },
+      ] },
       { label: 'Exibir', submenu: [{ role: 'togglefullscreen', label: 'Tela cheia' }, ...(DEV_TOOLS ? [{ role: 'toggleDevTools' as const, label: 'Ferramentas de desenvolvimento' }] : [])] },
       { label: 'Ajuda', submenu: [{ label: 'Documentação', click: () => void shell.openExternal('https://github.com/LeonardoSSm/aurora-board/tree/main/docs/desktop') }, { label: `Aurora Board ${app.getVersion()}`, enabled: false }] },
     ]));
@@ -223,6 +267,7 @@ if (!single) {
     secrets.load();
     registerIpc(service, () => mainWindow);
     registerSecretsIpc(secrets, () => mainWindow);
+    registerImportIpc(() => mainWindow);
     createWindow();
   });
   app.on('window-all-closed', () => app.quit());

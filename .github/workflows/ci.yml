@@ -202,10 +202,10 @@ jobs:
         with: { name: desktop-linux-results, path: test-results, retention-days: 14 }
 
   desktop-windows:
-    name: Desktop (Electron, Windows — app e pacote)
+    name: Desktop (Electron, Windows — app, pacote e instalador)
     needs: [typecheck, unit]
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: ''
     steps:
@@ -218,12 +218,83 @@ jobs:
       - name: Testes no app montado (Electron do projeto)
         run: npx playwright test -c playwright.desktop.config.ts
         env: { CI: 'true' }
-      - name: Empacotar (pasta, sem instalador nem assinatura)
-        run: npx electron-builder --config electron-builder.yml --win --dir --publish never
+      # D1-D: instalador NSIS (por usuário, sem administrador) + pasta; sem certificado = artefato “unsigned”.
+      - name: Empacotar (instalador NSIS e pasta, sem assinatura)
+        run: npx electron-builder --config electron-builder.yml --win --publish never
       - name: Testes no EXECUTÁVEL EMPACOTADO
         run: npx playwright test -c playwright.desktop.config.ts
         env: { CI: 'true', AURORA_DESKTOP_EXECUTABLE: '${{ github.workspace }}/release/win-unpacked/Aurora Board.exe' }
+      - name: Instalar, abrir, desinstalar (máquina descartável da CI)
+        shell: pwsh
+        run: |
+          $installer = (Get-ChildItem release -Filter 'Aurora-Board-*-win-x64-unsigned.exe').FullName
+          if (-not $installer) { throw 'instalador não gerado' }
+          $env:AURORA_DESKTOP_INSTALLER = $installer
+          npx playwright test -c playwright.desktop.config.ts e2e-desktop/install.spec.ts
+        env: { CI: 'true', AURORA_INSTALL_TEST: '1' }
+      - name: Instalador (artefato de teste, NÃO assinado)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with: { name: aurora-board-windows-x64-unsigned, path: 'release/Aurora-Board-*-win-x64-unsigned.exe', retention-days: 14, if-no-files-found: error }
       - name: Artefatos de falha
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with: { name: desktop-windows-results, path: test-results, retention-days: 14 }
+
+  desktop-linux-package:
+    name: Desktop (Linux — AppImage e .deb instalados)
+    needs: [typecheck, unit]
+    # Host (não contêiner): instalar o .deb exige root, e o sandbox do Chromium usa o que o pacote configura
+    # (perfil AppArmor no Ubuntu 24+ ou, sem namespaces de usuário, o auxiliar SUID).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: ''
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run build:desktop
+      - name: Empacotar (AppImage e .deb, sem assinatura)
+        run: npx electron-builder --config electron-builder.yml --linux --publish never
+      - name: Metadados do .deb
+        run: |
+          set -e
+          DEB=$(ls release/Aurora-Board-*-linux-amd64-unsigned.deb)
+          dpkg-deb --info "$DEB"
+          dpkg-deb --contents "$DEB" > deb-contents.txt
+          grep 'opt/Aurora Board/aurora-board' deb-contents.txt
+          dpkg-deb --field "$DEB" Depends Recommends
+      - name: Instalar o .deb (como no Linux Mint) e testar o app INSTALADO, sem root
+        run: |
+          set -e
+          sudo dpkg -i release/Aurora-Board-*-linux-amd64-unsigned.deb
+          # Sandbox configurado pela pós-instalação: SUID (sem namespaces) OU perfil AppArmor (Ubuntu 24+) OU namespaces livres.
+          ls -l '/opt/Aurora Board/chrome-sandbox'
+          test -u '/opt/Aurora Board/chrome-sandbox' || test -f /etc/apparmor.d/aurora-board || unshare --user true
+          xvfb-run -a npx playwright test -c playwright.desktop.config.ts
+        env: { CI: 'true', AURORA_INSTALL_TEST: '1', AURORA_DESKTOP_EXECUTABLE: '/opt/Aurora Board/aurora-board' }
+      # AppImage: sem FUSE no runner (extrai e roda). Sandbox por namespaces de usuário, liberados como em
+      # distribuições sem a restrição do AppArmor do Ubuntu 24.04 (ver docs/desktop/TROUBLESHOOTING.md).
+      - name: AppImage (extrai e roda, com sandbox por namespaces)
+        run: |
+          set -e
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          APP=$(ls release/Aurora-Board-*-linux-x86_64-unsigned.AppImage)
+          chmod +x "$APP"
+          AURORA_DESKTOP_EXECUTABLE="$PWD/$APP" xvfb-run -a npx playwright test -c playwright.desktop.config.ts e2e-desktop/desktop.spec.ts
+        env: { CI: 'true', APPIMAGE_EXTRACT_AND_RUN: '1' }
+      - name: Pacotes (artefatos de teste, NÃO assinados)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: aurora-board-linux-x64-unsigned
+          path: |
+            release/Aurora-Board-*-linux-x86_64-unsigned.AppImage
+            release/Aurora-Board-*-linux-amd64-unsigned.deb
+          retention-days: 14
+          if-no-files-found: error
+      - name: Artefatos de falha
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with: { name: desktop-linux-package-results, path: test-results, retention-days: 14 }

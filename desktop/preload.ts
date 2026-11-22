@@ -30,6 +30,11 @@ const lifecycle = Object.freeze({
       void ipcRenderer.invoke('aurora:close-ready', ok);
     });
   },
+  /** Itens do menu nativo (Importar, Migrar, Exportar, Configurações): só nomes da allowlist. */
+  onMenu: (handler: (action: string) => void) => {
+    ipcRenderer.removeAllListeners('aurora:menu');
+    ipcRenderer.on('aurora:menu', (_e, action: unknown) => { if (typeof action === 'string') handler(action); });
+  },
 });
 
 contextBridge.exposeInMainWorld('auroraDesktop', Object.freeze({
@@ -37,5 +42,6 @@ contextBridge.exposeInMainWorld('auroraDesktop', Object.freeze({
   platform: process.platform === 'win32' ? 'windows' : process.platform === 'linux' ? 'linux' : 'other',
   api,
   secrets,
+  files: Object.freeze({ pickImport: () => ipcRenderer.invoke('aurora:import-file') }),
   lifecycle,
 }));

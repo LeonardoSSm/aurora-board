@@ -23,9 +23,11 @@ const freePort = () => new Promise<number>((resolve, reject) => {
   s.on('error', reject);
 });
 
-export async function launch(userData: string, extraEnv: Record<string, string> = {}): Promise<DesktopSession> {
+/** `defaultProfile`: usa o perfil padrão do usuário (testes de instalação em máquina descartável da CI). */
+export async function launch(userData: string, extraEnv: Record<string, string> = {}, opts: { defaultProfile?: boolean } = {}): Promise<DesktopSession> {
   const exe = process.env.AURORA_DESKTOP_EXECUTABLE;
   const env = { ...process.env, AURORA_USER_DATA_DIR: userData, AURORA_DESKTOP_DEVTOOLS: '1', ...extraEnv } as Record<string, string>;
+  if (opts.defaultProfile) delete env.AURORA_USER_DATA_DIR;
   delete env.ELECTRON_RUN_AS_NODE;
   // CI Linux em contêiner: sem namespaces de usuário para o sandbox do SO (o Chromium recusaria abrir). Só lá; o
   // sandbox do renderer (webPreferences.sandbox) continua ligado e é conferido. Windows/local testam com sandbox.

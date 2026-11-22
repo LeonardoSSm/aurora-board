@@ -121,9 +121,9 @@ test('fechar a janela logo depois de uma alteração grava o pendente antes de s
 });
 
 test('fechar a janela com um texto AINDA em edição grava o texto digitado (Codex, PR #40)', async () => {
+  test.skip(!!process.env.AURORA_DESKTOP_EXECUTABLE, 'Precisa do processo principal para fechar a janela como o usuário (Alt+F4).');
   const dir = profile();
   let s = await launch(dir, NO_KEYS);
-  test.skip(!s.main, 'Precisa do processo principal para fechar a janela como o usuário (Alt+F4).');
   try {
     await s.page.getByTestId('desktop-welcome').getByRole('button', { name: 'Começar' }).click();
     await s.page.getByTestId('canvas').focus();
@@ -141,8 +141,8 @@ test('fechar a janela com um texto AINDA em edição grava o texto digitado (Cod
 });
 
 test('recuperação após queda do renderer: recarrega sozinho e os dados gravados continuam', async () => {
+  test.skip(!!process.env.AURORA_DESKTOP_EXECUTABLE, 'Precisa do processo principal para derrubar o renderer (modo app montado).');
   const s = await launch(profile(), NO_KEYS);
-  test.skip(!s.main, 'Precisa do processo principal para derrubar o renderer (modo app montado).');
   // No contêiner Linux da CI (sem sandbox do SO), derrubar o renderer à força deixa o processo do Electron travado
   // (nem o encerramento conclui). Verificado no Windows (local e CI); no Linux fica registrado como NÃO verificado
   // (docs/desktop/HOMOLOGATION.md). Só esta configuração de teste é pulada.

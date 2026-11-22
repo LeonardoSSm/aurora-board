@@ -17,6 +17,8 @@ import { ensureFinanceLoaded, restoreFinanceBackup } from '../finance/store';
 import { desktopBridge } from './bridge';
 import { executeMigration, importThenOpen, MIGRATION_INVENTORY, MigrationError, planMigration, type MigrationPlan } from './migration';
 import { openDesktopSettings } from './settings';
+import { exportWorkspaceJSON, importFromText } from '../ui/fileActions';
+import { createMenuHandler } from './menu';
 
 const WELCOME_KEY = 'desktopWelcomeDone';
 
@@ -31,6 +33,21 @@ export function registerDesktopLifecycle() {
     return !hasPendingChanges();
   });
   try { void navigator.storage?.persist?.(); } catch { /* sem suporte: o perfil do app não é limpo automaticamente */ }
+  // O menu não ativa o renderer: escolhe o arquivo no main e reutiliza toda a validação/confirmação da UI.
+  b.lifecycle.onMenu(createMenuHandler({
+    import: async () => {
+      const result = await b.files.pickImport();
+      // Uma ação da interface pode ter aberto um diálogo enquanto o seletor/leitura estava pendente.
+      if (getState().dialog) return;
+      if ('error' in result) {
+        await openDialog({ title: 'Importação recusada', message: `${result.error} Nenhum dado foi alterado.`, buttons: [{ label: 'Ok', value: 'ok', variant: 'primary' }] });
+      } else if (!result.canceled) await importFromText(result.name, Promise.resolve(result.text));
+    },
+    migrate: openMigrationDialog,
+    'export-workspace': exportWorkspaceJSON,
+    settings: openDesktopSettings,
+  }, () => getState().status !== 'ready' || !!getState().dialog,
+  () => toast('Não foi possível concluir a ação do menu.', 'error')));
 }
 
 async function importBoards(r: ImportResult): Promise<{ boardIds: string[]; openError?: string }> {
