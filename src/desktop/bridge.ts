@@ -3,6 +3,7 @@
  * existe: todas as funções aqui devolvem null/indisponível.
  */
 import type { ApiResult } from '../integrations/apiRoutes';
+import type { ImportFileResult } from '../../desktop/importFile';
 
 export type SecretName = 'OPENAI_API_KEY' | 'ANTHROPIC_API_KEY' | 'GEMINI_API_KEY' | 'OPENAI_MODEL' | 'ANTHROPIC_MODEL' | 'GEMINI_MODEL' | 'PLUGGY_CLIENT_ID' | 'PLUGGY_CLIENT_SECRET' | 'PLUGGY_ITEM_IDS';
 export interface SecretStatus { name: SecretName; configured: boolean; source: 'vault' | 'session' | 'env' | 'none'; secret: boolean }
@@ -15,6 +16,7 @@ export interface DesktopBridge {
   platform: 'windows' | 'linux' | 'other';
   api: { call(id: string, op: unknown, body?: unknown): Promise<ApiResult>; cancel(id: string): void };
   secrets: { status(): Promise<SecretsStatus | null>; set(name: SecretName, value: string, mode: 'vault' | 'session'): Promise<SecretsResult>; clear(name: SecretName): Promise<SecretsResult> };
+  files: { pickImport(): Promise<ImportFileResult> };
   lifecycle: { onBeforeClose(handler: () => Promise<boolean>): void; onMenu(handler: (action: string) => void): void };
 }
 

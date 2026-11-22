@@ -24,8 +24,17 @@ No aplicativo desktop **não existe servidor HTTP**. As integrações que na ver
 |---|---|---|
 | `aurora:api` | `callId`, `op`, `body?` | `{ status, body, retryAfter? }` |
 | `aurora:api-cancel` | `callId` | — |
+| `aurora:import-file` | nenhum | `{ canceled: true }`, `{ canceled: false, name, text }` ou `{ error }` |
 
-Operações aceitas (allowlist `DESKTOP_IPC_OPS`): `health`, `ai.providers`, `ai.chat`, `linkPreview`, `pluggy.status`, `pluggy.accounts`, `pluggy.transactions`, `net.status`, `net.fetch`. Não há pareamento LAN, leitura de arquivos, execução de comandos nem requisição genérica.
+Operações aceitas (allowlist `DESKTOP_IPC_OPS`): `health`, `ai.providers`, `ai.chat`, `linkPreview`, `pluggy.status`, `pluggy.accounts`, `pluggy.transactions`, `net.status`, `net.fetch`. Não há pareamento LAN, leitura arbitrária de arquivos, execução de comandos nem requisição genérica.
+
+### Importação pelo menu nativo (PR #41)
+
+`files.pickImport()` abre um diálogo de arquivo do Electron no processo principal. O IPC não aceita argumentos nem caminhos do renderer e valida o mesmo remetente das demais operações. Só um seletor pode ficar pendente. Cancelar não lê arquivos; mudar de documento durante a seleção descarta o resultado.
+
+Somente o JSON escolhido pelo usuário é lido: arquivo regular, extensão `.json`, teto de 200 MB verificado antes de ler e durante a leitura (inclusive se crescer). A resposta contém o nome base e o texto, nunca o caminho. Erros do sistema de arquivos não atravessam o IPC. No renderer, `importFromText` mantém orçamento, schema, desativação de HTML, confirmação e gravação transacional existentes.
+
+O menu recusa ações durante diálogos ou outra operação nativa pendente; a trava acompanha a promessa até cancelar, confirmar ou falhar. Um diálogo aberto pela interface enquanto o seletor nativo está pendente também é preservado. A importação pela barra continua usando o seletor web, disparado pelo clique do usuário.
 
 ## Validação no processo principal (`desktop/ipcValidation.ts`)
 

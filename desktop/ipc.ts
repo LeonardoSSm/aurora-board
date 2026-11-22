@@ -3,10 +3,11 @@
  * links) rodam no processo principal com o MESMO serviço da API local da web (server/apiService.ts), sem servidor
  * HTTP. Cada chamada: remetente confiável → validação (desktop/ipcValidation.ts) → limites do serviço → resultado.
  */
-import { BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
+import { BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
 import type { ApiService } from '../server/apiService';
 import type { ApiResult } from '../src/integrations/apiRoutes';
 import { IPC_LIMITS, isTrustedSenderInfo, parseCancel, parseIpcCall } from './ipcValidation';
+import { ImportFileError, readImportFile, type ImportFileResult } from './importFile';
 
 export function isTrustedSender(e: IpcMainInvokeEvent, appWindow: () => BrowserWindow | null): boolean {
   const win = appWindow();
@@ -15,6 +16,30 @@ export function isTrustedSender(e: IpcMainInvokeEvent, appWindow: () => BrowserW
     isAppWindow: !!win && !win.isDestroyed() && e.sender === win.webContents,
     isMainFrame: !!frame && frame === e.sender.mainFrame,
     frameUrl: frame?.url,
+  });
+}
+
+/** Seletor nativo sem argumentos: não expõe leitura arbitrária de caminhos por IPC. */
+export function registerImportIpc(appWindow: () => BrowserWindow | null) {
+  let pending = false;
+  ipcMain.handle('aurora:import-file', async (e, ...args: unknown[]): Promise<ImportFileResult> => {
+    if (!isTrustedSender(e, appWindow) || args.length) return { error: 'Pedido de importação não autorizado.' };
+    if (pending) return { canceled: true };
+    pending = true;
+    try {
+      const result = await dialog.showOpenDialog(appWindow()!, {
+        title: 'Importar backup ou arquivo JSON',
+        properties: ['openFile'],
+        filters: [{ name: 'Backup JSON', extensions: ['json'] }],
+      });
+      if (result.canceled || result.filePaths.length !== 1 || !isTrustedSender(e, appWindow)) return { canceled: true };
+      const file = await readImportFile(result.filePaths[0]);
+      if (!isTrustedSender(e, appWindow)) return { canceled: true };
+      return { canceled: false, ...file };
+    } catch (err) {
+      // Erros de fs podem conter caminhos privados. Só mensagens controladas atravessam o IPC.
+      return { error: err instanceof ImportFileError ? err.message : 'Não foi possível ler o arquivo selecionado.' };
+    } finally { pending = false; }
   });
 }
 

@@ -24,8 +24,10 @@ test('IPC tipado: operações da allowlist respondem; o resto é recusado pelo p
   const s = await launch(profile(), NO_KEYS);
   const { page } = s;
   try {
-    expect(Object.keys(await page.evaluate(() => (window as any).auroraDesktop)).sort()).toEqual(['api', 'isDesktop', 'lifecycle', 'platform', 'secrets']);
+    expect(Object.keys(await page.evaluate(() => (window as any).auroraDesktop)).sort()).toEqual(['api', 'files', 'isDesktop', 'lifecycle', 'platform', 'secrets']);
     expect(await page.evaluate(() => Object.isFrozen((window as any).auroraDesktop.api))).toBe(true);
+    expect(await page.evaluate(() => Object.isFrozen((window as any).auroraDesktop.files))).toBe(true);
+    expect(await page.evaluate(() => Object.keys((window as any).auroraDesktop.files))).toEqual(['pickImport']);
     expect(await call(page, 'h1', { op: 'health' })).toEqual({ status: 200, body: { ok: true } });
     const prov = await call(page, 'p1', { op: 'ai.providers' });
     expect(prov.status).toBe(200);

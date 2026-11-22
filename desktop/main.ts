@@ -18,7 +18,7 @@ import { APP_ENTRY, APP_HOST, APP_SCHEME, externalOpenTarget, isAppUrl, isPermis
 import { createApiService } from '../server/apiService';
 import { PROVIDERS } from '../server/providers';
 import { PluggyClient, readPluggyConfig } from '../server/pluggy';
-import { isTrustedSender, registerIpc, registerSecretsIpc } from './ipc';
+import { isTrustedSender, registerImportIpc, registerIpc, registerSecretsIpc } from './ipc';
 import { SecretStore } from './secrets';
 import { resolveWindowState, sanitizeWindowState, type WindowState } from './windowState';
 import { MENU_ACTIONS, type MenuAction } from './menuActions';
@@ -267,6 +267,7 @@ if (!single) {
     secrets.load();
     registerIpc(service, () => mainWindow);
     registerSecretsIpc(secrets, () => mainWindow);
+    registerImportIpc(() => mainWindow);
     createWindow();
   });
   app.on('window-all-closed', () => app.quit());

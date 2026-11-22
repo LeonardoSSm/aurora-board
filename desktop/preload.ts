@@ -42,5 +42,6 @@ contextBridge.exposeInMainWorld('auroraDesktop', Object.freeze({
   platform: process.platform === 'win32' ? 'windows' : process.platform === 'linux' ? 'linux' : 'other',
   api,
   secrets,
+  files: Object.freeze({ pickImport: () => ipcRenderer.invoke('aurora:import-file') }),
   lifecycle,
 }));

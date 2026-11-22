@@ -41,3 +41,9 @@ Até lá, atualizar = instalar a versão nova por cima (Windows) ou `sudo apt in
 ## Versão
 
 `package.json` → `version` é a versão do app (`app.getVersion()`, nome dos artefatos, menu Ajuda).
+
+### Identificar a origem do download
+
+Os artefatos Actions expiram após 14 dias. Antes de distribuir um instalador, confira o SHA e a branch da execução: um artefato de PR é de homologação daquela revisão; para entregar a versão integrada, prefira a execução **push da `main` após o merge**, com os jobs de desktop concluídos. O número `1.0.0` no arquivo não distingue builds de commits diferentes.
+
+O [PR #41](https://github.com/LeonardoSSm/aurora-board/pull/41) e a [issue #34](https://github.com/LeonardoSSm/aurora-board/issues/34) registram os links da execução e dos instaladores verificados na conclusão do D1. Não há GitHub Release publicado por esse fluxo.
