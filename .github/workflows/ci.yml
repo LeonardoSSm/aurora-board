@@ -70,7 +70,7 @@ jobs:
           test -f dist/_headers && test -f dist/sandbox.html
       - name: Configuração de hospedagem gerada está atualizada
         run: npx tsx scripts/generate-hosting-config.ts && git diff --exit-code -- public/_headers vercel.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: dist, path: dist, retention-days: 7 }
 
   audit:
@@ -135,7 +135,7 @@ jobs:
         env: { CI: 'true' }
       - name: Artefatos de falha (relatório, traces, vídeos)
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-${{ matrix.project }}
           path: |
@@ -198,7 +198,7 @@ jobs:
         env: { CI: 'true' }
       - name: Artefatos de falha
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: desktop-linux-results, path: test-results, retention-days: 14 }
 
   desktop-windows:
@@ -233,11 +233,11 @@ jobs:
           npx playwright test -c playwright.desktop.config.ts e2e-desktop/install.spec.ts
         env: { CI: 'true', AURORA_INSTALL_TEST: '1' }
       - name: Instalador (artefato de teste, NÃO assinado)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: aurora-board-windows-x64-unsigned, path: 'release/Aurora-Board-*-win-x64-unsigned.exe', retention-days: 14, if-no-files-found: error }
       - name: Artefatos de falha
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: desktop-windows-results, path: test-results, retention-days: 14 }
 
   desktop-linux-package:
@@ -286,7 +286,7 @@ jobs:
           AURORA_DESKTOP_EXECUTABLE="$PWD/$APP" xvfb-run -a npx playwright test -c playwright.desktop.config.ts e2e-desktop/desktop.spec.ts
         env: { CI: 'true', APPIMAGE_EXTRACT_AND_RUN: '1' }
       - name: Pacotes (artefatos de teste, NÃO assinados)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: aurora-board-linux-x64-unsigned
           path: |
@@ -296,5 +296,5 @@ jobs:
           if-no-files-found: error
       - name: Artefatos de falha
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: desktop-linux-package-results, path: test-results, retention-days: 14 }
