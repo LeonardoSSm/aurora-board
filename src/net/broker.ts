@@ -12,6 +12,7 @@
 import { getState, useEditor } from '../store/editor';
 import { WIDGET } from '../core/widgetIds';
 import { sanitizeSandbox, type SandboxData } from '../core/widgetData';
+import { artifactConfiguration, artifactEdges } from '../core/artifact';
 import type { AuroraElement, WidgetElement } from '../core/schema';
 import { LOCAL_API_ENABLED } from '../config/runtime';
 import { checkResult, NET_LIMITS, netError, netOrigin, parseAbortMessage, parseRequestMessage, responseMessage, type NetError, type NetErrorCode, type NetOutcome, type NetRequest } from './protocol';
@@ -134,6 +135,14 @@ export interface NetSessionOptions {
 
 interface Snapshot { el: WidgetElement; data: SandboxData; elements: AuroraElement[]; boardId: string }
 
+function contextOf(elementId: string, boardId: string, elements: AuroraElement[], data: SandboxData): NetContext {
+  return {
+    elementId, boardId, elements, html: data.html,
+    activation: activationStamp(data.activation),
+    ...(data.artifact ? { artifactConfiguration: artifactConfiguration(data, artifactEdges(elements, elementId)) } : {}),
+  };
+}
+
 export class NetSession {
   readonly elementId: string;
   readonly token: string;
@@ -180,11 +189,13 @@ export class NetSession {
     if (this.disposed || (s.boardId ?? '') !== this.boardId) return null;
     const el = s.elements.find((e) => e.id === this.elementId);
     if (!el || el.type !== 'widget' || el.widgetType !== WIDGET.sandbox) return null;
-    return { el, data: sanitizeSandbox(el.data), elements: s.elements, boardId: this.boardId };
+    const data = sanitizeSandbox(el.data);
+    if (data.artifact && data.activation?.state === 'blocked') return null;
+    return { el, data, elements: s.elements, boardId: this.boardId };
   }
 
   context(snap: Snapshot): NetContext {
-    return { elementId: this.elementId, boardId: snap.boardId, html: snap.data.html, activation: activationStamp(snap.data.activation), elements: snap.elements };
+    return contextOf(this.elementId, snap.boardId, snap.elements, snap.data);
   }
 
   sensitive(snap: Snapshot): SensitiveSource[] {
@@ -460,7 +471,7 @@ export function netStatusFor(elementId: string): { ctx: NetContext | null; sensi
   const el = st.elements.find((e) => e.id === elementId);
   if (!el || el.type !== 'widget' || el.widgetType !== WIDGET.sandbox) return { ctx: null, sensitive: [], onceOrigins: [], decisions: {} };
   const data = sanitizeSandbox(el.data);
-  const ctx: NetContext = { elementId, boardId: st.boardId ?? '', html: data.html, activation: activationStamp(data.activation), elements: st.elements };
+  const ctx = contextOf(elementId, st.boardId ?? '', st.elements, data);
   const sensitive = mergeSources(sensitiveUpstream(st.elements, elementId, rememberedOf), sourcesFromIds(st.elements, live ? live.sticky : []), sourcesFromIds(st.elements, data.stateTaint?.sources ?? []));
   const onceOrigins = live ? live.onceOrigins() : [];
   // Decisão COMPLETA por destino (comum + específica de dados protegidos + “uma vez” + negação), igual à da consulta:

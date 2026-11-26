@@ -36,6 +36,8 @@ protocol.registerSchemesAsPrivileged([{ scheme: APP_SCHEME, privileges: { standa
 const RENDERER_ROOT = join(app.getAppPath(), 'renderer');
 const PRELOAD = join(__dirname, 'preload.cjs');
 const DEV_TOOLS = !app.isPackaged || process.env.AURORA_DESKTOP_DEVTOOLS === '1';
+const SAFE_ENTRY = `${APP_ENTRY}?safe`;
+const SAFE_FLAG = '--safe-artifacts';
 
 async function serveApp(request: Request): Promise<Response> {
   if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Método não permitido', { status: 405 });
@@ -150,7 +152,7 @@ function createWindow() {
   guardClose(win);
   recoverFromCrashes(win);
   mainWindow = win;
-  void win.loadURL(APP_ENTRY);
+  void win.loadURL(process.argv.includes(SAFE_FLAG) ? SAFE_ENTRY : APP_ENTRY);
   return win;
 }
 
@@ -209,6 +211,10 @@ function guardClose(win: BrowserWindow) {
  */
 function recoverFromCrashes(win: BrowserWindow) {
   let lastCrash = 0;
+  let recoveryUrl = process.argv.includes(SAFE_FLAG) ? SAFE_ENTRY : APP_ENTRY;
+  win.webContents.on('did-navigate', (_e, url) => {
+    recoveryUrl = url === SAFE_ENTRY ? SAFE_ENTRY : APP_ENTRY;
+  });
   win.webContents.on('render-process-gone', async (_e, details) => {
     if (details.reason === 'clean-exit' || win.isDestroyed()) return;
     console.error(`[desktop] renderer encerrou: ${details.reason}`);
@@ -219,11 +225,14 @@ function recoverFromCrashes(win: BrowserWindow) {
       const r = await dialog.showMessageBox(win, { type: 'error', title: 'Aurora Board', message: 'O Aurora Board parou de responder novamente.', detail: 'Seus dados gravados estão no perfil do aplicativo. Recarregar tenta recuperar as alterações do diário.', buttons: ['Recarregar', 'Fechar'], defaultId: 0, cancelId: 1, noLink: true });
       if (r.response !== 0) { win.destroy(); return; }
     }
-    if (!win.isDestroyed()) void win.loadURL(APP_ENTRY);
+    if (!win.isDestroyed()) void win.loadURL(recoveryUrl);
   });
   win.on('unresponsive', async () => {
-    const r = await dialog.showMessageBox(win, { type: 'warning', title: 'Aurora Board', message: 'O Aurora Board não está respondendo.', buttons: ['Esperar', 'Recarregar'], defaultId: 0, cancelId: 0, noLink: true });
-    if (r.response === 1 && !win.isDestroyed()) win.webContents.reload();
+    const r = await dialog.showMessageBox(win, { type: 'warning', title: 'Aurora Board', message: 'O Aurora Board não está respondendo.', buttons: ['Esperar', 'Reabrir sem HTML'], defaultId: 0, cancelId: 0, noLink: true });
+    if (r.response === 1 && !win.isDestroyed()) {
+      recoveryUrl = SAFE_ENTRY;
+      win.webContents.forcefullyCrashRenderer();
+    }
   });
 }
 
@@ -231,9 +240,13 @@ const single = app.requestSingleInstanceLock();
 if (!single) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
     const w = BrowserWindow.getAllWindows()[0];
-    if (w) { if (w.isMinimized()) w.restore(); w.focus(); }
+    if (w) {
+      if (argv.includes(SAFE_FLAG)) void w.loadURL(SAFE_ENTRY);
+      if (w.isMinimized()) w.restore();
+      w.focus();
+    }
   });
   app.on('web-contents-created', (_e, contents) => harden(contents));
   app.whenReady().then(() => {

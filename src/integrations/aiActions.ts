@@ -248,7 +248,7 @@ const PROPOSAL_MARKERS = ['{"version"', '{"actions"', '{"notes"', '{"tasks"', '{
  * 3. um objeto JSON no FIM da resposta que comece por uma chave do contrato ({"version", {"actions"…).
  * `raw` é o trecho exato (para ocultá-lo do texto exibido). Tudo continua passando pela validação.
  */
-function proposalSource(text: string): { raw: string; json: string } | null {
+export function proposalSource(text: string): { raw: string; json: string } | null {
   const fenced = [...text.matchAll(/```(json|JSON)?[ \t]*\r?\n?([\s\S]*?)```/g)];
   for (let i = fenced.length - 1; i >= 0; i--) {
     const body = fenced[i][2].trim();
@@ -294,6 +294,7 @@ export function parseAIProposal(text: string, validIds: ReadonlySet<string>): Pa
   }
   if (!json || typeof json !== 'object' || Array.isArray(json)) return null;
   const o = json as Record<string, unknown>;
+  if (o.version === 3) return null;
   const v2 = Array.isArray(o.actions);
   const v1 = 'notes' in o || 'tasks' in o || 'connections' in o;
   if (!v2 && !v1) return null;

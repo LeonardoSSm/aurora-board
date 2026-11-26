@@ -17,6 +17,7 @@ import { renderMarkdown } from './notes';
 import { ProposalCard } from './aiProposal';
 import { CategorySuggestionCard } from './aiFinanceSuggestions';
 import { openPairing } from '../../ui/PairingDialog';
+import { ArtifactComposer, ArtifactProposal } from './aiArtifact';
 
 const QUICK: { label: string; prompt: string; mode: QuickMode }[] = [
   { label: 'Resumir', prompt: 'Resuma o contexto conectado em tópicos curtos.', mode: 'chat' },
@@ -34,15 +35,16 @@ function useAIStatus() {
 }
 
 function MessageView({ m, request, props, validIds, elements }: { m: AIMessage; request: FinancialRequest | null; props: WidgetProps<AIData>; validIds: Set<string>; elements: AuroraElement[] }) {
-  const proposal = useMemo(() => (m.role === 'assistant' ? parseAIProposal(m.content, validIds) : null), [m, validIds]);
+  const proposal = useMemo(() => (m.role === 'assistant' && !m.artifact ? parseAIProposal(m.content, validIds) : null), [m, validIds]);
   // A IA não propôs nenhuma ação financeira, mas o pedido é inequívoco ("Crie um bloco de receita de R$ 2.000,00"):
   // oferece a interpretação local, também só com prévia e confirmação.
   const local = useMemo<ParsedProposal | null>(() => {
-    if (m.role !== 'assistant' || proposal?.actions.some((a) => a.type === 'money')) return null;
+    if (m.role !== 'assistant' || m.artifact || proposal?.actions.some((a) => a.type === 'money')) return null;
     const a = localMoneyAction(request);
     return a ? { version: 2, actions: [a], rejected: [], notices: [], raw: '' } : null;
-  }, [m.role, proposal, request]);
-  const html = useMemo(() => (m.role === 'assistant' ? renderMarkdown(proposalDisplayText(m.content, proposal)) : ''), [m, proposal]);
+  }, [m.role, m.artifact, proposal, request]);
+  const html = useMemo(() => (m.role === 'assistant' && !m.artifact ? renderMarkdown(proposalDisplayText(m.content, proposal)) : ''), [m, proposal]);
+  if (m.role === 'assistant' && m.artifact) return <ArtifactProposal message={m} props={props} />;
   return (
     <div className={`rounded-lg px-2.5 py-1.5 text-[12px] ${m.role === 'user' ? 'bg-panel-3 self-end max-w-[90%] whitespace-pre-wrap' : 'bg-[#0f1826] border border-line/60'}`}>
       {m.role === 'assistant' ? <div className="md" dangerouslySetInnerHTML={{ __html: html }} /> : m.content}
@@ -71,8 +73,8 @@ export const aiPlugin: WidgetPlugin<AIData> = {
   outputs: [{ id: 'reply', label: 'Última resposta', type: 'text' }],
   createData: () => sanitizeAI({}),
   sanitize: sanitizeAI,
-  compute: (d) => ({ reply: [...d.messages].reverse().find((m) => m.role === 'assistant')?.content ?? '' }),
-  summarize: (d) => `Instrução: ${d.instruction}\n` + d.messages.slice(-6).map((m) => `${m.role === 'user' ? 'Usuário' : 'IA'}: ${m.content}`).join('\n'),
+  compute: (d) => ({ reply: [...d.messages].reverse().find((m) => m.role === 'assistant' && !m.artifact)?.content ?? '' }),
+  summarize: (d) => `Instrução: ${d.instruction}\n` + d.messages.filter((m) => !m.artifact).slice(-6).map((m) => `${m.role === 'user' ? 'Usuário' : 'IA'}: ${m.content}`).join('\n'),
   // Issue #13: o mesmo assistente em dois visuais. O personagem usa moldura mínima (arrastar move o bloco).
   frameFor: (d) => (d.companion?.displayMode === 'character' ? 'bare' : 'standard'),
   Component: function AIBlock(props) {
@@ -91,6 +93,7 @@ export function AIClassic(props: WidgetProps<AIData>) {
     const { data, update, element, api } = props;
     const { status, refresh } = useAIStatus();
     const elements = useEditor((s) => s.elements);
+    const selectedIds = useEditor((s) => s.selectedIds);
     const sources = useMemo(() => contextSources(elements, element.id, data.authorized), [elements, element.id, data.authorized]);
     const validIds = useMemo(() => new Set(sources.filter((s) => s.authorized).map((s) => s.id)), [sources]);
     // Pedido do usuário que originou cada resposta (conferência local de valores financeiros).
@@ -98,12 +101,14 @@ export function AIClassic(props: WidgetProps<AIData>) {
       const out = new Map<string, FinancialRequest | null>();
       let last: FinancialRequest | null = null;
       for (const m of data.messages) {
+        if (m.artifact) continue;
         if (m.role === 'user') last = interpretFinancialRequest(m.content);
         else out.set(m.id, last);
       }
       return out;
     }, [data.messages]);
     const [input, setInput] = useState('');
+    const [artifactMode, setArtifactMode] = useState(false);
     const req = useAIRequest(element.id);
     const loading = req.status === 'sending';
     const error = req.status === 'error' ? req.error : '';
@@ -211,7 +216,8 @@ export function AIClassic(props: WidgetProps<AIData>) {
         </div>
 
         <div className="flex flex-wrap gap-1">
-          {QUICK.map((q) => (
+          <button type="button" disabled={artifactMode && loading} aria-pressed={artifactMode} onClick={() => setArtifactMode((v) => !v)} className="h-6 px-2 rounded-md border border-accent-2/50 text-[10px] text-accent-2 hover:bg-panel-3 disabled:opacity-50">{artifactMode ? 'Voltar ao chat' : 'Criar ou editar Artifact'}</button>
+          {!artifactMode && QUICK.map((q) => (
             <button key={q.label} disabled={!provider || loading} onClick={() => send(q.prompt, q.mode)} className="h-6 px-2 rounded-md border border-line text-[10px] text-fg-2 hover:bg-panel-3">{q.label}</button>
           ))}
           {data.messages.length > 0 && (
@@ -221,16 +227,18 @@ export function AIClassic(props: WidgetProps<AIData>) {
         <div className="flex gap-1.5">
           <textarea
             value={input}
-            disabled={!provider}
-            placeholder={provider ? 'Pergunte algo sobre o contexto… (Enter envia)' : 'IA não configurada'}
+            disabled={!provider || (artifactMode && loading)}
+            placeholder={provider ? artifactMode ? 'Descreva o painel ou a mudança…' : 'Pergunte algo sobre o contexto… (Enter envia)' : 'IA não configurada'}
+            aria-label={artifactMode ? 'Pedido para o Artifact' : undefined}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(input, 'structure'); } }}
+            onKeyDown={(e) => { if (!artifactMode && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(input, 'structure'); } }}
             className="flex-1 h-14 px-2 py-1.5 rounded-lg bg-[#0f1826] border border-line outline-none focus:border-accent-2 text-[12px] resize-none"
           />
-          <button aria-label="Enviar" disabled={!provider || loading || !input.trim()} onClick={() => send(input, 'structure')} className="w-10 rounded-lg bg-[#5b46a8] text-white grid place-items-center">
+          {!artifactMode && <button aria-label="Enviar" disabled={!provider || loading || !input.trim()} onClick={() => send(input, 'structure')} className="w-10 rounded-lg bg-[#5b46a8] text-white grid place-items-center">
             <Send size={14} />
-          </button>
+          </button>}
         </div>
+        {artifactMode && <ArtifactComposer key={provider?.id} aiId={element.id} elements={elements} selectedIds={selectedIds} prompt={input} provider={provider} ready={!!provider && !loading} onSent={() => { setInput(''); setArtifactMode(false); }} />}
       </div>
     );
 }
