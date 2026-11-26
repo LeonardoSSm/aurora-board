@@ -83,6 +83,8 @@ Limitação conhecida: um proxy HTTP do sistema (variáveis `HTTP_PROXY`) não �
 
 Limites honestos: depois de ativado, um widget pode exibir conteúdo enganoso (phishing visual) — o isolamento impede acesso a dados, não impede texto falso. Widgets HTML importados **antes** do ciclo S1 não têm marcação e são tratados como locais.
 
+**Aurora Artifacts.** Propostas v3 têm escopo da sessão, validação no host e revisão de código e conexões. A execução exige uma ação explícita no host. As mensagens do runtime exigem origem opaca, janela e token. Autorizações locais de IA e rede são revogadas ao mudar código, portas ou conexões do Artifact e permanecem revogadas após desfazer. Durante execuções com fontes protegidas, o host descarta gravações de `aurora.setState`. Consulte a [arquitetura e a recuperação em modo seguro](ARTIFACTS_IMPLEMENTATION.md).
+
 ### Documentos e mídias (`core/media.ts`, `documents.tsx`, `ElementView.tsx`)
 
 - **GIFs animados (ciclo 6, `core/gif.ts`)**: o leitor de estrutura trata o arquivo como não confiável (limites em todo acesso, sem decodificar pixels, até 10.000 quadros; testado com todos os prefixos truncados e 2.000 corrupções aleatórias). Variantes de exibição (repetição infinita, primeiro quadro) são `data:` URLs geradas localmente; o arquivo salvo é o original. GIF pesado demais (> 400 MP somados) não anima. Ver [ANIMATED_GIFS.md](ANIMATED_GIFS.md).
