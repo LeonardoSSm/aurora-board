@@ -144,6 +144,12 @@ Google Calendar, Google Drive, GitHub, API externa, indicadores financeiros, das
 - Preferências locais, autorizações (IA, rede, dados importados) e credenciais não migram do navegador: ajuste/autorize/configure de novo.
 - O executável empacotado não pode ser dirigido pelo `electron.launch` do Playwright: os testes dele conectam por CDP e não acessam o processo principal (testes que dependem dele rodam no modo “app montado”).
 
+## Aurora Artifacts
+
+- Propostas pendentes do Assistente expiram ao sair do quadro ou recarregar. O código aplicado e as últimas cinco revisões continuam disponíveis no quadro local.
+- O tempo de inicialização começa quando o iframe carrega. Se o host estiver responsivo, ele pode interromper um iframe que não sinaliza que iniciou. Uma execução JavaScript síncrona que trave o renderer pode exigir fechar e reabrir em modo seguro (`?safe` na web, `--safe-artifacts` no desktop).
+- A revisão usa os limites de resposta dos provedores atuais. Se a saída for truncada ou vier fora do contrato, peça um painel menor e tente de novo.
+
 ## Data Hub (issue #24, D2-A)
 
 - Importação de planilhas `.xlsx` não é suportada: salve como “CSV UTF-8”. Outras codificações (Latin-1/Windows-1252) são recusadas com orientação.

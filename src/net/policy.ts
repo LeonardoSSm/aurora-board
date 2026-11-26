@@ -128,6 +128,7 @@ export interface NetContext {
   html: string;
   /** Marca de ativação: `local` para HTML do próprio usuário; importado/colado recebe outra a cada importação. */
   activation: string;
+  artifactConfiguration?: string;
   elements: AuroraElement[];
 }
 
@@ -138,7 +139,7 @@ export function activationStamp(a: unknown): string {
 
 /** Resumo da configuração que a autorização `network` cobre. */
 export function netConfigDigest(ctx: NetContext): string {
-  return digest(JSON.stringify(['h2', ctx.elementId, ctx.boardId, ctx.activation, ctx.html.length, digest(ctx.html), [...directInputEdges(ctx.elements, ctx.elementId)].sort()]));
+  return digest(JSON.stringify(['h2', ctx.elementId, ctx.boardId, ctx.activation, ctx.html.length, digest(ctx.html), [...directInputEdges(ctx.elements, ctx.elementId)].sort(), ...(ctx.artifactConfiguration ? [ctx.artifactConfiguration] : [])]));
 }
 
 export function networkKey(ctx: NetContext, origin: string, method = 'GET'): string {

@@ -64,10 +64,11 @@
           try { parent.postMessage(msg, '*'); }
           catch (err) { console.warn('[aurora] valor não pôde ser enviado (use JSON simples):', err && err.name); }
         }
+        var reportRuntimeError = function (error) { console.error(error); };
         function emitInputs() {
           var list = callbacks.slice();
           for (var i = 0; i < list.length; i++) {
-            try { list[i](inputs, connections); } catch (err) { console.error(err); }
+            try { list[i](inputs, connections); } catch (err) { reportRuntimeError(err); }
           }
           window.dispatchEvent(new CustomEvent('aurora:inputs', { detail: { inputs: inputs, connections: connections } }));
         }
@@ -165,6 +166,16 @@
               if (!token && typeof n.token === 'string') token = n.token;
               network = Object.freeze({ version: 1, available: n.available === true, message: typeof n.message === 'string' ? n.message.slice(0, 300) : '' });
             }
+            if (e.data.reportRuntime === true && token) {
+              var reportedError = false;
+              reportRuntimeError = function () {
+                if (reportedError) return;
+                reportedError = true;
+                post({ type: 'aurora:runtime', token: token, status: 'error' });
+              };
+              addEventListener('error', reportRuntimeError);
+              addEventListener('unhandledrejection', reportRuntimeError);
+            }
             var tpl = document.createElement('template');
             tpl.innerHTML = e.data.html;
             document.body.appendChild(tpl.content);
@@ -180,6 +191,7 @@
             document.dispatchEvent(new Event('DOMContentLoaded'));
             window.dispatchEvent(new CustomEvent('aurora:init', { detail: api.state }));
             if (b && typeof b === 'object') window.dispatchEvent(new CustomEvent('aurora:inputs', { detail: { inputs: inputs, connections: connections } }));
+            if (e.data.reportRuntime === true && token) post({ type: 'aurora:runtime', token: token, status: 'ready' });
           } else if (e.data.type === 'aurora:init') {
             api.state = e.data.state;
             window.dispatchEvent(new CustomEvent('aurora:init', { detail: e.data.state }));

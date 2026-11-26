@@ -69,6 +69,7 @@ Preencha **apenas** as chaves que possuir (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Benchmark, medições antes/depois, limites |
 | [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Problemas e limitações conhecidos |
 | [docs/AI_ACTIONS.md](docs/AI_ACTIONS.md) | Ações da IA (contrato v2): blocos de valor, lançamentos financeiros, validação, prévia e confirmação |
+| [docs/ARTIFACTS_IMPLEMENTATION.md](docs/ARTIFACTS_IMPLEMENTATION.md) | Aurora Artifacts, contrato v3, exemplos, histórico e recuperação |
 | [docs/AI_TILES.md](docs/AI_TILES.md) | AI Tiles: decisões, modos visual/funcional, procedência e condições de uso das logos |
 | [docs/SMART_LINKS.md](docs/SMART_LINKS.md) | Smart Links (L1): atalhos visuais `[ícone] Nome`, clique × arrasto, ícones locais, imagens, privacidade, compatibilidade |
 | [docs/finance/PERSONAL_FINANCE.md](docs/finance/PERSONAL_FINANCE.md) | Minhas contas (ciclo F1): contas, cartões, extratos, conciliação, canvas, IA, backups — índice dos documentos em `docs/finance/` |
@@ -121,6 +122,7 @@ Legenda: ✅ implementado e testado · 🟡 implementado, depende de configuraç
 | Link / Smart Link | ✅ · 🟡 prévia | **Atalho visual** `[ícone] Nome` clicável (layouts horizontal, compacto e card; ícones locais, imagem enviada ou imagem do site com permissão; configuração em Propriedades) ou modo **Clássico** com URL/descrição no bloco (padrão de links antigos). Prévia Open Graph só por ação explícita, via servidor local (bloqueia endereços de rede local). Ver [docs/SMART_LINKS.md](docs/SMART_LINKS.md) |
 | Código | ✅ | Destaque de sintaxe (10 linguagens), Tab, copiar |
 | Assistente IA | 🟡 | OpenAI, Claude e Gemini via servidor local; só envia contexto conectado e autorizado; respostas estruturadas viram blocos/tarefas/conexões **somente após confirmação** |
+| Aurora Artifacts | 🟡 | **Criar ou editar Artifact** no Assistente IA. Revise código, portas e conexões antes de salvar ou executar. Três exemplos locais na Biblioteca funcionam sem IA |
 | Gráfico | ✅ | Barras/rosca a partir de blocos financeiros conectados |
 | HTML isolado | ✅ experimental | Base de plugins de terceiros (iframe sandbox + CSP); ponte de dados com entradas/saídas tipadas e IA só com saídas autorizadas (docs/HTML_DATA_BRIDGE.md); consultas GET a APIs HTTPS autorizadas com `aurora.request()` pelo servidor local, painel “Acesso à rede” e exemplo de dashboard público (docs/HTML_NETWORK_BRIDGE.md) |
 | Dados importados | ✅ | CSV/JSON com prévia e validação, guardados no dispositivo, exportação CSV/JSON segura, saídas paginadas e agrupamento nativo para Fórmula/Gráfico/HTML, dashboard HTML conectado em um clique; IA só com consentimento granular e autorização local (docs/DATA_HUB.md) |

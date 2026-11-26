@@ -126,3 +126,16 @@ um único valor com moeda, intenção bloco/lançamento). Serve para:
 - “Enviar para ‘Tarefas’…” (conexão de execução) continua disponível para tarefas propostas.
 - Dados antigos do bloco de IA sem `applied` são válidos (`sanitizeAI` preenche `{}`).
 - O contexto enviado ao modelo não mudou: só blocos conectados por contexto/dados e autorizados.
+
+## Aurora Artifacts (contrato v3)
+
+No modo **Criar ou editar Artifact**, o Assistente envia o pedido e os metadados dos blocos que você escolheu. Para refinar um painel, revise o código e as portas na tela e autorize o envio ao provedor em cada pedido. O histórico convencional do Assistente, os valores das portas e o estado do painel ficam fora desse envio. Respostas de Artifact ficam na conversa local e fora do contexto e da saída `reply` usados pelo chat convencional.
+
+| `type` | Campos |
+|---|---|
+| `create_html_widget` | `title` (até 80 caracteres), `html` (até 32 mil caracteres) |
+| `update_html_widget` | `target` (`@artifact` ou o ID do painel escolhido), `html` completo |
+| `configure_html_ports` | `target`, `inputs`, `outputs`. Cada porta tem `id`, `label` e `type` |
+| `connect_data` | `from`, `sourcePort`, `to`, `targetPort`. Pelo menos uma ponta é o painel em revisão e a outra deve estar entre os blocos escolhidos |
+
+`{ "version": 3, "actions": [...] }` aceita até 14 ações, um painel e uma configuração completa de portas por proposta. `@artifact` é uma referência local à proposta. O host aplica o conjunto inteiro após validar campos, código autocontido, IDs, tipos, conexões e ciclos. Uma revisão que invalidaria uma conexão existente fica bloqueada até o usuário ajustar a proposta ou a conexão. Pode-se salvar pausado ou confirmar a execução. O escopo de aplicação vale na sessão do quadro, e o histórico local guarda o estado de aplicação. O chat convencional segue com as ações v1 e v2. Consulte o [guia e relatório da implementação](ARTIFACTS_IMPLEMENTATION.md).

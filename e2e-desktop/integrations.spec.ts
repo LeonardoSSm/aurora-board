@@ -20,6 +20,38 @@ test.afterAll(() => { for (const p of profiles) try { rmSync(p, { recursive: tru
 
 const call = (page: Page, id: string, op: unknown, body?: unknown) => page.evaluate(([i, o, b]) => (window as any).auroraDesktop.api.call(i, o, b), [id, op, body] as const);
 
+test('Artifact no Electron exige ativação, roda isolado e reabre em modo seguro', async () => {
+  const dir = profile();
+  const desktop = await launch(dir, NO_KEYS);
+  try {
+    const { page } = desktop;
+    await page.locator('[data-library-item="aurora.sandbox-html#artifact-calculator"]').click();
+    const widget = page.getByTestId('artifact-widget');
+    await expect(widget.getByTestId('sandbox-inactive')).toBeVisible();
+    await expect(widget.locator('iframe')).toHaveCount(0);
+    await widget.getByTestId('sandbox-activate').click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Ativar este widget' }).click();
+    const preview = widget.frameLocator('iframe');
+    await expect(preview.locator('#resultado')).toHaveText('115,00');
+    await expect(widget).toContainText('Em execução');
+    expect(await preview.locator('body').evaluate(() => ({ origin: self.origin, desktop: 'auroraDesktop' in window, node: 'require' in window })))
+      .toEqual({ origin: 'null', desktop: false, node: false });
+    await preview.getByLabel('Valor base').fill('200');
+    await preview.getByLabel('Valor base').press('Tab');
+    await expect(preview.locator('#resultado')).toHaveText('230,00');
+  } finally {
+    await desktop.close();
+  }
+  const safe = await launch(dir, NO_KEYS, { args: ['--safe-artifacts'] });
+  try {
+    expect(safe.page.url()).toContain('?safe');
+    await expect(safe.page.getByTestId('sandbox-safe-mode')).toBeVisible();
+    await expect(safe.page.getByTestId('artifact-widget').locator('iframe')).toHaveCount(0);
+  } finally {
+    await safe.close();
+  }
+});
+
 test('IPC tipado: operações da allowlist respondem; o resto é recusado pelo processo principal', async () => {
   const s = await launch(profile(), NO_KEYS);
   const { page } = s;

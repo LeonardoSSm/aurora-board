@@ -3,6 +3,7 @@ import { uid } from './elements';
 import { sanitizeCompanion } from './companion';
 import { sanitizeBridge, type BridgeConfig } from './htmlBridge';
 import { sanitizeVisual, type LinkVisual } from './smartLinks';
+import { sanitizeArtifact, type ArtifactMetadata } from './artifact';
 
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
 const str = (v: unknown, d = '') => (typeof v === 'string' ? v : d);
@@ -52,7 +53,7 @@ export const sanitizeCalendar = (raw: unknown): CalendarData => {
 };
 
 /* IA ---------------------------------------------------------------- */
-export interface AIMessage { id: string; role: 'user' | 'assistant'; content: string; at: number; provider?: string; model?: string }
+export interface AIMessage { id: string; role: 'user' | 'assistant'; content: string; at: number; provider?: string; model?: string; artifact?: true }
 export interface AIData {
   provider: string;
   model: string;
@@ -80,7 +81,7 @@ export const sanitizeAI = (raw: unknown): AIData => {
     messages: arr(d.messages)
       .map((x) => {
         const m = obj(x);
-        return { id: str(m.id) || uid(), role: m.role === 'assistant' ? 'assistant' : 'user', content: str(m.content), at: Number(m.at) || Date.now(), provider: str(m.provider) || undefined, model: str(m.model) || undefined } as AIMessage;
+        return { id: str(m.id) || uid(), role: m.role === 'assistant' ? 'assistant' : 'user', content: str(m.content), at: Number(m.at) || Date.now(), provider: str(m.provider) || undefined, model: str(m.model) || undefined, ...(m.artifact === true ? { artifact: true } : {}) } as AIMessage;
       })
       .slice(-200),
     authorized,
@@ -167,7 +168,7 @@ export const sanitizeChart = (raw: unknown): ChartData => {
  * `blocked` até o usuário ativá-lo. A marcação é feita pelo IMPORTADOR (sobrescreve o que vier no arquivo),
  * então um backup não consegue se declarar "já ativado". Ausente = conteúdo criado neste navegador.
  */
-export interface SandboxActivation { state: 'blocked' | 'allowed'; source: 'import' | 'paste'; at: number }
+export interface SandboxActivation { state: 'blocked' | 'allowed'; source: 'import' | 'paste' | 'artifact'; at: number }
 /** `bridge`: portas da ponte de dados (issue #11). Ausente = bloco legado (só `aurora.setState`). */
 /**
  * H2 (HTML Network Bridge): o estado foi gravado por uma execução que recebia dados PROTEGIDOS (bancários, dados
@@ -175,13 +176,15 @@ export interface SandboxActivation { state: 'blocked' | 'allowed'; source: 'impo
  * fontes (ou fica bloqueada se alguma não existir mais). Some ao limpar o estado.
  */
 export interface SandboxStateTaint { sources: string[]; at: number }
-export interface SandboxData { html: string; state: unknown; activation?: SandboxActivation; bridge?: BridgeConfig; stateTaint?: SandboxStateTaint }
+export interface SandboxData { html: string; state: unknown; activation?: SandboxActivation; bridge?: BridgeConfig; stateTaint?: SandboxStateTaint; artifact?: ArtifactMetadata }
 export const MAX_STATE_TAINT_SOURCES = 50;
 export const sanitizeSandbox = (raw: unknown): SandboxData => {
   const d = obj(raw);
   const a = obj(d.activation);
   const out: SandboxData = { html: str(d.html), state: d.state ?? null };
-  if (a.state === 'blocked' || a.state === 'allowed') out.activation = { state: a.state, source: a.source === 'paste' ? 'paste' : 'import', at: Number(a.at) || 0 };
+  if (a.state === 'blocked' || a.state === 'allowed') out.activation = { state: a.state, source: a.source === 'paste' || a.source === 'artifact' ? a.source : 'import', at: Number(a.at) || 0 };
+  const artifact = sanitizeArtifact(d.artifact);
+  if (artifact) out.artifact = artifact;
   const bridge = sanitizeBridge(d.bridge);
   if (bridge) out.bridge = bridge;
   const t = obj(d.stateTaint);

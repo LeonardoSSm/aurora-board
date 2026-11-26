@@ -116,6 +116,11 @@ function Popover({ el, from, anchor }: { el: WidgetElement; from: 'canvas' | 'do
         {data.messages.length > recent.length && <button type="button" className="text-[10px] text-accent self-start underline" onClick={() => setState({ companionOpen: null, companionFull: el.id })}>{data.messages.length - recent.length} mensagens anteriores — conversa completa</button>}
         {recent.map((m) => {
           if (m.role === 'user') return <div key={m.id} className="self-end max-w-[85%] rounded-xl rounded-br-sm bg-panel-3 px-2.5 py-1.5 text-[12px] whitespace-pre-wrap" data-testid="companion-bubble-user">{m.content}</div>;
+          if (m.artifact) return (
+            <button key={m.id} type="button" className="self-start rounded-lg border border-line px-2.5 py-1.5 text-[11px] text-accent-2" onClick={() => setState({ companionOpen: null, companionFull: el.id })}>
+              Revisar Artifact na conversa completa
+            </button>
+          );
           const proposal = parseAIProposal(m.content, validIds);
           const display = proposalDisplayText(m.content, proposal);
           const long = display.length > 420 && expanded !== m.id;

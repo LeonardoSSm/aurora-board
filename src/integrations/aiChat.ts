@@ -19,12 +19,31 @@ import { getState, useEditor } from '../store/editor';
 import { updateWidgetData } from '../store/actions';
 import { fetchAIStatus, sendChat, type ProviderId } from './aiClient';
 import { buildContextText, buildSystemPrompt, contextSources, type QuickMode } from './aiContext';
+import { artifactEndpoint, artifactSelection, artifactSystemPrompt, MAX_ARTIFACT_ENDPOINTS, MAX_ARTIFACT_REPLY, type ArtifactScope } from './artifactActions';
+import { artifactPorts } from '../core/artifact';
+import { isWidget } from '../core/schema';
 
 interface Entry { state: RequestState; controller: AbortController | null; boardId: string }
 const entries = new Map<string, Entry>();
 const listeners = new Set<() => void>();
 /** Quem está olhando a conversa de cada assistente (mini chat, dock, conversa completa). */
 const viewers = new Map<string, number>();
+const artifactScopes = new Map<string, { aiId: string; scope: ArtifactScope }>();
+
+export interface ArtifactRequest {
+  target: { id: string; configuration: string } | null;
+  endpoints: ArtifactScope['endpoints'];
+  provider: ProviderId;
+}
+
+export function artifactScopeFor(aiId: string, messageId: string): ArtifactScope | null {
+  const entry = artifactScopes.get(messageId);
+  return entry?.aiId === aiId && entry.scope.boardId === getState().boardId ? entry.scope : null;
+}
+
+export function discardArtifactProposal(aiId: string, messageId: string) {
+  if (artifactScopeFor(aiId, messageId)) artifactScopes.delete(messageId);
+}
 
 function emit() { listeners.forEach((l) => l()); }
 function set(id: string, patch: Partial<RequestState>) {
@@ -79,7 +98,7 @@ function aiElement(id: string): WidgetElement | null {
  * Envia uma mensagem do assistente `id`. Mesmo contexto, autorização, prompt de sistema e histórico do modo
  * clássico. Recusa envio duplicado enquanto houver um pendente. Devolve false se não enviou.
  */
-export async function sendAIMessage(id: string, text: string, mode: QuickMode = 'structure'): Promise<boolean> {
+export async function sendAIMessage(id: string, text: string, mode: QuickMode = 'structure', artifact?: ArtifactRequest): Promise<boolean> {
   const content = text.trim();
   if (!content) return false;
   const prev = entries.get(id);
@@ -109,15 +128,38 @@ export async function sendAIMessage(id: string, text: string, mode: QuickMode = 
     // Dados e contexto lidos AGORA (após a espera), com o estado atual — mesmas funções do bloco clássico.
     const fresh = sanitizeAI(aiElement(id)!.data);
     const elements = getState().elements;
-    const sources = contextSources(elements, id, fresh.authorized);
-    const contextText = buildContextText(elements, sources);
-    const userMsg: AIMessage = { id: uid(), role: 'user', content, at: Date.now() };
-    const history = [...fresh.messages.slice(-12), userMsg].map((m) => ({ role: m.role, content: m.content }));
+    let scope: ArtifactScope | undefined;
+    let system: string;
+    if (artifact) {
+      if (provider.id !== artifact.provider || fresh.provider !== data.provider) throw new Error('O provedor mudou. Confira a seleção antes de gerar.');
+      const selected = artifact.target ? artifactSelection(elements, artifact.target.id) : null;
+      if (artifact.target && selected?.configuration !== artifact.target.configuration) throw new Error('O código ou as conexões mudaram. Revise o código antes de autorizar o envio.');
+      const ids = [...new Set(artifact.endpoints.map((endpoint) => endpoint.id))];
+      const endpoints = ids.flatMap((endpointId) => {
+        const target = elements.find((e) => e.id === endpointId);
+        const endpoint = target && isWidget(target) ? artifactEndpoint(target) : null;
+        return endpoint ? [endpoint] : [];
+      });
+      if (ids.length > MAX_ARTIFACT_ENDPOINTS || JSON.stringify(endpoints) !== JSON.stringify(artifact.endpoints)) throw new Error('Os blocos escolhidos mudaram. Revise os metadados antes de gerar.');
+      scope = { target: artifact.target, endpoints, boardId };
+      system = artifactSystemPrompt(scope, selected ? { html: selected.data.html, ports: artifactPorts(selected.data.bridge) } : undefined);
+    } else {
+      const sources = contextSources(elements, id, fresh.authorized);
+      system = buildSystemPrompt(fresh.instruction, buildContextText(elements, sources), mode);
+    }
+    const userMsg: AIMessage = { id: uid(), role: 'user', content, at: Date.now(), ...(scope ? { artifact: true } : {}) };
+    const history = [...(scope ? [] : fresh.messages.filter((m) => !m.artifact).slice(-12)), userMsg].map((m) => ({ role: m.role, content: m.content }));
     updateWidgetData(id, (d) => { const cur = sanitizeAI(d); return { ...cur, messages: [...cur.messages, userMsg] }; });
-    const res = await abortable(sendChat({ provider: provider.id as ProviderId, model: fresh.model || undefined, system: buildSystemPrompt(fresh.instruction, contextText, mode), messages: history }, ctrl.signal), ctrl.signal);
+    const res = await abortable(sendChat({ provider: provider.id as ProviderId, model: fresh.model || undefined, system, messages: history }, ctrl.signal), ctrl.signal);
     // Cancelado, quadro trocado ou assistente excluído enquanto esperava: descarta (nunca grava no lugar errado).
     if (!alive()) throw abortError();
-    updateWidgetData(id, (d) => { const cur = sanitizeAI(d); return { ...cur, messages: [...cur.messages, { id: uid(), role: 'assistant', content: res.text, at: Date.now(), provider: res.provider, model: res.model }] }; });
+    if (scope && res.text.length > MAX_ARTIFACT_REPLY) throw new Error('A resposta excedeu o limite da proposta. Peça uma versão menor.');
+    const replyId = uid();
+    if (scope) {
+      if (artifactScopes.size >= 200) artifactScopes.delete(artifactScopes.keys().next().value!);
+      artifactScopes.set(replyId, { aiId: id, scope });
+    }
+    updateWidgetData(id, (d) => { const cur = sanitizeAI(d); return { ...cur, messages: [...cur.messages, { id: replyId, role: 'assistant', content: res.text, at: Date.now(), provider: res.provider, model: res.model, ...(scope ? { artifact: true } : {}) }] }; });
     set(id, { status: 'idle', error: '', repliedAt: Date.now(), unread: !viewers.has(id) });
     return true;
   } catch (e) {
@@ -150,6 +192,7 @@ export function startAIChatHousekeeping() {
   if (started) return;
   started = true;
   useEditor.subscribe((s) => s.boardId, () => {
+    artifactScopes.clear();
     for (const [id, e] of entries) {
       e.controller?.abort();
       entries.delete(id);
@@ -166,4 +209,4 @@ export function startAIChatHousekeeping() {
 }
 
 /** Testes. */
-export function __resetAIChat() { for (const e of entries.values()) e.controller?.abort(); entries.clear(); viewers.clear(); emit(); }
+export function __resetAIChat() { for (const e of entries.values()) e.controller?.abort(); entries.clear(); artifactScopes.clear(); viewers.clear(); emit(); }

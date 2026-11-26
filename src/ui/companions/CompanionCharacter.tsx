@@ -34,7 +34,7 @@ export function CompanionCharacter({ element, data }: { element: WidgetElement; 
           className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 max-w-[260px] w-max rounded-xl rounded-bl-sm border border-line bg-[#0f1826f2] px-2.5 py-1.5 text-[11px] text-fg-2 text-left shadow-[0_8px_24px_#0008] line-clamp-3"
           onClick={() => setState({ companionOpen: { id: element.id, from: 'canvas' } })}
         >
-          {last!.content.replace(/```[\s\S]*?```/g, '[código]').slice(0, 160)}{last!.content.length > 160 ? '…' : ''}
+          {last!.artifact ? 'Proposta de Artifact disponível na conversa.' : `${last!.content.replace(/```[\s\S]*?```/g, '[código]').slice(0, 160)}${last!.content.length > 160 ? '…' : ''}`}
         </button>
       )}
       <button

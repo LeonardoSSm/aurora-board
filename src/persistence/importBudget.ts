@@ -126,6 +126,12 @@ export function checkImportBudget(data: unknown, lim: ImportLimits = IMPORT_LIMI
           if (htmlWidgets > lim.maxHtmlWidgets) throw new ImportBudgetError(`O arquivo tem mais de ${fmt(lim.maxHtmlWidgets)} widgets HTML.`);
           if (e.data.html.length > lim.maxHtmlChars) throw new ImportBudgetError(`Quadro "${name}": widget HTML com ${fmt(e.data.html.length)} caracteres (limite ${fmt(lim.maxHtmlChars)}).`);
           htmlChars += e.data.html.length;
+          const artifact = e.data.artifact;
+          if (isObj(artifact) && Array.isArray(artifact.history)) {
+            for (const revision of artifact.history) {
+              if (isObj(revision) && typeof revision.html === 'string') htmlChars += revision.html.length;
+            }
+          }
           if (htmlChars > lim.maxTotalHtmlChars) throw new ImportBudgetError('HTML personalizado demais no arquivo.');
         }
         walk(e.data, `Quadro "${name}" (dados de widget)`, lim, acc, lim.maxWidgetNodes);

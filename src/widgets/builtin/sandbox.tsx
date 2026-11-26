@@ -3,24 +3,28 @@ import type React from 'react';
 import { Box } from 'lucide-react';
 import type { WidgetPlugin, WidgetProps } from '../registry';
 import { sanitizeSandbox, type SandboxData } from '../../core/widgetData';
+import { MAX_ARTIFACT_HTML, artifactCodeError, artifactConfiguration, artifactEdges, artifactPorts, reviseArtifact, type ArtifactRevision } from '../../core/artifact';
 import { WIDGET } from '../../core/widgetIds';
 import type { AuroraElement, WidgetElement } from '../../core/schema';
 import { isLinear } from '../../core/schema';
 import { aiConfigDigest, BRIDGE_INPUT_TYPES, BRIDGE_LIMITS, BRIDGE_OUTPUT_TYPES, BRIDGE_TYPE_LABELS, BRIDGE_VERSION, buildHtmlAIText, buildInputSnapshot, digest, emptyBridge, isValidPortId, sanitizeBridge, type BridgeConfig, type BridgePort, type InputSnapshot } from '../../core/htmlBridge';
 import { dataUpstream, directInputEdges } from '../../core/dataUpstream';
-import { beginGeneration, endGeneration, isCurrentToken, outputEntry, outputsOf, outputsVersion, publishOutput, randomToken, subscribeOutputs } from '../htmlOutputs';
+import { beginGeneration, clearOutputs, endGeneration, isCurrentToken, outputEntry, outputsOf, outputsVersion, publishOutput, randomToken, subscribeOutputs } from '../htmlOutputs';
 import { useDataflow } from '../dataflow';
 import { getState, useEditor } from '../../store/editor';
 import { grantHtmlAI, revokeHtmlAI } from '../../store/actions';
+import { toast } from '../../store/ui';
 import { financialTaint } from '../../integrations/aiContext';
 import { Badge, Button, Field, Label, Segmented, Select } from '../../ui/primitives';
 import { BRIDGE_EXAMPLES } from './sandboxExamples';
+import { ARTIFACT_EXAMPLES } from './artifactExamples';
 import { sanitizeDatasetData } from './dataset';
 import { datasetGrantKey } from '../../data/aiShare';
-import { NetSession, netAvailability, netReloadOf, subscribeNet } from '../../net/broker';
+import { NetSession, netAvailability, netReloadOf, revokeNetAccess, subscribeNet } from '../../net/broker';
 import { NetAccessPanel } from '../../net/NetAccessPanel';
 import { netError, parseRequestMessage, responseMessage } from '../../net/protocol';
 import '../../net/consent';
+import { artifactConnectionImpact } from '../../integrations/artifactActions';
 
 /**
  * Host de widgets isolados. O conteúdo roda em <iframe sandbox="allow-scripts"> SEM allow-same-origin:
@@ -149,7 +153,9 @@ export interface FrameBridge {
   snapshot: InputSnapshot;
 }
 
-export function SandboxFrame({ html, state, onState, title, bridge, elementId: netElementId }: { html: string; state: unknown; onState: (s: unknown, taint: string[]) => void; title: string; bridge?: FrameBridge; elementId?: string }) {
+type RuntimeStatus = 'ready' | 'error' | 'timeout';
+
+export function SandboxFrame({ html, state, onState, title, bridge, elementId: netElementId, onRuntime }: { html: string; state: unknown; onState: (s: unknown, taint: string[]) => void; title: string; bridge?: FrameBridge; elementId?: string; onRuntime?: (status: RuntimeStatus) => void }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [error, setError] = useState('');
   const [navigated, setNavigated] = useState(false);
@@ -158,6 +164,9 @@ export function SandboxFrame({ html, state, onState, title, bridge, elementId: n
   const navigatedRef = useRef(false);
   const onStateRef = useRef(onState);
   onStateRef.current = onState;
+  const runtime = useRef(onRuntime);
+  runtime.current = onRuntime;
+  const startupTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const stateRef = useRef(state);
   stateRef.current = state;
   const htmlRef = useRef(html);
@@ -185,19 +194,28 @@ export function SandboxFrame({ html, state, onState, title, bridge, elementId: n
     const token = tokenRef.current;
     beginGeneration(elementId, token, signature);
     return () => endGeneration(elementId, token);
-  }, [elementId, signature]);
+  }, [elementId, signature, nonce]);
   // useLayoutEffect: o listener existe antes de o iframe (inserido neste mesmo commit) conseguir postar a
   // primeira mensagem — com useEffect, o WebKit às vezes entregava o primeiro setState antes do registro.
   useLayoutEffect(() => {
     // H2: a marca de dados protegidos é capturada quando a mensagem CHEGA (a sessão ainda existe), não na entrega
     // atrasada pelo limitador; e nada é entregue depois da desmontagem (Codex PR #33: “Limpar estado e recarregar”).
-    const deliver = createThrottle<{ st: unknown; taint: string[] }>(({ st, taint }) => { if (!navigatedRef.current) onStateRef.current(st, taint); });
+    const deliver = createThrottle<{ st: unknown; taint: string[]; token: string }>(({ st, taint, token }) => {
+      if (!navigatedRef.current && token === tokenRef.current) onStateRef.current(st, taint);
+    });
     let windowStart = 0, inWindow = 0, warned = false;
     const onMessage = (e: MessageEvent) => {
       // Só aceita mensagens do PRÓPRIO iframe (identidade da janela; a origem do srcdoc é opaca)
       // e nunca depois de o frame ter navegado para outro documento.
-      if (!ref.current || e.source !== ref.current.contentWindow || navigatedRef.current) return;
+      if (!ref.current || e.source !== ref.current.contentWindow || e.origin !== 'null' || navigatedRef.current) return;
       const type = (e.data as { type?: unknown } | null)?.type;
+      if (type === 'aurora:runtime' && runtime.current) {
+        const d = e.data as Record<string, unknown>;
+        if (Object.keys(d).length !== 3 || d.token !== tokenRef.current || (d.status !== 'ready' && d.status !== 'error')) return;
+        if (d.status === 'ready') clearTimeout(startupTimer.current);
+        runtime.current(d.status);
+        return;
+      }
       if (type === 'aurora:request' || type === 'aurora:abort') {
         if (netRef.current) { netRef.current.handle(e.data); return; }
         // Bloco sem sessão de rede (widgets de terceiros): responde “indisponível” a quem tiver token válido.
@@ -221,15 +239,15 @@ export function SandboxFrame({ html, state, onState, title, bridge, elementId: n
         setError(err ?? '');
         return;
       }
-      const r = parseSandboxMessage(e.data);
-      if (!r) return;
+      if (type !== 'aurora:setState') return;
       const tok = (e.data as { token?: unknown }).token;
-      if (tok !== undefined && tok !== '' && tok !== tokenRef.current) return;
-      if (r.ok) deliver({ st: r.state, taint: netRef.current?.taintIds() ?? [] });
-      else setError(r.error);
+      if (runtime.current ? tok !== tokenRef.current : tok !== undefined && tok !== '' && tok !== tokenRef.current) return;
+      const r = parseSandboxMessage(e.data);
+      if (r?.ok) deliver({ st: r.state, taint: netRef.current?.taintIds() ?? [], token: tokenRef.current });
+      else if (r) setError(r.error);
     };
     window.addEventListener('message', onMessage);
-    return () => { window.removeEventListener('message', onMessage); deliver.cancel(); };
+    return () => { window.removeEventListener('message', onMessage); deliver.cancel(); clearTimeout(startupTimer.current); };
   }, []);
   // Entradas: só reenviadas quando o conteúdo muda (sem eco; até 10 por segundo, a última vence).
   const postInputs = useMemo(() => createThrottle<InputSnapshot>((snap) => {
@@ -244,7 +262,15 @@ export function SandboxFrame({ html, state, onState, title, bridge, elementId: n
       <div data-testid="sandbox-navigated" className="flex flex-col h-full gap-2 items-start justify-center p-3 rounded-md border border-warn/50 bg-warn/10 text-[11px] text-fg-2">
         <b className="text-warn">Widget bloqueado</b>
         O HTML tentou carregar outra página dentro do quadro. Isso não é permitido (a página carregada sairia do isolamento sem rede).
-        <button className="h-6 px-2 rounded border border-line text-[11px] hover:bg-panel-3" onClick={() => { loads.current = 0; navigatedRef.current = false; setNavigated(false); setNonce((n) => n + 1); }}>Recarregar widget</button>
+        <button className="h-6 px-2 rounded border border-line text-[11px] hover:bg-panel-3" onClick={() => {
+          loads.current = 0;
+          loadedRef.current = false;
+          sentInputs.current = '';
+          tokenRef.current = randomToken();
+          navigatedRef.current = false;
+          setNavigated(false);
+          setNonce((n) => n + 1);
+        }}>Recarregar widget</button>
       </div>
     );
   }
@@ -264,12 +290,13 @@ export function SandboxFrame({ html, state, onState, title, bridge, elementId: n
           // O documento hospedeiro dispara UM load. Um segundo load significa que o frame navegou (location, meta
           // refresh, link): o novo documento está fora do nosso controle, então o widget é desmontado e nada mais
           // é aceito dele. (A CSP do app, frame-src 'self', já impede navegar para outras origens.)
-          if (loads.current > 1) { navigatedRef.current = true; netRef.current?.dispose(); netRef.current = null; setNavigated(true); return; }
+          if (loads.current > 1) { navigatedRef.current = true; netRef.current?.dispose(); netRef.current = null; clearTimeout(startupTimer.current); setNavigated(true); return; }
           const b = bridgeRef.current;
           loadedRef.current = true;
           if (b) sentInputs.current = b.snapshot.json;
           const net = netRef.current ? netAvailability() : { available: false, message: 'Este tipo de bloco não tem acesso à rede.' };
-          ref.current?.contentWindow?.postMessage({ type: 'aurora:load', html: htmlRef.current, state: stateRef.current, net: { v: 1, token: tokenRef.current, available: net.available, message: net.message }, ...(b ? { bridge: { v: BRIDGE_VERSION, token: tokenRef.current, ports: b.ports, inputs: b.snapshot.inputs, connections: b.snapshot.connections } } : {}) }, '*');
+          if (runtime.current) startupTimer.current = setTimeout(() => runtime.current?.('timeout'), 5_000);
+          ref.current?.contentWindow?.postMessage({ type: 'aurora:load', html: htmlRef.current, state: stateRef.current, reportRuntime: !!runtime.current, net: { v: 1, token: tokenRef.current, available: net.available, message: net.message }, ...(b ? { bridge: { v: BRIDGE_VERSION, token: tokenRef.current, ports: b.ports, inputs: b.snapshot.inputs, connections: b.snapshot.connections } } : {}) }, '*');
         }}
       />
       {error && <div className="text-[11px] text-warn">{error}</div>}
@@ -312,6 +339,8 @@ export const sandboxPlugin: WidgetPlugin<SandboxData> = {
   accent: '#9cb1cf',
   permissions: ['sandbox:scripts'],
   defaultSize: { width: 360, height: 300 },
+  librarySection: 'Aurora Artifacts',
+  presets: ARTIFACT_EXAMPLES,
   inputs: [],
   outputs: [STATE_PORT],
   // Ponte de dados (issue #11): a porta legada `state` continua (conexões antigas não mudam).
@@ -327,32 +356,91 @@ export const sandboxPlugin: WidgetPlugin<SandboxData> = {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(data.html);
     const [showCode, setShowCode] = useState(false);
+    const [draftError, setDraftError] = useState('');
+    const [runtime, setRuntime] = useState<{ key: string; status: RuntimeStatus } | null>(null);
+    const [retry, setRetry] = useState(0);
+    const editSource = useRef('');
+    const artifact = data.artifact;
+    const edgeKey = useEditor((s) => artifact ? artifactEdges(s.elements, element.id) : '');
+    const signature = useMemo(() => artifact ? artifactConfiguration(data, edgeKey) : bridgeSignature(data), [artifact, data.html, data.activation, data.bridge, edgeKey]);
     const blocked = data.activation?.state === 'blocked';
-    const tooBig = data.html.length > MAX_HTML_CHARS;
-    const slot = useFrameSlot(`${element.id}:${useId()}`, !editing && !blocked && !SAFE_MODE && !tooBig);
-    const signature = useMemo(() => bridgeSignature(data), [data]);
+    const tooBig = data.html.length > (artifact ? MAX_ARTIFACT_HTML : MAX_HTML_CHARS);
     // Só re-renderiza quando o painel pede “Limpar estado e recarregar” (não a cada consulta).
     const netReload = useSyncExternalStore(subscribeNet, () => netReloadOf(element.id));
+    const frameKey = `${signature}:${netReload}:${retry}`;
+    const status = runtime?.key === frameKey ? runtime.status : null;
+    const slot = useFrameSlot(`${element.id}:${useId()}`, !editing && !blocked && !SAFE_MODE && !tooBig && status !== 'timeout');
     const bridgeInputs = data.bridge?.inputs;
     const snapshot = useMemo(() => (bridgeInputs ? buildInputSnapshot(bridgeInputs, inputs) : null), [bridgeInputs, inputs]);
     const frameBridge = useMemo<FrameBridge | undefined>(() => (data.bridge && snapshot ? { elementId: element.id, signature, ports: { inputs: data.bridge.inputs, outputs: data.bridge.outputs }, snapshot } : undefined), [data.bridge, snapshot, element.id, signature]);
+    const live = () => {
+      const el = api.getElement(element.id);
+      if (!el || el.type !== 'widget' || el.widgetType !== WIDGET.sandbox || el.locked) return null;
+      const current = sanitizeSandbox(el.data);
+      return { el, data: current, key: artifactConfiguration(current, artifactEdges(api.getElements(), el.id)) };
+    };
+    const origin = data.activation?.source === 'paste' ? 'conteúdo colado' : data.activation?.source === 'import' ? 'um arquivo importado' : 'uma revisão salva';
     const activate = async () => {
+      const before = live();
+      if (!before || before.data.activation?.state !== 'blocked') return;
+      if (artifact) {
+        const error = artifactCodeError(before.data.html);
+        if (error) { api.toast(error, 'error'); return; }
+      }
       const ok = await api.confirm(
-        'Ativar HTML personalizado',
-        `Este widget veio de ${data.activation?.source === 'paste' ? 'conteúdo colado' : 'um arquivo importado'} e contém ${data.html.length.toLocaleString('pt-BR')} caracteres de HTML/JavaScript de terceiros. Ele roda isolado (sem acesso aos seus quadros, ao armazenamento ou à rede), mas pode exibir conteúdo enganoso. Ative apenas se você confia na origem do arquivo.`,
+        artifact ? 'Autorizar execução do Artifact?' : 'Ativar HTML personalizado',
+        `Este código veio de ${origin}. O JavaScript roda em um iframe isolado e recebe as entradas conectadas. Consultas a APIs HTTPS pedem autorização por destino no Board.`,
         'Ativar este widget',
       );
-      if (ok) update({ activation: { state: 'allowed', source: data.activation?.source ?? 'import', at: Date.now() } });
+      if (!ok) return;
+      if (live()?.key !== before.key) { api.toast('O painel mudou. Revise o código antes de executar.', 'warning'); return; }
+      update({ activation: { state: 'allowed', source: before.data.activation.source, at: Date.now() } });
+    };
+    const openEditor = () => {
+      const current = live();
+      if (!current) return;
+      editSource.current = current.key;
+      setDraft(current.data.html);
+      setDraftError('');
+      setEditing(true);
+    };
+    const saveDraft = () => {
+      const current = live();
+      if (!current || current.key !== editSource.current) { setDraftError('O painel mudou. Reabra o editor para revisar a versão atual.'); return; }
+      if (artifact) {
+        const error = artifactCodeError(draft);
+        if (error) { setDraftError(error); return; }
+        if (draft !== current.data.html) update(reviseArtifact(current.data, draft, artifactPorts(current.data.bridge), 'manual', false));
+      } else {
+        if (draft.length > MAX_HTML_CHARS) { setDraftError('O HTML excede o limite do widget.'); return; }
+        update({ html: draft, activation: undefined });
+      }
+      setEditing(false);
+    };
+    const restore = async (revision: ArtifactRevision) => {
+      const current = live();
+      if (!current) return;
+      const next = reviseArtifact(current.data, revision.html, artifactPorts(revision), 'restore', false);
+      const error = artifactCodeError(revision.html) ?? artifactConnectionImpact(api.getElements(), current.el, next);
+      if (error) { api.toast(error, 'error'); return; }
+      const ok = await api.confirm('Restaurar revisão do Artifact?', `A v${revision.number} será salva como uma nova revisão pausada, preservando o código atual no histórico. Revise antes de executar.`, 'Restaurar pausado');
+      if (!ok) return;
+      const latest = live();
+      if (!latest || latest.key !== current.key) { api.toast('O painel mudou. Revise antes de restaurar.', 'warning'); return; }
+      const revised = reviseArtifact(latest.data, revision.html, artifactPorts(revision), 'restore', false);
+      const impact = artifactConnectionImpact(api.getElements(), latest.el, revised);
+      if (impact) { api.toast(impact, 'error'); return; }
+      update(revised);
     };
     let body: React.ReactNode;
     if (editing) {
       body = (
         <>
-          <textarea value={draft} onChange={(e) => setDraft(e.target.value)} spellCheck={false} className="flex-1 min-h-[120px] p-2 rounded-md bg-[#0a111c] border border-line font-mono text-[11px] resize-none" />
+          <textarea aria-label="Código HTML" data-scrollable value={draft} onChange={(e) => { setDraft(e.target.value); setDraftError(''); }} spellCheck={false} className="flex-1 min-h-[80px] p-2 rounded-md bg-[#0a111c] border border-line font-mono text-[11px] resize-none" />
+          {draftError && <p role="alert" className="text-warn text-[11px]">{draftError}</p>}
           <div className="flex justify-end gap-1.5">
             <button className="h-7 px-2 text-[11px] text-muted" onClick={() => { setDraft(data.html); setEditing(false); }}>Cancelar</button>
-            {/* Aplicar uma edição é autoria do próprio usuário: o HTML passa a ser local (ativo). */}
-            <button className="h-7 px-3 rounded-md bg-[#3174db] text-white text-[11px]" onClick={() => { update({ html: draft, activation: undefined }); setEditing(false); }}>Aplicar</button>
+            <button className="h-7 px-3 rounded-md bg-[#3174db] text-white text-[11px]" onClick={saveDraft}>{artifact ? 'Salvar revisão pausada' : 'Aplicar'}</button>
           </div>
         </>
       );
@@ -361,25 +449,50 @@ export const sandboxPlugin: WidgetPlugin<SandboxData> = {
     } else if (blocked) {
       body = (
         <SandboxNotice testId="sandbox-inactive" title="HTML personalizado desativado">
-          <span>Veio de {data.activation?.source === 'paste' ? 'conteúdo colado' : 'um arquivo importado'} e não é executado até você ativá-lo. {data.html.length.toLocaleString('pt-BR')} caracteres.</span>
+          <span>Veio de {origin}. Autorize para executar. {data.html.length.toLocaleString('pt-BR')} caracteres.</span>
           <div className="flex gap-1.5">
             <button className="h-6 px-2 rounded border border-line hover:bg-panel-3" onClick={() => setShowCode((v) => !v)}>{showCode ? 'Ocultar código' : 'Ver código'}</button>
             <button data-testid="sandbox-activate" className="h-6 px-2 rounded border border-warn/60 text-warn hover:bg-warn/10" onClick={() => void activate()}>Ativar…</button>
           </div>
-          {showCode && <pre className="font-mono text-[10px] whitespace-pre-wrap break-all max-h-40 overflow-auto bg-[#060b13] p-1.5 rounded">{data.html.slice(0, 20_000)}</pre>}
+          {showCode && <pre data-scrollable className="font-mono text-[10px] whitespace-pre-wrap break-all max-h-40 overflow-auto bg-[#060b13] p-1.5 rounded">{data.html}</pre>}
         </SandboxNotice>
       );
     } else if (tooBig) {
-      body = <SandboxNotice testId="sandbox-too-big" title="HTML grande demais">O HTML tem mais de {MAX_HTML_CHARS.toLocaleString('pt-BR')} caracteres e não é executado.</SandboxNotice>;
+      body = <SandboxNotice testId="sandbox-too-big" title="HTML grande demais">Limite de {(artifact ? MAX_ARTIFACT_HTML : MAX_HTML_CHARS).toLocaleString('pt-BR')} caracteres.</SandboxNotice>;
+    } else if (status === 'timeout') {
+      body = <SandboxNotice testId="artifact-timeout" title="Execução interrompida">O painel demorou a iniciar.<Button onClick={() => setRetry((n) => n + 1)}>Tentar executar de novo</Button></SandboxNotice>;
     } else if (!slot) {
       body = <SandboxNotice testId="sandbox-paused" title="Pausado">Há {MAX_ACTIVE_FRAMES} widgets HTML em execução. Este começa quando outro for fechado.</SandboxNotice>;
     } else {
-      body = <SandboxFrame key={`${signature}:${netReload}`} html={data.html} state={data.state} title={element.title} elementId={element.id} onState={(state, taint) => update((d) => ({ ...d, state, ...(taint.length ? { stateTaint: { sources: taint, at: Date.now() } } : {}) }), { coalesce: true })} bridge={frameBridge} />;
+      body = <SandboxFrame key={frameKey} html={data.html} state={data.state} title={element.title} elementId={element.id}
+        onRuntime={artifact ? (next) => setRuntime((prev) => prev?.key === frameKey && prev.status === 'error' && next === 'ready' ? prev : { key: frameKey, status: next }) : undefined}
+        onState={(state, taint) => {
+          if (artifact && taint.length) return;
+          update((d) => ({ ...d, state, ...(taint.length ? { stateTaint: { sources: taint, at: Date.now() } } : {}) }), { coalesce: true });
+        }} bridge={frameBridge} />;
     }
     return (
-      <div className="flex flex-col gap-1.5 h-full">
-        {body}
-        {!editing && selected && <button className="self-start h-6 px-2 text-[11px] text-muted hover:text-fg" onClick={() => { setDraft(data.html); setEditing(true); }}>Editar HTML</button>}
+      <div className="flex flex-col gap-1.5 h-full" data-testid={artifact ? 'artifact-widget' : undefined}>
+        {artifact && <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
+          <Badge tone="accent">Artifact v{artifact.number}</Badge>
+          <span role="status">{editing ? 'Editando' : blocked || SAFE_MODE ? 'Pausado' : status === 'error' || status === 'timeout' ? 'Falha de execução' : status === 'ready' ? 'Em execução' : slot ? 'Iniciando…' : 'Aguardando vaga'}</span>
+          <span>{data.bridge?.inputs.length ?? 0} entradas · {data.bridge?.outputs.length ?? 0} saídas</span>
+        </div>}
+        {status === 'error' && !blocked && !editing && <p role="alert" className="text-[11px] text-warn">O código registrou um erro. Edite ou restaure uma revisão.</p>}
+        <div className="min-h-0 flex-1 flex flex-col">{body}</div>
+        {!editing && (selected || artifact) && <div className="flex flex-wrap gap-1">
+          <button disabled={element.locked} className="h-6 px-2 text-[11px] text-muted hover:text-fg" onClick={openEditor}>{artifact ? 'Código' : 'Editar HTML'}</button>
+          {artifact && !blocked && <button disabled={element.locked} className="h-6 px-2 text-[11px] text-muted hover:text-fg" onClick={() => update({ activation: { state: 'blocked', source: data.activation?.source ?? 'artifact', at: Date.now() } })}>{SAFE_MODE ? 'Manter pausado' : 'Pausar'}</button>}
+          {artifact && artifact.history.length > 0 && <details className="relative text-[11px]">
+            <summary data-interactive className="cursor-pointer px-2 py-1">Histórico</summary>
+            <ul className="z-10 max-h-32 overflow-auto rounded border border-line bg-panel-2 p-1" data-scrollable>
+              {[...artifact.history].reverse().map((rev, i) => <li key={i} className="flex flex-wrap items-center gap-1 py-0.5">
+                <span>v{rev.number} · {{ ai: 'IA', manual: 'Manual', restore: 'Restauração', example: 'Exemplo' }[rev.origin]} · {new Date(rev.at).toLocaleDateString('pt-BR')}</span>
+                <button className="underline" disabled={element.locked} onClick={() => void restore(rev)}>Restaurar v{rev.number}…</button>
+              </li>)}
+            </ul>
+          </details>}
+        </div>}
       </div>
     );
   },
@@ -417,8 +530,31 @@ function financialUpstreamOf(elements: AuroraElement[], id: string): string[] {
 
 export function htmlGrantKey(elements: AuroraElement[], el: WidgetElement, d: SandboxData): string {
   const bridge = d.bridge ?? emptyBridge();
-  return `${el.id}:${aiConfigDigest({ elementId: el.id, html: d.html, bridge, inputEdges: directInputEdges(elements, el.id), financialUpstream: financialUpstreamOf(elements, el.id) })}`;
+  const base = aiConfigDigest({ elementId: el.id, html: d.html, bridge, inputEdges: directInputEdges(elements, el.id), financialUpstream: financialUpstreamOf(elements, el.id) });
+  return `${el.id}:${d.artifact ? digest(`${base}:${artifactConfiguration(d, artifactEdges(elements, el.id))}`) : base}`;
 }
+
+// Concessões locais nunca voltam automaticamente ao desfazer. Limpa também as saídas da revisão anterior.
+useEditor.subscribe((state, prev) => {
+  const { elements } = state;
+  const previous = prev.elements;
+  if (state.boardId !== prev.boardId || elements === previous) return;
+  let after: Map<string, AuroraElement> | undefined;
+  for (const old of previous) {
+    if (old.type !== 'widget' || old.widgetType !== WIDGET.sandbox) continue;
+    after ??= new Map(elements.map((el) => [el.id, el]));
+    const el = after.get(old.id);
+    const current = el?.type === 'widget' && el.widgetType === WIDGET.sandbox ? el.data as SandboxData : null;
+    const prior = old.data as SandboxData;
+    if (!current?.artifact && !prior?.artifact) continue;
+    const beforeEdges = artifactEdges(previous, old.id);
+    const afterEdges = artifactEdges(elements, old.id);
+    if (current && beforeEdges === afterEdges && (current === prior || artifactConfiguration(sanitizeSandbox(current), afterEdges) === artifactConfiguration(sanitizeSandbox(prior), beforeEdges))) continue;
+    clearOutputs(old.id);
+    if (state.htmlAiGrants.some((key) => key.startsWith(`${old.id}:`))) void revokeHtmlAI(old.id).catch(() => toast('Autorizações de IA atualizadas apenas nesta sessão.', 'warning'));
+    if (state.htmlNetGrants.some((grant) => grant.elementId === old.id && grant.boardId === state.boardId)) void revokeNetAccess(old.id).catch(() => toast('Autorizações de rede atualizadas apenas nesta sessão.', 'warning'));
+  }
+});
 
 /** Política de IA do bloco HTML: só saídas escolhidas, com autorização LOCAL válida para a configuração atual. */
 export function htmlAIPolicy(d: SandboxData, el: WidgetElement): { allowed: boolean; text: string; reason?: string } {
@@ -490,7 +626,17 @@ function SandboxInspector({ element, data, update, api }: WidgetProps<SandboxDat
   const b = data.bridge;
   // H2-C: limpa o estado gravado e a marca de dados protegidos (o painel também esquece a memória da execução).
   const clearState = () => update((d) => { const { stateTaint: _drop, ...rest } = d; void _drop; return { ...rest, state: null }; });
-  const setBridge = (patch: Partial<BridgeConfig>) => update((d) => ({ ...d, bridge: sanitizeBridge({ ...(d.bridge ?? emptyBridge()), ...patch }) }));
+  const setBridge = (patch: Partial<BridgeConfig>) => {
+    const bridge = sanitizeBridge({ ...(data.bridge ?? emptyBridge()), ...patch });
+    if (data.artifact && (patch.inputs || patch.outputs)) {
+      const ports = artifactPorts(bridge);
+      if (JSON.stringify(ports) === JSON.stringify(artifactPorts(data.bridge))) return;
+      const next = reviseArtifact(data, data.html, ports, 'manual', false);
+      const impact = artifactConnectionImpact(api.getElements(), element, next);
+      if (impact) { api.toast(impact, 'error'); return; }
+      update(next);
+    } else update((d) => ({ ...d, bridge }));
+  };
   const ins = flow.inputs.get(element.id) ?? {};
   // Conexões de dados que chegam a esta entrada (inclusive as inválidas: porta inexistente, tipo errado, ciclo).
   const edgeStatus = (port: string) => elements.flatMap((x) => {
@@ -513,7 +659,7 @@ function SandboxInspector({ element, data, update, api }: WidgetProps<SandboxDat
         <div className="text-[11px] text-soft">Este bloco só guarda o próprio estado (<code>aurora.setState</code>). Ative a ponte para receber dados de conexões e publicar saídas tipadas para fórmulas, gráficos e IA.</div>
         <Button data-testid="bridge-enable" onClick={() => setBridge({})}>Ativar entradas e saídas</Button>
         <NetAccessPanel element={element} data={data} onClearState={clearState} />
-        <Examples data={data} update={update} api={api} />
+        <Examples data={data} update={update} api={api} element={element} />
       </div>
     );
   }
@@ -579,12 +725,12 @@ function SandboxInspector({ element, data, update, api }: WidgetProps<SandboxDat
         {b.ai.mode === 'none' && <div className="text-[11px] text-soft" data-testid="bridge-ai-status">Nada deste bloco é enviado à IA, mesmo conectado a um Assistente.</div>}
       </div>
       <NetAccessPanel element={element} data={data} onClearState={clearState} />
-      <Examples data={data} update={update} api={api} />
+      <Examples data={data} update={update} api={api} element={element} />
     </div>
   );
 }
 
-function Examples({ data, update, api }: Pick<WidgetProps<SandboxData>, 'data' | 'update' | 'api'>) {
+function Examples({ data, update, api, element }: Pick<WidgetProps<SandboxData>, 'data' | 'update' | 'api' | 'element'>) {
   const [pick, setPick] = useState('');
   return (
     <div className="mt-2 flex flex-col gap-1" data-testid="bridge-examples">
@@ -597,8 +743,15 @@ function Examples({ data, update, api }: Pick<WidgetProps<SandboxData>, 'data' |
         <Button disabled={!pick} data-testid="bridge-use-example" onClick={async () => {
           const ex = BRIDGE_EXAMPLES.find((x) => x.id === pick);
           if (!ex) return;
-          if (data.html.trim() && data.html !== ex.html && !(await api.confirm('Usar exemplo', 'O HTML atual deste bloco será substituído pelo exemplo (desfazer com Ctrl+Z).', 'Substituir'))) return;
-          update({ html: ex.html, activation: undefined, bridge: sanitizeBridge(ex.bridge) });
+          if (data.html.trim() && data.html !== ex.html && !(await api.confirm('Usar exemplo', 'O HTML atual deste bloco será substituído pelo exemplo (desfazer com Ctrl+Z).', data.artifact ? 'Salvar pausado' : 'Substituir'))) return;
+          const current = api.getElement(element.id);
+          if (current?.type !== 'widget' || current.data !== element.data || current.locked) { api.toast('O painel mudou. Selecione o exemplo de novo.', 'warning'); return; }
+          if (data.artifact) {
+            const next = reviseArtifact(data, ex.html, artifactPorts(ex.bridge), 'example', false);
+            const impact = artifactConnectionImpact(api.getElements(), current, next);
+            if (impact) { api.toast(impact, 'error'); return; }
+            update(next);
+          } else update({ html: ex.html, activation: undefined, bridge: sanitizeBridge(ex.bridge) });
         }}>Usar</Button>
       </div>
       <div className="text-[10px] text-soft">API: <code>aurora.inputs</code>, <code>aurora.onInputs(cb)</code>, <code>aurora.publish(porta, valor)</code>, <code>aurora.setState(obj)</code>. Ver docs/HTML_DATA_BRIDGE.md.</div>
